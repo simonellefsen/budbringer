@@ -464,6 +464,8 @@ export class Planet {
     const biome = this.biomes.find(b => b.type === BiomeType.SEASIDE)!;
     const center = biome.center.clone().multiplyScalar(this.radius);
     
+    this.createWater(center);
+    
     const pier = this.createPier();
     this.placeOnSphere(pier, this.getOffsetOnSphere(center, 0.5, 3));
     this.decorations.add(pier);
@@ -482,6 +484,61 @@ export class Planet {
     const lighthouse = this.createLighthouse();
     this.placeOnSphere(lighthouse, this.getOffsetOnSphere(center, Math.PI, 6));
     this.decorations.add(lighthouse);
+  }
+
+  private createWater(center: THREE.Vector3): void {
+    const waterGroup = new THREE.Group();
+    
+    const waterMat = ToonMaterial.create({ 
+      color: 0x4a90a4,
+      transparent: true,
+      opacity: 0.85
+    });
+    
+    for (let ring = 0; ring < 3; ring++) {
+      const innerRadius = 6 + ring * 3;
+      const outerRadius = 9 + ring * 3;
+      const segments = 24;
+      
+      for (let i = 0; i < segments; i++) {
+        const angle1 = (i / segments) * Math.PI * 2;
+        const angle2 = ((i + 1) / segments) * Math.PI * 2;
+        
+        const waterGeo = new THREE.BufferGeometry();
+        const positions: number[] = [];
+        
+        const p1 = this.getOffsetOnSphere(center, angle1, innerRadius);
+        const p2 = this.getOffsetOnSphere(center, angle2, innerRadius);
+        const p3 = this.getOffsetOnSphere(center, angle2, outerRadius);
+        const p4 = this.getOffsetOnSphere(center, angle1, outerRadius);
+        
+        const offset = 0.05;
+        const up1 = p1.clone().normalize();
+        const up2 = p2.clone().normalize();
+        const up3 = p3.clone().normalize();
+        const up4 = p4.clone().normalize();
+        
+        p1.sub(up1.multiplyScalar(offset));
+        p2.sub(up2.multiplyScalar(offset));
+        p3.sub(up3.multiplyScalar(offset));
+        p4.sub(up4.multiplyScalar(offset));
+        
+        positions.push(p1.x, p1.y, p1.z);
+        positions.push(p2.x, p2.y, p2.z);
+        positions.push(p3.x, p3.y, p3.z);
+        positions.push(p1.x, p1.y, p1.z);
+        positions.push(p3.x, p3.y, p3.z);
+        positions.push(p4.x, p4.y, p4.z);
+        
+        waterGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        waterGeo.computeVertexNormals();
+        
+        const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+        waterGroup.add(waterMesh);
+      }
+    }
+    
+    this.decorations.add(waterGroup);
   }
 
   private createPier(): THREE.Group {

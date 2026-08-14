@@ -237,7 +237,7 @@ export class Character {
       return;
     }
     
-    if (distFromCenter <= surfaceHeight) {
+    if (distFromCenter < surfaceHeight) {
       const up = this.group.position.clone().normalize();
       this.group.position.copy(up.multiplyScalar(surfaceHeight));
       
@@ -319,20 +319,47 @@ export class Character {
   private checkNPCInteraction(): void {
     if (!this.game.inputManager.consumeInteract()) return;
     
-    const nearestNPC = this.game.npcManager.getNearestNPC(this.group.position);
-    if (!nearestNPC) return;
-    
     const delivery = this.game.deliverySystem;
+    const interactionRange = 6;
     
-    if (delivery.canPickupFrom(nearestNPC.name)) {
+    let targetNPC = this.game.npcManager.getNearestNPC(this.group.position);
+    
+    if (delivery.hasLetter && delivery.currentDelivery) {
+      const deliveryTarget = this.game.npcManager.getNPCByName(delivery.currentDelivery.to);
+      if (deliveryTarget) {
+        const targetPos = deliveryTarget.mesh.position;
+        const playerDir = this.group.position.clone().normalize();
+        const targetDir = targetPos.clone().normalize();
+        const dot = Math.max(-1, Math.min(1, playerDir.dot(targetDir)));
+        const angle = Math.acos(dot);
+        const arcDist = this.game.planetRadius * angle;
+        
+        if (arcDist <= interactionRange) {
+          targetNPC = deliveryTarget;
+        }
+      }
+    }
+    
+    if (!targetNPC) return;
+    
+    const npcWorldPos = targetNPC.mesh.position;
+    const playerDir = this.group.position.clone().normalize();
+    const npcDir = npcWorldPos.clone().normalize();
+    const dot = Math.max(-1, Math.min(1, playerDir.dot(npcDir)));
+    const angle = Math.acos(dot);
+    const arcDist = this.game.planetRadius * angle;
+    
+    if (arcDist > interactionRange) return;
+    
+    if (delivery.canPickupFrom(targetNPC.name)) {
       const message = delivery.pickupLetter();
-      this.game.dialogueSystem.showDialogue(nearestNPC.name, message);
-    } else if (delivery.canDeliverTo(nearestNPC.name)) {
+      this.game.dialogueSystem.showDialogue(targetNPC.name, message);
+    } else if (delivery.canDeliverTo(targetNPC.name)) {
       const response = delivery.deliverLetter();
-      this.game.dialogueSystem.showDialogue(nearestNPC.name, response);
+      this.game.dialogueSystem.showDialogue(targetNPC.name, response);
     } else {
-      const greeting = this.game.npcManager.getRandomGreeting(nearestNPC);
-      this.game.dialogueSystem.showDialogue(nearestNPC.name, greeting);
+      const greeting = this.game.npcManager.getRandomGreeting(targetNPC);
+      this.game.dialogueSystem.showDialogue(targetNPC.name, greeting);
     }
   }
 

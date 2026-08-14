@@ -114,7 +114,8 @@ export class NPCManager {
       position,
       mesh,
       idleAnimation: (elapsed) => {
-        mesh.position.y += Math.sin(elapsed * 0.8) * 0.002;
+        const body = mesh.children[0];
+        body.rotation.x = Math.sin(elapsed * 0.8) * 0.03;
       },
       greetings: [
         "A visitor? How... unusual. What news from the world?",
@@ -341,7 +342,16 @@ export class NPCManager {
     const planetRadius = this.game.planetRadius;
     
     for (const npc of this.npcs) {
-      const npcDir = npc.position.clone().normalize();
+      if (!npc.position || npc.position.lengthSq() < 0.01) {
+        continue;
+      }
+      
+      const npcWorldPos = npc.mesh.position.clone();
+      if (npcWorldPos.lengthSq() < 0.01) {
+        continue;
+      }
+      
+      const npcDir = npcWorldPos.normalize();
       const dot = Math.max(-1, Math.min(1, playerDir.dot(npcDir)));
       const angle = Math.acos(dot);
       const arcDist = planetRadius * angle;
