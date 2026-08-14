@@ -7,9 +7,9 @@ export class Character {
   public group: THREE.Group;
   
   private velocity: THREE.Vector3 = new THREE.Vector3();
-  private moveSpeed: number = 8;
-  private jumpForce: number = 5;
-  private gravity: number = 25;
+  private moveSpeed: number = 12;
+  private jumpForce: number = 18;
+  private gravity: number = 12;
   
   private isGrounded: boolean = true;
   private jumpCooldown: number = 0;
@@ -29,6 +29,7 @@ export class Character {
   private hat!: THREE.Mesh;
   private hatBrim!: THREE.Mesh;
   private satchel!: THREE.Group;
+  private groundShadow!: THREE.Mesh;
   
 
   constructor(game: Game, spawnPosition: THREE.Vector3) {
@@ -135,6 +136,17 @@ export class Character {
     this.satchel.add(flap);
     
     this.group.add(this.satchel);
+    
+    const shadowGeo = new THREE.CircleGeometry(0.6, 16);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false
+    });
+    this.groundShadow = new THREE.Mesh(shadowGeo, shadowMat);
+    this.groundShadow.rotation.x = -Math.PI / 2;
+    this.game.scene.add(this.groundShadow);
   }
 
   public update(delta: number): void {
@@ -144,6 +156,7 @@ export class Character {
     this.applyGravity(delta);
     this.move(delta);
     this.alignToSurface();
+    this.updateShadow();
     this.animate(delta);
     this.checkNPCInteraction();
     
@@ -176,31 +189,20 @@ export class Character {
       this.currentForward.lerp(moveDir, 10 * delta);
       this.currentForward.normalize();
       
-      this.velocity.add(moveDir.multiplyScalar(this.moveSpeed * delta * 10));
+      const verticalVel = up.clone().multiplyScalar(this.velocity.dot(up));
+      const targetHorizontalVel = moveDir.clone().multiplyScalar(this.moveSpeed);
+      this.velocity.copy(targetHorizontalVel).add(verticalVel);
     } else {
       this.isWalking = false;
-    }
-    
-    const maxSpeed = this.moveSpeed;
-    const horizontalVel = this.velocity.clone();
-    horizontalVel.sub(up.clone().multiplyScalar(horizontalVel.dot(up)));
-    
-    if (horizontalVel.length() > maxSpeed) {
-      horizontalVel.normalize().multiplyScalar(maxSpeed);
       const verticalVel = up.clone().multiplyScalar(this.velocity.dot(up));
-      this.velocity.copy(horizontalVel).add(verticalVel);
+      this.velocity.copy(verticalVel);
     }
-    
-    const friction = this.isGrounded ? 8 : 2;
-    horizontalVel.multiplyScalar(Math.exp(-friction * delta));
-    const verticalVel = up.clone().multiplyScalar(this.velocity.dot(up));
-    this.velocity.copy(horizontalVel).add(verticalVel);
     
     if (input.jump && this.isGrounded && this.jumpCooldown <= 0) {
       this.velocity.add(up.clone().multiplyScalar(this.jumpForce));
       this.isGrounded = false;
       this.isJumping = true;
-      this.jumpCooldown = 0.3;
+      this.jumpCooldown = 0.5;
       this.game.audioManager.playJump();
     }
   }
@@ -220,7 +222,8 @@ export class Character {
     
     const distFromCenter = this.group.position.length();
     const surfaceHeight = this.game.planetRadius + 0.5;
-    const maxHeight = this.game.planetRadius + 10;
+    const maxHeight = this.game.planetRadius + 20;
+    const groundTolerance = 0.1;
     
     if (distFromCenter < 1) {
       this.group.position.set(0, surfaceHeight, 0);
@@ -237,25 +240,46 @@ export class Character {
       return;
     }
     
-    if (distFromCenter < surfaceHeight) {
-      const up = this.group.position.clone().normalize();
-      this.group.position.copy(up.multiplyScalar(surfaceHeight));
+    const up = this.group.position.clone().normalize();
+    
+    if (distFromCenter <= surfaceHeight) {
+      this.group.position.copy(up.clone().multiplyScalar(surfaceHeight));
       
-      const verticalVel = up.clone().multiplyScalar(this.velocity.dot(up));
-      if (verticalVel.dot(up) < 0) {
-        this.velocity.sub(verticalVel);
+      const verticalVel = this.velocity.dot(up);
+      if (verticalVel < 0) {
+        this.velocity.sub(up.clone().multiplyScalar(verticalVel));
       }
       
       if (!this.isGrounded) {
         this.isGrounded = true;
         this.isJumping = false;
-        if (Math.abs(this.velocity.dot(up)) > 2) {
+        if (Math.abs(verticalVel) > 2) {
           this.game.audioManager.playLand();
         }
       }
+    } else if (distFromCenter < surfaceHeight + groundTolerance && !this.isJumping) {
+      this.group.position.copy(up.clone().multiplyScalar(surfaceHeight));
+      this.isGrounded = true;
     } else {
       this.isGrounded = false;
     }
+  }
+
+  private updateShadow(): void {
+    const surfaceHeight = this.game.planetRadius + 0.01;
+    const up = this.group.position.clone().normalize();
+    
+    this.groundShadow.position.copy(up.multiplyScalar(surfaceHeight));
+    
+    const defaultUp = new THREE.Vector3(0, 1, 0);
+    const shadowQuat = new THREE.Quaternion().setFromUnitVectors(defaultUp, up.normalize());
+    this.groundShadow.quaternion.copy(shadowQuat);
+    
+    const heightAboveSurface = this.group.position.length() - this.game.planetRadius - 0.5;
+    const shadowScale = Math.max(0.3, 1 - heightAboveSurface * 0.1);
+    const shadowOpacity = Math.max(0.1, 0.3 - heightAboveSurface * 0.03);
+    this.groundShadow.scale.setScalar(shadowScale);
+    (this.groundShadow.material as THREE.MeshBasicMaterial).opacity = shadowOpacity;
   }
 
   private alignToSurface(): void {

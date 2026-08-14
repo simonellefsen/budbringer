@@ -60,7 +60,7 @@ export class NPCManager {
   }
 
   private createFisherFinn(): void {
-    const position = this.getPositionInBiome(BiomeType.SEASIDE, Math.PI / 4, 4);
+    const position = this.getPositionInBiome(BiomeType.SEASIDE, 0.5, 6);
     const mesh = this.createNPCMesh({
       bodyColor: 0xf39c12,
       hatColor: 0x7f8c8d,
