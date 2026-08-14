@@ -121,14 +121,36 @@ export class Planet {
 
   private createRoads(): void {
     // Create a dense road network wrapping the ENTIRE sphere
-    // Main latitude roads (horizontal rings)
-    for (let lat = -0.7; lat <= 0.7; lat += 0.35) {
+    // Dense latitude roads covering ENTIRE sphere
+    for (let lat = -0.9; lat <= 0.9; lat += 0.18) {
       this.createLatitudeRoad(lat);
     }
     
-    // Main longitude roads (vertical meridians)
-    for (let lon = 0; lon < Math.PI * 2; lon += Math.PI / 3) {
+    // Dense longitude roads for better coverage
+    for (let lon = 0; lon < Math.PI * 2; lon += Math.PI / 6) {
       this.createLongitudeRoad(lon);
+    }
+    
+    // Extra diagonal roads to fill gaps
+    for (let i = 0; i < 8; i++) {
+      const startTheta = (i / 8) * Math.PI * 2;
+      const startPhi = 0.3;
+      const endTheta = startTheta + Math.PI / 4;
+      const endPhi = Math.PI - 0.3;
+      
+      const from = new THREE.Vector3(
+        Math.sin(startPhi) * Math.cos(startTheta),
+        Math.cos(startPhi),
+        Math.sin(startPhi) * Math.sin(startTheta)
+      ).multiplyScalar(this.radius);
+      
+      const to = new THREE.Vector3(
+        Math.sin(endPhi) * Math.cos(endTheta),
+        Math.cos(endPhi),
+        Math.sin(endPhi) * Math.sin(endTheta)
+      ).multiplyScalar(this.radius);
+      
+      this.createConnectingRoad(from, to);
     }
     
     // Connect all biomes with roads
@@ -195,32 +217,39 @@ export class Planet {
   }
 
   private createRoadSegment(from: THREE.Vector3, to: THREE.Vector3): void {
-    const roadGeo = new THREE.BoxGeometry(1.8, 0.03, 1);
-    const roadMat = ToonMaterial.create({ color: 0x505050 });
+    // Calculate road length based on arc distance
+    const arcLength = from.angleTo(to) * this.radius;
+    const roadWidth = 2.2;
+    const roadGeo = new THREE.BoxGeometry(roadWidth, 0.04, Math.max(arcLength * 1.1, 1.5));
+    const roadMat = ToonMaterial.create({ color: 0x404040 });
     const road = new THREE.Mesh(roadGeo, roadMat);
     road.receiveShadow = true;
     
-    const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius);
-    this.placeOnSphere(road, mid);
+    // Position at midpoint on the surface
+    const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius + 0.02);
+    road.position.copy(mid);
     
-    // Orient along road direction
-    const dir = to.clone().sub(from);
+    // Orient: up is surface normal, forward points along the road
     const up = mid.clone().normalize();
+    const dir = to.clone().sub(from);
     dir.sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
-    if (dir.lengthSq() > 0.001) {
-      road.lookAt(mid.clone().add(dir));
-      road.rotateX(Math.PI / 2);
-    }
+    
+    const right = new THREE.Vector3().crossVectors(up, dir).normalize();
+    const correctedDir = new THREE.Vector3().crossVectors(right, up).normalize();
+    
+    const matrix = new THREE.Matrix4();
+    matrix.makeBasis(right, up, correctedDir);
+    road.quaternion.setFromRotationMatrix(matrix);
     
     this.decorations.add(road);
     
-    // Center line
-    const lineGeo = new THREE.BoxGeometry(0.12, 0.035, 0.6);
-    const lineMat = ToonMaterial.create({ color: 0xffffff });
+    // Center line dash
+    const lineGeo = new THREE.BoxGeometry(0.15, 0.045, Math.max(arcLength * 0.4, 0.5));
+    const lineMat = ToonMaterial.create({ color: 0xeeeeee });
     const line = new THREE.Mesh(lineGeo, lineMat);
-    line.position.copy(road.position);
+    line.position.copy(mid);
+    line.position.add(up.clone().multiplyScalar(0.025));
     line.quaternion.copy(road.quaternion);
-    line.translateY(0.01);
     this.decorations.add(line);
   }
 
@@ -292,11 +321,11 @@ export class Planet {
 
   private fillGlobalDecorations(): void {
     // Scatter houses, trees, and props across the entire sphere
-    // Fill gaps but keep roads open
+    // Dense content to wrap the entire sphere - no empty patches
     
-    const numGlobalHouses = 15; // Fewer scattered houses
-    const numGlobalTrees = 25;
-    const numGlobalProps = 30;
+    const numGlobalHouses = 60; // Dense houses across the globe
+    const numGlobalTrees = 70;
+    const numGlobalProps = 80;
     
     // Random houses everywhere
     for (let i = 0; i < numGlobalHouses; i++) {
