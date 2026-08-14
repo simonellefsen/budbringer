@@ -225,7 +225,7 @@ export class Secrets {
       const islandPos = this.floatingIsland.position;
       const dist = playerPos.distanceTo(islandPos);
       
-      if (dist < 30 && !this.foundSecrets.has('island')) {
+      if (dist < 20 && !this.foundSecrets.has('island')) {
         this.foundSecrets.add('island');
         this.game.dialogueSystem.showMessage(
           "The Wandering Isle",
