@@ -121,14 +121,36 @@ export class Planet {
 
   private createRoads(): void {
     // Create a dense road network wrapping the ENTIRE sphere
-    // Main latitude roads covering ENTIRE sphere (more rings, closer together)
-    for (let lat = -0.85; lat <= 0.85; lat += 0.25) {
+    // Dense latitude roads covering ENTIRE sphere
+    for (let lat = -0.9; lat <= 0.9; lat += 0.18) {
       this.createLatitudeRoad(lat);
     }
     
-    // Main longitude roads (more meridians for better coverage)
-    for (let lon = 0; lon < Math.PI * 2; lon += Math.PI / 4) {
+    // Dense longitude roads for better coverage
+    for (let lon = 0; lon < Math.PI * 2; lon += Math.PI / 6) {
       this.createLongitudeRoad(lon);
+    }
+    
+    // Extra diagonal roads to fill gaps
+    for (let i = 0; i < 8; i++) {
+      const startTheta = (i / 8) * Math.PI * 2;
+      const startPhi = 0.3;
+      const endTheta = startTheta + Math.PI / 4;
+      const endPhi = Math.PI - 0.3;
+      
+      const from = new THREE.Vector3(
+        Math.sin(startPhi) * Math.cos(startTheta),
+        Math.cos(startPhi),
+        Math.sin(startPhi) * Math.sin(startTheta)
+      ).multiplyScalar(this.radius);
+      
+      const to = new THREE.Vector3(
+        Math.sin(endPhi) * Math.cos(endTheta),
+        Math.cos(endPhi),
+        Math.sin(endPhi) * Math.sin(endTheta)
+      ).multiplyScalar(this.radius);
+      
+      this.createConnectingRoad(from, to);
     }
     
     // Connect all biomes with roads
@@ -299,11 +321,11 @@ export class Planet {
 
   private fillGlobalDecorations(): void {
     // Scatter houses, trees, and props across the entire sphere
-    // Fill gaps - more content to wrap the entire sphere
+    // Dense content to wrap the entire sphere - no empty patches
     
-    const numGlobalHouses = 40; // More houses across the globe
-    const numGlobalTrees = 50;
-    const numGlobalProps = 60;
+    const numGlobalHouses = 60; // Dense houses across the globe
+    const numGlobalTrees = 70;
+    const numGlobalProps = 80;
     
     // Random houses everywhere
     for (let i = 0; i < numGlobalHouses; i++) {
