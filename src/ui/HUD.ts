@@ -246,8 +246,12 @@ export class HUD {
     const checklistToggle = document.getElementById('checklist-toggle')!;
     checklistToggle.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.preventDefault();
       this.checklistVisible = !this.checklistVisible;
       this.checklistPanel.classList.toggle('visible', this.checklistVisible);
+    });
+    checklistToggle.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
     });
     
     document.querySelectorAll('.emote-btn').forEach(btn => {
