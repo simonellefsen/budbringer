@@ -57,13 +57,17 @@ export class InputManager {
     document.addEventListener('keydown', this.boundKeyDown);
     document.addEventListener('keyup', this.boundKeyUp);
     document.addEventListener('mousemove', this.boundMouseMove);
-    document.addEventListener('mousedown', this.boundMouseDown);
-    document.addEventListener('touchstart', this.boundTouchStart, { passive: false });
-    document.addEventListener('touchmove', this.boundTouchMove, { passive: false });
-    document.addEventListener('touchend', this.boundTouchEnd);
     document.addEventListener('pointerlockchange', this.boundPointerLockChange);
     
     this.createMobileControls();
+  }
+
+  public setupCanvasEvents(): void {
+    const canvas = this.game.renderer.domElement;
+    canvas.addEventListener('mousedown', this.boundMouseDown);
+    canvas.addEventListener('touchstart', this.boundTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', this.boundTouchMove, { passive: false });
+    canvas.addEventListener('touchend', this.boundTouchEnd);
   }
 
   private createMobileControls(): void {
@@ -195,8 +199,6 @@ export class InputManager {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
-    if (!this.enabled) return;
-    
     switch (e.code) {
       case 'KeyW':
       case 'ArrowUp':
@@ -215,8 +217,10 @@ export class InputManager {
         this.state.right = true;
         break;
       case 'Space':
-        this.state.jump = true;
-        e.preventDefault();
+        if (this.enabled) {
+          this.state.jump = true;
+          e.preventDefault();
+        }
         break;
       case 'KeyE':
       case 'Enter':
@@ -380,11 +384,13 @@ export class InputManager {
     document.removeEventListener('keydown', this.boundKeyDown);
     document.removeEventListener('keyup', this.boundKeyUp);
     document.removeEventListener('mousemove', this.boundMouseMove);
-    document.removeEventListener('mousedown', this.boundMouseDown);
-    document.removeEventListener('touchstart', this.boundTouchStart);
-    document.removeEventListener('touchmove', this.boundTouchMove);
-    document.removeEventListener('touchend', this.boundTouchEnd);
     document.removeEventListener('pointerlockchange', this.boundPointerLockChange);
+    
+    const canvas = this.game.renderer.domElement;
+    canvas.removeEventListener('mousedown', this.boundMouseDown);
+    canvas.removeEventListener('touchstart', this.boundTouchStart);
+    canvas.removeEventListener('touchmove', this.boundTouchMove);
+    canvas.removeEventListener('touchend', this.boundTouchEnd);
     
     if (document.pointerLockElement) {
       document.exitPointerLock();

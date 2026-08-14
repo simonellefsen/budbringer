@@ -244,13 +244,15 @@ export class HUD {
     this.checklistPanel = document.getElementById('checklist-panel')!;
     
     const checklistToggle = document.getElementById('checklist-toggle')!;
-    checklistToggle.addEventListener('click', () => {
+    checklistToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.checklistVisible = !this.checklistVisible;
       this.checklistPanel.classList.toggle('visible', this.checklistVisible);
     });
     
     document.querySelectorAll('.emote-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const emote = (e.target as HTMLElement).getAttribute('data-emote');
         this.playEmote(emote!);
       });

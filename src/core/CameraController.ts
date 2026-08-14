@@ -109,15 +109,26 @@ export class CameraController {
       baseOffset.applyQuaternion(tempQuat);
     }
     
-    const targetPos = characterPos.clone()
+    let targetPos = characterPos.clone()
       .add(baseOffset.clone().multiplyScalar(this.distance))
       .add(characterUp.clone().multiplyScalar(this.height));
+    
+    const minCamHeight = planetRadius + 2;
+    const targetDist = targetPos.length();
+    if (targetDist < minCamHeight) {
+      targetPos = targetPos.normalize().multiplyScalar(minCamHeight);
+    }
     
     const targetLookAt = characterPos.clone().add(characterUp.clone().multiplyScalar(2));
     
     const smoothFactor = Math.min(1, Math.max(0, 1 - Math.exp(-this.smoothing * delta)));
     
     this.camera.position.lerp(targetPos, smoothFactor);
+    
+    const currentCamDist = this.camera.position.length();
+    if (currentCamDist < minCamHeight) {
+      this.camera.position.normalize().multiplyScalar(minCamHeight);
+    }
     
     const currentLookAt = new THREE.Vector3();
     this.camera.getWorldDirection(currentLookAt);
