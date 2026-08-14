@@ -8,8 +8,8 @@ export class Character {
   
   private velocity: THREE.Vector3 = new THREE.Vector3();
   private moveSpeed: number = 12;
-  private jumpForce: number = 12;
-  private gravity: number = 15;
+  private jumpForce: number = 18;
+  private gravity: number = 12;
   
   private isGrounded: boolean = true;
   private jumpCooldown: number = 0;
@@ -29,6 +29,7 @@ export class Character {
   private hat!: THREE.Mesh;
   private hatBrim!: THREE.Mesh;
   private satchel!: THREE.Group;
+  private groundShadow!: THREE.Mesh;
   
 
   constructor(game: Game, spawnPosition: THREE.Vector3) {
@@ -135,6 +136,17 @@ export class Character {
     this.satchel.add(flap);
     
     this.group.add(this.satchel);
+    
+    const shadowGeo = new THREE.CircleGeometry(0.6, 16);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false
+    });
+    this.groundShadow = new THREE.Mesh(shadowGeo, shadowMat);
+    this.groundShadow.rotation.x = -Math.PI / 2;
+    this.game.scene.add(this.groundShadow);
   }
 
   public update(delta: number): void {
@@ -144,6 +156,7 @@ export class Character {
     this.applyGravity(delta);
     this.move(delta);
     this.alignToSurface();
+    this.updateShadow();
     this.animate(delta);
     this.checkNPCInteraction();
     
@@ -250,6 +263,23 @@ export class Character {
     } else {
       this.isGrounded = false;
     }
+  }
+
+  private updateShadow(): void {
+    const surfaceHeight = this.game.planetRadius + 0.01;
+    const up = this.group.position.clone().normalize();
+    
+    this.groundShadow.position.copy(up.multiplyScalar(surfaceHeight));
+    
+    const defaultUp = new THREE.Vector3(0, 1, 0);
+    const shadowQuat = new THREE.Quaternion().setFromUnitVectors(defaultUp, up.normalize());
+    this.groundShadow.quaternion.copy(shadowQuat);
+    
+    const heightAboveSurface = this.group.position.length() - this.game.planetRadius - 0.5;
+    const shadowScale = Math.max(0.3, 1 - heightAboveSurface * 0.1);
+    const shadowOpacity = Math.max(0.1, 0.3 - heightAboveSurface * 0.03);
+    this.groundShadow.scale.setScalar(shadowScale);
+    (this.groundShadow.material as THREE.MeshBasicMaterial).opacity = shadowOpacity;
   }
 
   private alignToSurface(): void {
