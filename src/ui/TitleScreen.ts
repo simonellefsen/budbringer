@@ -375,8 +375,9 @@ export class TitleScreen {
       xOffset += letterSpacing;
     }
     
-    // Position letters below the planet, not covering it
-    this.titleLetters.position.set(0, -22, 25);
+    // Position letters clearly below the planet, in front so they're visible
+    // Planet is at y=0 with radius=18, so letters at y=-28 should be well below
+    this.titleLetters.position.set(0, -28, 40);
     this.titleScene.add(this.titleLetters);
   }
 
