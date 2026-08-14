@@ -5,15 +5,16 @@ export class CameraController {
   private game: Game;
   private camera: THREE.PerspectiveCamera;
   
-  private distance: number = 12;
-  private height: number = 4;
+  // Very close third-person, human height - can't see whole planet as diorama
+  private distance: number = 3.2;
+  private height: number = 1.2;
   
-  private pitchOffset: number = 0.2;
-  private maxPitch: number = 0.8;
-  private minPitch: number = -0.3;
+  private pitchOffset: number = 0.04;
+  private maxPitch: number = 0.35;
+  private minPitch: number = -0.08;
   
   private lookSensitivity: number = 0.003;
-  private smoothing: number = 5;
+  private smoothing: number = 12;
   
   // Stable heading direction for parallel transport
   private stableHeading: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
@@ -86,7 +87,8 @@ export class CameraController {
       .add(up.clone().multiplyScalar(this.height))
       .add(behind.clone().multiplyScalar(this.distance));
     
-    const lookAt = charPos.clone().add(up.clone().multiplyScalar(2));
+    // Look at character's back/shoulder level for street-level view
+    const lookAt = charPos.clone().add(up.clone().multiplyScalar(1.0));
     
     this.camera.position.copy(camPos);
     this.camera.lookAt(lookAt);
@@ -169,13 +171,14 @@ export class CameraController {
       .add(cameraOffset.clone().multiplyScalar(this.distance))
       .add(characterUp.clone().multiplyScalar(this.height));
     
-    const minCamHeight = planetRadius + 2;
+    const minCamHeight = planetRadius + 1.0;
     const targetDist = targetPos.length();
     if (targetDist < minCamHeight) {
       targetPos = targetPos.normalize().multiplyScalar(minCamHeight);
     }
     
-    const targetLookAt = characterPos.clone().add(characterUp.clone().multiplyScalar(2));
+    // Look at character's back for street-level feel
+    const targetLookAt = characterPos.clone().add(characterUp.clone().multiplyScalar(1.0));
     
     const smoothFactor = Math.min(1, Math.max(0, 1 - Math.exp(-this.smoothing * delta)));
     
