@@ -8,13 +8,16 @@ export class CameraController {
   private distance: number = 12;
   private height: number = 4;
   
-  private yawOffset: number = 0;
   private pitchOffset: number = 0.2;
   private maxPitch: number = 0.8;
   private minPitch: number = -0.3;
   
   private lookSensitivity: number = 0.003;
   private smoothing: number = 5;
+  
+  // Stable heading direction for parallel transport
+  private stableHeading: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
+  private lastCharacterUp: THREE.Vector3 = new THREE.Vector3(0, 1, 0);
 
   constructor(game: Game) {
     this.game = game;
@@ -24,9 +27,29 @@ export class CameraController {
   }
 
   public reset(): void {
-    this.yawOffset = 0;
     this.pitchOffset = 0.2;
+    this.initializeStableHeading();
     this.snapToCharacter();
+  }
+  
+  private initializeStableHeading(): void {
+    const charPos = this.game.character.group.position;
+    if (charPos.length() < 1) {
+      this.stableHeading.set(0, 0, 1);
+      this.lastCharacterUp.set(0, 1, 0);
+      return;
+    }
+    
+    const up = charPos.clone().normalize();
+    this.lastCharacterUp.copy(up);
+    
+    // Create an initial heading on the tangent plane
+    let tangent = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(up.dot(tangent)) > 0.99) {
+      tangent.set(1, 0, 0);
+    }
+    const right = new THREE.Vector3().crossVectors(up, tangent).normalize();
+    this.stableHeading.crossVectors(right, up).normalize();
   }
 
   private snapToCharacter(): void {
@@ -37,19 +60,27 @@ export class CameraController {
       this.camera.position.set(0, planetRadius + this.height + this.distance, 0);
       this.camera.lookAt(0, planetRadius, 0);
       this.camera.up.set(0, 1, 0);
+      this.initializeStableHeading();
       return;
     }
     
     const up = charPos.clone().normalize();
+    this.lastCharacterUp.copy(up);
     
-    let tangent = new THREE.Vector3(0, 1, 0);
-    if (Math.abs(up.dot(tangent)) > 0.99) {
-      tangent.set(1, 0, 0);
+    // Initialize stable heading if needed
+    if (this.stableHeading.lengthSq() < 0.5) {
+      this.initializeStableHeading();
     }
-    const right = new THREE.Vector3().crossVectors(up, tangent).normalize();
-    const forward = new THREE.Vector3().crossVectors(right, up).normalize();
     
-    const behind = forward.clone().negate();
+    // Ensure heading is on tangent plane
+    this.stableHeading.sub(up.clone().multiplyScalar(this.stableHeading.dot(up)));
+    if (this.stableHeading.lengthSq() < 0.01) {
+      this.initializeStableHeading();
+    } else {
+      this.stableHeading.normalize();
+    }
+    
+    const behind = this.stableHeading.clone().negate();
     
     const camPos = charPos.clone()
       .add(up.clone().multiplyScalar(this.height))
@@ -84,33 +115,58 @@ export class CameraController {
       return;
     }
     
+    const characterUp = characterPos.clone().normalize();
+    
+    // Parallel transport: rotate heading as the surface normal changes
+    if (this.lastCharacterUp.lengthSq() > 0.5) {
+      const dot = Math.max(-1, Math.min(1, this.lastCharacterUp.dot(characterUp)));
+      if (dot < 0.9999) {
+        // Compute rotation from old up to new up
+        const rotationAxis = new THREE.Vector3().crossVectors(this.lastCharacterUp, characterUp);
+        if (rotationAxis.lengthSq() > 0.0001) {
+          rotationAxis.normalize();
+          const angle = Math.acos(dot);
+          const transportQuat = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angle);
+          this.stableHeading.applyQuaternion(transportQuat);
+        }
+      }
+    }
+    this.lastCharacterUp.copy(characterUp);
+    
+    // Re-orthogonalize heading to tangent plane (numerical stability)
+    this.stableHeading.sub(characterUp.clone().multiplyScalar(this.stableHeading.dot(characterUp)));
+    if (this.stableHeading.lengthSq() < 0.01) {
+      this.initializeStableHeading();
+    } else {
+      this.stableHeading.normalize();
+    }
+    
+    // Apply yaw from mouse/touch input
     const lookDelta = this.game.inputManager.consumeLookDelta();
-    this.yawOffset -= lookDelta.x * this.lookSensitivity;
+    if (Math.abs(lookDelta.x) > 0.001) {
+      const yawAngle = -lookDelta.x * this.lookSensitivity;
+      const yawQuat = new THREE.Quaternion().setFromAxisAngle(characterUp, yawAngle);
+      this.stableHeading.applyQuaternion(yawQuat);
+      this.stableHeading.normalize();
+    }
+    
+    // Apply pitch
     this.pitchOffset -= lookDelta.y * this.lookSensitivity;
     this.pitchOffset = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitchOffset));
     
-    const characterUp = characterPos.clone().normalize();
+    // Camera looks in direction of stableHeading, positioned behind character
+    const behind = this.stableHeading.clone().negate();
     
-    let tangent = new THREE.Vector3(0, 1, 0);
-    if (Math.abs(characterUp.dot(tangent)) > 0.99) {
-      tangent.set(1, 0, 0);
-    }
-    const worldRight = new THREE.Vector3().crossVectors(characterUp, tangent).normalize();
-    const worldForward = new THREE.Vector3().crossVectors(worldRight, characterUp).normalize();
-    
-    const tempQuat = new THREE.Quaternion();
-    tempQuat.setFromAxisAngle(characterUp, this.yawOffset);
-    const baseOffset = worldForward.clone().negate();
-    baseOffset.applyQuaternion(tempQuat);
-    
-    const pitchAxis = new THREE.Vector3().crossVectors(baseOffset, characterUp).normalize();
-    if (pitchAxis.length() > 0.01) {
-      tempQuat.setFromAxisAngle(pitchAxis, this.pitchOffset);
-      baseOffset.applyQuaternion(tempQuat);
+    // Apply pitch to camera offset
+    const pitchAxis = new THREE.Vector3().crossVectors(behind, characterUp).normalize();
+    let cameraOffset = behind.clone();
+    if (pitchAxis.lengthSq() > 0.01) {
+      const pitchQuat = new THREE.Quaternion().setFromAxisAngle(pitchAxis, this.pitchOffset);
+      cameraOffset.applyQuaternion(pitchQuat);
     }
     
     let targetPos = characterPos.clone()
-      .add(baseOffset.clone().multiplyScalar(this.distance))
+      .add(cameraOffset.clone().multiplyScalar(this.distance))
       .add(characterUp.clone().multiplyScalar(this.height));
     
     const minCamHeight = planetRadius + 2;
@@ -145,25 +201,14 @@ export class CameraController {
   }
 
   public getForwardOnSurface(): THREE.Vector3 {
-    const characterPos = this.game.character.group.position;
-    const up = characterPos.clone().normalize();
-    
-    const cameraForward = new THREE.Vector3();
-    this.camera.getWorldDirection(cameraForward);
-    
-    cameraForward.sub(up.clone().multiplyScalar(cameraForward.dot(up)));
-    if (cameraForward.length() < 0.01) {
-      return new THREE.Vector3(1, 0, 0);
-    }
-    cameraForward.normalize();
-    
-    return cameraForward;
+    // Return the stable heading direction (already on tangent plane)
+    return this.stableHeading.clone();
   }
 
   public getRightOnSurface(): THREE.Vector3 {
     const characterPos = this.game.character.group.position;
     const up = characterPos.clone().normalize();
-    const forward = this.getForwardOnSurface();
+    const forward = this.stableHeading.clone();
     
     return new THREE.Vector3().crossVectors(forward, up).normalize().negate();
   }
