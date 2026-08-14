@@ -179,7 +179,13 @@ export class Secrets {
       this.gameStartTime = elapsed;
     }
     const timeSinceStart = elapsed - this.gameStartTime;
-    if (timeSinceStart < 5) return;
+    if (timeSinceStart < 8) return;
+    
+    const playerPos = this.game.character.group.position;
+    const playerDist = playerPos.length();
+    if (playerDist < this.game.planetRadius * 0.5 || playerDist > this.game.planetRadius * 2) {
+      return;
+    }
     
     if (this.floatingIsland) {
       this.floatingIsland.position.y = this.game.planetRadius + 50 + Math.sin(elapsed * 0.3) * 2;
@@ -228,11 +234,10 @@ export class Secrets {
     }
     
     if (this.floatingIsland) {
-      const playerPos = this.game.character.group.position;
       const islandPos = this.floatingIsland.position;
       const dist = playerPos.distanceTo(islandPos);
       
-      if (dist < 20 && !this.foundSecrets.has('island')) {
+      if (dist < 10 && !this.foundSecrets.has('island')) {
         this.foundSecrets.add('island');
         this.game.dialogueSystem.showMessage(
           "The Wandering Isle",

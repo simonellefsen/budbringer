@@ -15,41 +15,50 @@ export class CameraController {
   
   private lookSensitivity: number = 0.003;
   private smoothing: number = 5;
-  
-  private currentPosition: THREE.Vector3 = new THREE.Vector3();
-  private currentLookAt: THREE.Vector3 = new THREE.Vector3();
-  private targetPosition: THREE.Vector3 = new THREE.Vector3();
-  private targetLookAt: THREE.Vector3 = new THREE.Vector3();
-  
-  private tempQuat: THREE.Quaternion = new THREE.Quaternion();
 
   constructor(game: Game) {
     this.game = game;
     this.camera = game.camera;
     
-    this.resetToCharacter();
+    this.snapToCharacter();
   }
 
   public reset(): void {
     this.yawOffset = 0;
-    this.pitchOffset = 0;
-    this.resetToCharacter();
+    this.pitchOffset = 0.2;
+    this.snapToCharacter();
   }
 
-  private resetToCharacter(): void {
-    const charPos = this.game.character.group.position.clone();
+  private snapToCharacter(): void {
+    const charPos = this.game.character.group.position;
+    const planetRadius = this.game.planetRadius;
+    
+    if (charPos.length() < 1) {
+      this.camera.position.set(0, planetRadius + this.height + this.distance, 0);
+      this.camera.lookAt(0, planetRadius, 0);
+      this.camera.up.set(0, 1, 0);
+      return;
+    }
+    
     const up = charPos.clone().normalize();
-    const behind = this.game.character.getForward().clone().negate();
     
-    this.currentPosition.copy(charPos)
+    let tangent = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(up.dot(tangent)) > 0.99) {
+      tangent.set(1, 0, 0);
+    }
+    const right = new THREE.Vector3().crossVectors(up, tangent).normalize();
+    const forward = new THREE.Vector3().crossVectors(right, up).normalize();
+    
+    const behind = forward.clone().negate();
+    
+    const camPos = charPos.clone()
       .add(up.clone().multiplyScalar(this.height))
-      .add(behind.multiplyScalar(this.distance));
-    this.currentLookAt.copy(charPos).add(up.clone().multiplyScalar(2));
-    this.targetPosition.copy(this.currentPosition);
-    this.targetLookAt.copy(this.currentLookAt);
+      .add(behind.clone().multiplyScalar(this.distance));
     
-    this.camera.position.copy(this.currentPosition);
-    this.camera.lookAt(this.currentLookAt);
+    const lookAt = charPos.clone().add(up.clone().multiplyScalar(2));
+    
+    this.camera.position.copy(camPos);
+    this.camera.lookAt(lookAt);
     this.camera.up.copy(up);
   }
 
@@ -57,10 +66,21 @@ export class CameraController {
     if (this.game.state !== GameState.PLAYING) return;
     
     const characterPos = this.game.character.group.position;
+    const planetRadius = this.game.planetRadius;
+    
+    if (characterPos.length() < 1 || !isFinite(characterPos.x)) {
+      return;
+    }
     
     const distToChar = this.camera.position.distanceTo(characterPos);
-    if (distToChar > 50 || !isFinite(distToChar)) {
-      this.resetToCharacter();
+    if (distToChar > 50 || !isFinite(distToChar) || distToChar < 0.1) {
+      this.snapToCharacter();
+      return;
+    }
+    
+    const camDist = this.camera.position.length();
+    if (camDist > planetRadius * 5 || camDist < planetRadius * 0.5) {
+      this.snapToCharacter();
       return;
     }
     
@@ -71,31 +91,46 @@ export class CameraController {
     
     const characterUp = characterPos.clone().normalize();
     
-    const characterForward = this.game.character.getForward();
+    let tangent = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(characterUp.dot(tangent)) > 0.99) {
+      tangent.set(1, 0, 0);
+    }
+    const worldRight = new THREE.Vector3().crossVectors(characterUp, tangent).normalize();
+    const worldForward = new THREE.Vector3().crossVectors(worldRight, characterUp).normalize();
     
-    this.tempQuat.setFromAxisAngle(characterUp, this.yawOffset);
-    const baseOffset = characterForward.clone().negate();
-    baseOffset.applyQuaternion(this.tempQuat);
+    const tempQuat = new THREE.Quaternion();
+    tempQuat.setFromAxisAngle(characterUp, this.yawOffset);
+    const baseOffset = worldForward.clone().negate();
+    baseOffset.applyQuaternion(tempQuat);
     
     const pitchAxis = new THREE.Vector3().crossVectors(baseOffset, characterUp).normalize();
-    this.tempQuat.setFromAxisAngle(pitchAxis, this.pitchOffset);
-    baseOffset.applyQuaternion(this.tempQuat);
+    if (pitchAxis.length() > 0.01) {
+      tempQuat.setFromAxisAngle(pitchAxis, this.pitchOffset);
+      baseOffset.applyQuaternion(tempQuat);
+    }
     
-    this.targetPosition.copy(characterPos)
-      .add(baseOffset.multiplyScalar(this.distance))
+    const targetPos = characterPos.clone()
+      .add(baseOffset.clone().multiplyScalar(this.distance))
       .add(characterUp.clone().multiplyScalar(this.height));
     
-    this.targetLookAt.copy(characterPos).add(characterUp.clone().multiplyScalar(2));
+    const targetLookAt = characterPos.clone().add(characterUp.clone().multiplyScalar(2));
     
-    const smoothFactor = 1 - Math.exp(-this.smoothing * delta);
-    this.currentPosition.lerp(this.targetPosition, smoothFactor);
-    this.currentLookAt.lerp(this.targetLookAt, smoothFactor);
+    const smoothFactor = Math.min(1, Math.max(0, 1 - Math.exp(-this.smoothing * delta)));
     
-    this.camera.position.copy(this.currentPosition);
-    this.camera.lookAt(this.currentLookAt);
+    this.camera.position.lerp(targetPos, smoothFactor);
     
-    const cameraUp = this.currentPosition.clone().normalize();
-    this.camera.up.copy(cameraUp);
+    const currentLookAt = new THREE.Vector3();
+    this.camera.getWorldDirection(currentLookAt);
+    currentLookAt.multiplyScalar(10).add(this.camera.position);
+    currentLookAt.lerp(targetLookAt, smoothFactor);
+    
+    this.camera.lookAt(currentLookAt);
+    this.camera.up.copy(characterUp);
+    
+    const finalCamDist = this.camera.position.length();
+    if (finalCamDist > planetRadius * 3) {
+      this.snapToCharacter();
+    }
   }
 
   public getForwardOnSurface(): THREE.Vector3 {
@@ -106,6 +141,9 @@ export class CameraController {
     this.camera.getWorldDirection(cameraForward);
     
     cameraForward.sub(up.clone().multiplyScalar(cameraForward.dot(up)));
+    if (cameraForward.length() < 0.01) {
+      return new THREE.Vector3(1, 0, 0);
+    }
     cameraForward.normalize();
     
     return cameraForward;
