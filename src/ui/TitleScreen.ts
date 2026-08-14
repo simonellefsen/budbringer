@@ -128,9 +128,9 @@ export class TitleScreen {
     const skyColor = new THREE.Color(0x5ec9be);
     this.titleScene.background = skyColor;
     
-    // Camera looking between planet (y=8) and letters (y=-22) 
-    this.titleCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.titleCamera.position.set(0, -5, 75);
+    // Camera centered to see planet (top) and letters (bottom)
+    this.titleCamera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
+    this.titleCamera.position.set(0, -8, 80);
     this.titleCamera.lookAt(0, -5, 0);
     
     // Lighting
@@ -360,24 +360,23 @@ export class TitleScreen {
     });
     const outlineOpts = { thickness: 0.06, wobble: 0.01 };
     
-    // Single row "budbringer" below the planet - fits in viewport
+    // Small letters at bottom of frame - planet is the star
     const text = 'budbringer';
-    const letterSpacing = 2.2;
+    const letterSpacing = 1.8;
     const totalWidth = text.length * letterSpacing;
     let xOffset = -totalWidth / 2 + letterSpacing / 2;
     
     for (const char of text) {
       const letterGroup = this.createSimpleLetter(char, letterMat, outlineOpts);
       letterGroup.position.x = xOffset;
-      // Scale letters down to 40% - planet is the hero
-      letterGroup.scale.setScalar(0.4);
+      // Scale letters to 25% - much smaller, planet is the hero
+      letterGroup.scale.setScalar(0.25);
       this.titleLetters.add(letterGroup);
       xOffset += letterSpacing;
     }
     
-    // Position letters in LOWER portion of frame, well below planet
-    // Planet is at y=8, so letters at y=-22 should be clearly separated
-    this.titleLetters.position.set(0, -22, 55);
+    // Position letters at very bottom of frame, far below planet
+    this.titleLetters.position.set(0, -35, 65);
     this.titleScene.add(this.titleLetters);
   }
 
