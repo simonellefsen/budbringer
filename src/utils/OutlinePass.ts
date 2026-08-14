@@ -21,18 +21,18 @@ uniform float outlineThickness;
 
 varying vec2 vUv;
 
-float readDepth(sampler2D depthSampler, vec2 coord) {
-  float fragCoordZ = texture2D(depthSampler, coord).x;
-  float viewZ = perspectiveDepthToViewZ(fragCoordZ, cameraNear, cameraFar);
-  return viewZToOrthographicDepth(viewZ, cameraNear, cameraFar);
-}
-
-float perspectiveDepthToViewZ(float invClipZ, float near, float far) {
+float customPerspectiveDepthToViewZ(float invClipZ, float near, float far) {
   return (near * far) / ((far - near) * invClipZ - far);
 }
 
-float viewZToOrthographicDepth(float viewZ, float near, float far) {
+float customViewZToOrthographicDepth(float viewZ, float near, float far) {
   return (viewZ + near) / (near - far);
+}
+
+float readDepth(sampler2D depthSampler, vec2 coord) {
+  float fragCoordZ = texture2D(depthSampler, coord).x;
+  float viewZ = customPerspectiveDepthToViewZ(fragCoordZ, cameraNear, cameraFar);
+  return customViewZToOrthographicDepth(viewZ, cameraNear, cameraFar);
 }
 
 void main() {
