@@ -8,7 +8,7 @@ export class Secrets {
   private beachCreature: THREE.Group | null = null;
   private mysteryOrb: THREE.Group | null = null;
   private foundSecrets: Set<string> = new Set();
-  private startupDelay: number = 5;
+  private gameStartTime: number = -1;
 
   constructor(game: Game) {
     this.game = game;
@@ -175,7 +175,11 @@ export class Secrets {
   }
 
   public update(elapsed: number): void {
-    if (elapsed < this.startupDelay) return;
+    if (this.gameStartTime < 0) {
+      this.gameStartTime = elapsed;
+    }
+    const timeSinceStart = elapsed - this.gameStartTime;
+    if (timeSinceStart < 5) return;
     
     if (this.floatingIsland) {
       this.floatingIsland.position.y = this.game.planetRadius + 25 + Math.sin(elapsed * 0.3) * 2;

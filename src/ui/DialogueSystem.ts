@@ -16,7 +16,7 @@ export class DialogueSystem {
   private isTyping: boolean = false;
   
   private boundKeyHandler: (e: KeyboardEvent) => void;
-  private boundClickHandler: () => void;
+  private boundClickHandler: (e: MouseEvent) => void;
 
   constructor(game: Game) {
     this.game = game;
@@ -94,10 +94,11 @@ export class DialogueSystem {
     this.continuePrompt = document.getElementById('dialogue-continue')!;
     
     this.boundKeyHandler = this.handleKey.bind(this);
-    this.boundClickHandler = this.handleClick.bind(this);
+    this.boundClickHandler = (e: MouseEvent) => this.handleClick(e);
     
     document.addEventListener('keydown', this.boundKeyHandler);
     this.container.addEventListener('click', this.boundClickHandler);
+    this.container.addEventListener('mousedown', (e) => e.stopPropagation());
     
     this.startTypewriterLoop();
   }
@@ -153,8 +154,10 @@ export class DialogueSystem {
     }
   }
 
-  private handleClick(): void {
+  private handleClick(e: MouseEvent): void {
     if (!this.isShowing) return;
+    e.stopPropagation();
+    e.preventDefault();
     this.advanceOrClose();
   }
 

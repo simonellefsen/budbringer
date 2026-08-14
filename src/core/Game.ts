@@ -193,6 +193,8 @@ export class Game {
     this.planet.update(elapsed);
     this.hud.update();
     
+    this.renderer.setRenderTarget(null);
+    this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
   };
 
