@@ -353,243 +353,232 @@ export class TitleScreen {
     
     // Create chunky 3D block letters for "budbringer"
     // Arranged in a stacked/wrapped layout like Messenger
-    const letters = [
-      { text: 'bud', y: 8 },
-      { text: 'brin', y: 2 },
+    const letterMat = ToonMaterial.create({ color: 0xffffff });
+    const outlineOpts = { thickness: 0.15, wobble: 0.025 };
+    
+    // Layout: bud / brin / ger stacked
+    const rows = [
+      { text: 'bud', y: 12 },
+      { text: 'brin', y: 4 },
       { text: 'ger', y: -4 }
     ];
     
-    const letterMat = ToonMaterial.create({ color: 0xffffff });
-    const outlineOpts = { thickness: 0.12, wobble: 0.02 };
-    
-    letters.forEach(row => {
+    rows.forEach(row => {
       const rowGroup = new THREE.Group();
-      let xOffset = -(row.text.length * 3.5) / 2;
+      const letterSpacing = 5;
+      const totalWidth = row.text.length * letterSpacing;
+      let xOffset = -totalWidth / 2 + letterSpacing / 2;
       
       for (const char of row.text) {
-        const letterGroup = this.create3DLetter(char, letterMat, outlineOpts);
+        const letterGroup = this.createSimpleLetter(char, letterMat, outlineOpts);
         letterGroup.position.x = xOffset;
         rowGroup.add(letterGroup);
-        xOffset += 4;
+        xOffset += letterSpacing;
       }
       
       rowGroup.position.y = row.y;
       this.titleLetters.add(rowGroup);
     });
     
-    this.titleLetters.position.z = 20;
+    // Position letters in front of camera, behind planet
+    this.titleLetters.position.set(0, 5, 25);
     this.titleScene.add(this.titleLetters);
   }
 
-  private create3DLetter(char: string, material: THREE.Material, outlineOpts: { thickness: number; wobble: number }): THREE.Group {
+  private createSimpleLetter(char: string, material: THREE.Material, outlineOpts: { thickness: number; wobble: number }): THREE.Group {
     const group = new THREE.Group();
+    const depth = 2.5;
+    const height = 6;
+    const width = 4;
+    const thickness = 1.2;
     
-    // Simple block letter shapes
-    const depth = 2;
-    const height = 5;
-    const width = 3;
-    
-    let geometry: THREE.BufferGeometry;
+    // Use simple box combinations for each letter
+    const meshes: THREE.Mesh[] = [];
     
     switch (char.toLowerCase()) {
-      case 'b':
-        geometry = this.createBShape(width, height, depth);
+      case 'b': {
+        // Vertical bar
+        const bar = new THREE.BoxGeometry(thickness, height, depth);
+        const barMesh = new THREE.Mesh(bar, material);
+        barMesh.position.x = -width/2 + thickness/2;
+        meshes.push(barMesh);
+        // Top bump
+        const top = new THREE.BoxGeometry(width * 0.6, thickness, depth);
+        const topMesh = new THREE.Mesh(top, material);
+        topMesh.position.set(0, height/2 - thickness/2, 0);
+        meshes.push(topMesh);
+        // Middle
+        const mid = new THREE.BoxGeometry(width * 0.5, thickness, depth);
+        const midMesh = new THREE.Mesh(mid, material);
+        midMesh.position.set(-0.2, 0, 0);
+        meshes.push(midMesh);
+        // Bottom
+        const bot = new THREE.BoxGeometry(width * 0.6, thickness, depth);
+        const botMesh = new THREE.Mesh(bot, material);
+        botMesh.position.set(0, -height/2 + thickness/2, 0);
+        meshes.push(botMesh);
+        // Right bumps
+        const bump1 = new THREE.BoxGeometry(thickness, height * 0.35, depth);
+        const bump1Mesh = new THREE.Mesh(bump1, material);
+        bump1Mesh.position.set(width/3, height * 0.22, 0);
+        meshes.push(bump1Mesh);
+        const bump2 = new THREE.BoxGeometry(thickness, height * 0.35, depth);
+        const bump2Mesh = new THREE.Mesh(bump2, material);
+        bump2Mesh.position.set(width/3, -height * 0.22, 0);
+        meshes.push(bump2Mesh);
         break;
-      case 'u':
-        geometry = this.createUShape(width, height, depth);
+      }
+      case 'u': {
+        // Left bar
+        const left = new THREE.BoxGeometry(thickness, height, depth);
+        const leftMesh = new THREE.Mesh(left, material);
+        leftMesh.position.x = -width/2 + thickness/2;
+        meshes.push(leftMesh);
+        // Right bar
+        const right = new THREE.BoxGeometry(thickness, height, depth);
+        const rightMesh = new THREE.Mesh(right, material);
+        rightMesh.position.x = width/2 - thickness/2;
+        meshes.push(rightMesh);
+        // Bottom
+        const bot = new THREE.BoxGeometry(width, thickness, depth);
+        const botMesh = new THREE.Mesh(bot, material);
+        botMesh.position.y = -height/2 + thickness/2;
+        meshes.push(botMesh);
         break;
-      case 'd':
-        geometry = this.createDShape(width, height, depth);
+      }
+      case 'd': {
+        // Same as B but smoother right side
+        const bar = new THREE.BoxGeometry(thickness, height, depth);
+        const barMesh = new THREE.Mesh(bar, material);
+        barMesh.position.x = -width/2 + thickness/2;
+        meshes.push(barMesh);
+        const top = new THREE.BoxGeometry(width * 0.5, thickness, depth);
+        const topMesh = new THREE.Mesh(top, material);
+        topMesh.position.set(-0.2, height/2 - thickness/2, 0);
+        meshes.push(topMesh);
+        const bot = new THREE.BoxGeometry(width * 0.5, thickness, depth);
+        const botMesh = new THREE.Mesh(bot, material);
+        botMesh.position.set(-0.2, -height/2 + thickness/2, 0);
+        meshes.push(botMesh);
+        const bump = new THREE.BoxGeometry(thickness, height * 0.7, depth);
+        const bumpMesh = new THREE.Mesh(bump, material);
+        bumpMesh.position.set(width/3, 0, 0);
+        meshes.push(bumpMesh);
         break;
-      case 'r':
-        geometry = this.createRShape(width, height, depth);
+      }
+      case 'r': {
+        const bar = new THREE.BoxGeometry(thickness, height, depth);
+        const barMesh = new THREE.Mesh(bar, material);
+        barMesh.position.x = -width/2 + thickness/2;
+        meshes.push(barMesh);
+        const top = new THREE.BoxGeometry(width * 0.7, thickness, depth);
+        const topMesh = new THREE.Mesh(top, material);
+        topMesh.position.set(0, height/2 - thickness/2, 0);
+        meshes.push(topMesh);
+        const mid = new THREE.BoxGeometry(width * 0.6, thickness, depth);
+        const midMesh = new THREE.Mesh(mid, material);
+        midMesh.position.set(-0.2, height * 0.1, 0);
+        meshes.push(midMesh);
+        const bump = new THREE.BoxGeometry(thickness, height * 0.3, depth);
+        const bumpMesh = new THREE.Mesh(bump, material);
+        bumpMesh.position.set(width/3, height * 0.28, 0);
+        meshes.push(bumpMesh);
+        // Diagonal leg
+        const leg = new THREE.BoxGeometry(thickness * 1.5, height * 0.5, depth);
+        const legMesh = new THREE.Mesh(leg, material);
+        legMesh.position.set(width/4, -height * 0.25, 0);
+        legMesh.rotation.z = -0.4;
+        meshes.push(legMesh);
         break;
-      case 'i':
-        geometry = this.createIShape(width * 0.4, height, depth);
+      }
+      case 'i': {
+        const bar = new THREE.BoxGeometry(thickness, height * 0.7, depth);
+        const barMesh = new THREE.Mesh(bar, material);
+        barMesh.position.y = -height * 0.1;
+        meshes.push(barMesh);
+        // Dot
+        const dot = new THREE.BoxGeometry(thickness * 1.2, thickness * 1.2, depth);
+        const dotMesh = new THREE.Mesh(dot, material);
+        dotMesh.position.y = height * 0.38;
+        meshes.push(dotMesh);
         break;
-      case 'n':
-        geometry = this.createNShape(width, height, depth);
+      }
+      case 'n': {
+        const left = new THREE.BoxGeometry(thickness, height, depth);
+        const leftMesh = new THREE.Mesh(left, material);
+        leftMesh.position.x = -width/2 + thickness/2;
+        meshes.push(leftMesh);
+        const right = new THREE.BoxGeometry(thickness, height, depth);
+        const rightMesh = new THREE.Mesh(right, material);
+        rightMesh.position.x = width/2 - thickness/2;
+        meshes.push(rightMesh);
+        const top = new THREE.BoxGeometry(width, thickness, depth);
+        const topMesh = new THREE.Mesh(top, material);
+        topMesh.position.y = height/2 - thickness/2;
+        meshes.push(topMesh);
         break;
-      case 'g':
-        geometry = this.createGShape(width, height, depth);
+      }
+      case 'g': {
+        // C shape plus horizontal
+        const left = new THREE.BoxGeometry(thickness, height, depth);
+        const leftMesh = new THREE.Mesh(left, material);
+        leftMesh.position.x = -width/2 + thickness/2;
+        meshes.push(leftMesh);
+        const top = new THREE.BoxGeometry(width, thickness, depth);
+        const topMesh = new THREE.Mesh(top, material);
+        topMesh.position.y = height/2 - thickness/2;
+        meshes.push(topMesh);
+        const bot = new THREE.BoxGeometry(width, thickness, depth);
+        const botMesh = new THREE.Mesh(bot, material);
+        botMesh.position.y = -height/2 + thickness/2;
+        meshes.push(botMesh);
+        const rightBot = new THREE.BoxGeometry(thickness, height * 0.35, depth);
+        const rightBotMesh = new THREE.Mesh(rightBot, material);
+        rightBotMesh.position.set(width/2 - thickness/2, -height * 0.15, 0);
+        meshes.push(rightBotMesh);
+        const mid = new THREE.BoxGeometry(width * 0.4, thickness, depth);
+        const midMesh = new THREE.Mesh(mid, material);
+        midMesh.position.set(width/4, 0, 0);
+        meshes.push(midMesh);
         break;
-      case 'e':
-        geometry = this.createEShape(width, height, depth);
+      }
+      case 'e': {
+        const bar = new THREE.BoxGeometry(thickness, height, depth);
+        const barMesh = new THREE.Mesh(bar, material);
+        barMesh.position.x = -width/2 + thickness/2;
+        meshes.push(barMesh);
+        const top = new THREE.BoxGeometry(width * 0.8, thickness, depth);
+        const topMesh = new THREE.Mesh(top, material);
+        topMesh.position.set(0, height/2 - thickness/2, 0);
+        meshes.push(topMesh);
+        const mid = new THREE.BoxGeometry(width * 0.6, thickness, depth);
+        const midMesh = new THREE.Mesh(mid, material);
+        midMesh.position.set(-0.3, 0, 0);
+        meshes.push(midMesh);
+        const bot = new THREE.BoxGeometry(width * 0.8, thickness, depth);
+        const botMesh = new THREE.Mesh(bot, material);
+        botMesh.position.set(0, -height/2 + thickness/2, 0);
+        meshes.push(botMesh);
         break;
-      default:
-        geometry = new THREE.BoxGeometry(width, height, depth);
+      }
+      default: {
+        const box = new THREE.BoxGeometry(width, height, depth);
+        meshes.push(new THREE.Mesh(box, material));
+      }
     }
     
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    group.add(mesh);
-    group.add(OutlineMaterial.addOutlineToMesh(mesh, outlineOpts));
+    // Add all meshes and their outlines
+    meshes.forEach(mesh => {
+      mesh.castShadow = true;
+      group.add(mesh);
+      group.add(OutlineMaterial.addOutlineToMesh(mesh, outlineOpts));
+    });
     
     // Slight random tilt for hand-drawn feel
-    group.rotation.z = (Math.random() - 0.5) * 0.08;
-    group.rotation.x = (Math.random() - 0.5) * 0.05;
+    group.rotation.z = (Math.random() - 0.5) * 0.06;
+    group.rotation.x = (Math.random() - 0.5) * 0.04;
     
     return group;
-  }
-
-  private createBShape(w: number, h: number, d: number): THREE.BufferGeometry {
-    const shape = new THREE.Shape();
-    shape.moveTo(0, 0);
-    shape.lineTo(0, h);
-    shape.lineTo(w * 0.7, h);
-    shape.quadraticCurveTo(w, h, w, h * 0.75);
-    shape.quadraticCurveTo(w, h * 0.55, w * 0.6, h * 0.5);
-    shape.quadraticCurveTo(w, h * 0.45, w, h * 0.25);
-    shape.quadraticCurveTo(w, 0, w * 0.7, 0);
-    shape.lineTo(0, 0);
-    
-    // Holes
-    const hole1 = new THREE.Path();
-    hole1.moveTo(w * 0.3, h * 0.55);
-    hole1.lineTo(w * 0.3, h * 0.85);
-    hole1.lineTo(w * 0.55, h * 0.85);
-    hole1.quadraticCurveTo(w * 0.7, h * 0.85, w * 0.7, h * 0.7);
-    hole1.quadraticCurveTo(w * 0.7, h * 0.55, w * 0.55, h * 0.55);
-    shape.holes.push(hole1);
-    
-    const hole2 = new THREE.Path();
-    hole2.moveTo(w * 0.3, h * 0.15);
-    hole2.lineTo(w * 0.3, h * 0.45);
-    hole2.lineTo(w * 0.55, h * 0.45);
-    hole2.quadraticCurveTo(w * 0.7, h * 0.45, w * 0.7, h * 0.3);
-    hole2.quadraticCurveTo(w * 0.7, h * 0.15, w * 0.55, h * 0.15);
-    shape.holes.push(hole2);
-    
-    const extrudeSettings = { depth: d, bevelEnabled: false };
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  }
-
-  private createUShape(w: number, h: number, d: number): THREE.BufferGeometry {
-    const shape = new THREE.Shape();
-    shape.moveTo(0, h);
-    shape.lineTo(0, h * 0.3);
-    shape.quadraticCurveTo(0, 0, w * 0.5, 0);
-    shape.quadraticCurveTo(w, 0, w, h * 0.3);
-    shape.lineTo(w, h);
-    shape.lineTo(w * 0.7, h);
-    shape.lineTo(w * 0.7, h * 0.35);
-    shape.quadraticCurveTo(w * 0.7, h * 0.2, w * 0.5, h * 0.2);
-    shape.quadraticCurveTo(w * 0.3, h * 0.2, w * 0.3, h * 0.35);
-    shape.lineTo(w * 0.3, h);
-    shape.lineTo(0, h);
-    
-    const extrudeSettings = { depth: d, bevelEnabled: false };
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  }
-
-  private createDShape(w: number, h: number, d: number): THREE.BufferGeometry {
-    const shape = new THREE.Shape();
-    shape.moveTo(0, 0);
-    shape.lineTo(0, h);
-    shape.lineTo(w * 0.6, h);
-    shape.quadraticCurveTo(w, h, w, h * 0.5);
-    shape.quadraticCurveTo(w, 0, w * 0.6, 0);
-    shape.lineTo(0, 0);
-    
-    const hole = new THREE.Path();
-    hole.moveTo(w * 0.3, h * 0.2);
-    hole.lineTo(w * 0.3, h * 0.8);
-    hole.lineTo(w * 0.5, h * 0.8);
-    hole.quadraticCurveTo(w * 0.7, h * 0.8, w * 0.7, h * 0.5);
-    hole.quadraticCurveTo(w * 0.7, h * 0.2, w * 0.5, h * 0.2);
-    shape.holes.push(hole);
-    
-    const extrudeSettings = { depth: d, bevelEnabled: false };
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  }
-
-  private createRShape(w: number, h: number, d: number): THREE.BufferGeometry {
-    const shape = new THREE.Shape();
-    shape.moveTo(0, 0);
-    shape.lineTo(0, h);
-    shape.lineTo(w * 0.6, h);
-    shape.quadraticCurveTo(w, h, w, h * 0.7);
-    shape.quadraticCurveTo(w, h * 0.45, w * 0.5, h * 0.45);
-    shape.lineTo(w, 0);
-    shape.lineTo(w * 0.65, 0);
-    shape.lineTo(w * 0.35, h * 0.4);
-    shape.lineTo(w * 0.3, h * 0.4);
-    shape.lineTo(w * 0.3, 0);
-    shape.lineTo(0, 0);
-    
-    const hole = new THREE.Path();
-    hole.moveTo(w * 0.3, h * 0.55);
-    hole.lineTo(w * 0.3, h * 0.85);
-    hole.lineTo(w * 0.5, h * 0.85);
-    hole.quadraticCurveTo(w * 0.7, h * 0.85, w * 0.7, h * 0.7);
-    hole.quadraticCurveTo(w * 0.7, h * 0.55, w * 0.5, h * 0.55);
-    shape.holes.push(hole);
-    
-    const extrudeSettings = { depth: d, bevelEnabled: false };
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  }
-
-  private createIShape(w: number, h: number, d: number): THREE.BufferGeometry {
-    return new THREE.BoxGeometry(w, h, d);
-  }
-
-  private createNShape(w: number, h: number, d: number): THREE.BufferGeometry {
-    const shape = new THREE.Shape();
-    shape.moveTo(0, 0);
-    shape.lineTo(0, h);
-    shape.lineTo(w * 0.3, h);
-    shape.lineTo(w * 0.7, h * 0.3);
-    shape.lineTo(w * 0.7, h);
-    shape.lineTo(w, h);
-    shape.lineTo(w, 0);
-    shape.lineTo(w * 0.7, 0);
-    shape.lineTo(w * 0.3, h * 0.7);
-    shape.lineTo(w * 0.3, 0);
-    shape.lineTo(0, 0);
-    
-    const extrudeSettings = { depth: d, bevelEnabled: false };
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  }
-
-  private createGShape(w: number, h: number, d: number): THREE.BufferGeometry {
-    const shape = new THREE.Shape();
-    shape.moveTo(w, h * 0.8);
-    shape.quadraticCurveTo(w, h, w * 0.5, h);
-    shape.quadraticCurveTo(0, h, 0, h * 0.5);
-    shape.quadraticCurveTo(0, 0, w * 0.5, 0);
-    shape.quadraticCurveTo(w, 0, w, h * 0.2);
-    shape.lineTo(w * 0.7, h * 0.25);
-    shape.quadraticCurveTo(w * 0.7, h * 0.15, w * 0.5, h * 0.15);
-    shape.quadraticCurveTo(w * 0.2, h * 0.15, w * 0.2, h * 0.5);
-    shape.quadraticCurveTo(w * 0.2, h * 0.85, w * 0.5, h * 0.85);
-    shape.quadraticCurveTo(w * 0.7, h * 0.85, w * 0.7, h * 0.6);
-    shape.lineTo(w * 0.5, h * 0.6);
-    shape.lineTo(w * 0.5, h * 0.45);
-    shape.lineTo(w, h * 0.45);
-    shape.lineTo(w, h * 0.8);
-    
-    const extrudeSettings = { depth: d, bevelEnabled: false };
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  }
-
-  private createEShape(w: number, h: number, d: number): THREE.BufferGeometry {
-    const shape = new THREE.Shape();
-    shape.moveTo(0, 0);
-    shape.lineTo(0, h);
-    shape.lineTo(w, h);
-    shape.lineTo(w, h * 0.85);
-    shape.lineTo(w * 0.3, h * 0.85);
-    shape.lineTo(w * 0.3, h * 0.57);
-    shape.lineTo(w * 0.8, h * 0.57);
-    shape.lineTo(w * 0.8, h * 0.43);
-    shape.lineTo(w * 0.3, h * 0.43);
-    shape.lineTo(w * 0.3, h * 0.15);
-    shape.lineTo(w, h * 0.15);
-    shape.lineTo(w, 0);
-    shape.lineTo(0, 0);
-    
-    const extrudeSettings = { depth: d, bevelEnabled: false };
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
   }
 
   private createTitleClouds(): void {

@@ -400,15 +400,31 @@ export class Character {
     }
     localForward.normalize();
     
-    // Build rotation matrix from up and forward
-    const right = new THREE.Vector3().crossVectors(up, localForward).normalize();
-    const correctedForward = new THREE.Vector3().crossVectors(right, up).normalize();
+    // Use lookAt approach: character should "stand" on surface with feet down
+    // First align to surface normal (up direction)
+    const defaultUp = new THREE.Vector3(0, 1, 0);
+    const surfaceQuat = new THREE.Quaternion().setFromUnitVectors(defaultUp, up);
     
-    // Create rotation matrix
-    const matrix = new THREE.Matrix4();
-    matrix.makeBasis(right, up, correctedForward.negate());
+    // Then rotate around up axis to face forward direction
+    // Get the forward after surface alignment
+    const worldForward = new THREE.Vector3(0, 0, 1).applyQuaternion(surfaceQuat);
     
-    this.group.quaternion.setFromRotationMatrix(matrix);
+    // Calculate angle between aligned forward and desired forward on tangent plane
+    const right = new THREE.Vector3().crossVectors(up, localForward);
+    if (right.lengthSq() > 0.001) {
+      right.normalize();
+      const correctedForward = new THREE.Vector3().crossVectors(right, up).negate().normalize();
+      
+      // Angle between worldForward and correctedForward around up axis
+      let angle = Math.acos(Math.max(-1, Math.min(1, worldForward.dot(correctedForward))));
+      const cross = new THREE.Vector3().crossVectors(worldForward, correctedForward);
+      if (cross.dot(up) < 0) angle = -angle;
+      
+      const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, angle);
+      this.group.quaternion.copy(surfaceQuat).multiply(yawQuat);
+    } else {
+      this.group.quaternion.copy(surfaceQuat);
+    }
   }
 
   private animate(delta: number): void {
