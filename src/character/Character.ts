@@ -37,8 +37,11 @@ export class Character {
     
     this.createCharacterMesh();
     
-    this.group.position.copy(spawnPosition);
+    const surfaceHeight = this.game.planetRadius + 0.5;
+    const safeSpawn = spawnPosition.clone().normalize().multiplyScalar(surfaceHeight);
+    this.group.position.copy(safeSpawn);
     this.alignToSurface();
+    this.isGrounded = true;
   }
 
   private createCharacterMesh(): void {
@@ -217,8 +220,24 @@ export class Character {
     
     const distFromCenter = this.group.position.length();
     const surfaceHeight = this.game.planetRadius + 0.5;
+    const maxHeight = this.game.planetRadius + 10;
     
-    if (distFromCenter < surfaceHeight) {
+    if (distFromCenter < 1) {
+      this.group.position.set(0, surfaceHeight, 0);
+      this.velocity.set(0, 0, 0);
+      this.isGrounded = true;
+      return;
+    }
+    
+    if (distFromCenter > maxHeight) {
+      const up = this.group.position.clone().normalize();
+      this.group.position.copy(up.multiplyScalar(surfaceHeight));
+      this.velocity.set(0, 0, 0);
+      this.isGrounded = true;
+      return;
+    }
+    
+    if (distFromCenter <= surfaceHeight) {
       const up = this.group.position.clone().normalize();
       this.group.position.copy(up.multiplyScalar(surfaceHeight));
       
