@@ -6,12 +6,12 @@ export class CameraController {
   private camera: THREE.PerspectiveCamera;
   
   // Very close third-person, human height - can't see whole planet as diorama
-  private distance: number = 3.2;
-  private height: number = 1.2;
+  private distance: number = 3.5;
+  private height: number = 1.5;
   
-  private pitchOffset: number = 0.04;
-  private maxPitch: number = 0.35;
-  private minPitch: number = -0.08;
+  private pitchOffset: number = 0.06;
+  private maxPitch: number = 0.3;
+  private minPitch: number = 0.0; // Never look down into ground
   
   private lookSensitivity: number = 0.003;
   private smoothing: number = 12;
@@ -56,6 +56,7 @@ export class CameraController {
   private snapToCharacter(): void {
     const charPos = this.game.character.group.position;
     const planetRadius = this.game.planetRadius;
+    const minCamHeight = planetRadius + 2.0;
     
     if (charPos.length() < 1) {
       this.camera.position.set(0, planetRadius + this.height + this.distance, 0);
@@ -83,12 +84,17 @@ export class CameraController {
     
     const behind = this.stableHeading.clone().negate();
     
-    const camPos = charPos.clone()
+    let camPos = charPos.clone()
       .add(up.clone().multiplyScalar(this.height))
       .add(behind.clone().multiplyScalar(this.distance));
     
+    // CRITICAL: Ensure camera is always above surface
+    if (camPos.length() < minCamHeight) {
+      camPos = camPos.normalize().multiplyScalar(minCamHeight);
+    }
+    
     // Look at character's back/shoulder level for street-level view
-    const lookAt = charPos.clone().add(up.clone().multiplyScalar(1.0));
+    const lookAt = charPos.clone().add(up.clone().multiplyScalar(1.2));
     
     this.camera.position.copy(camPos);
     this.camera.lookAt(lookAt);
@@ -171,34 +177,46 @@ export class CameraController {
       .add(cameraOffset.clone().multiplyScalar(this.distance))
       .add(characterUp.clone().multiplyScalar(this.height));
     
-    const minCamHeight = planetRadius + 1.0;
+    // CRITICAL: Aggressive camera height clamping - never go inside planet
+    const minCamHeight = planetRadius + 2.0;
     const targetDist = targetPos.length();
     if (targetDist < minCamHeight) {
-      targetPos = targetPos.normalize().multiplyScalar(minCamHeight);
+      // Push camera up along surface normal
+      const surfaceNormal = targetPos.clone().normalize();
+      targetPos.copy(surfaceNormal.multiplyScalar(minCamHeight));
     }
     
     // Look at character's back for street-level feel
-    const targetLookAt = characterPos.clone().add(characterUp.clone().multiplyScalar(1.0));
+    const targetLookAt = characterPos.clone().add(characterUp.clone().multiplyScalar(1.2));
     
     const smoothFactor = Math.min(1, Math.max(0, 1 - Math.exp(-this.smoothing * delta)));
     
     this.camera.position.lerp(targetPos, smoothFactor);
     
+    // Double-check: ensure camera never goes below surface after lerp
     const currentCamDist = this.camera.position.length();
     if (currentCamDist < minCamHeight) {
       this.camera.position.normalize().multiplyScalar(minCamHeight);
     }
     
+    // Clamp lookAt to never be below the character
     const currentLookAt = new THREE.Vector3();
     this.camera.getWorldDirection(currentLookAt);
-    currentLookAt.multiplyScalar(10).add(this.camera.position);
+    currentLookAt.multiplyScalar(5).add(this.camera.position);
     currentLookAt.lerp(targetLookAt, smoothFactor);
+    
+    // Ensure lookAt is above surface
+    const lookAtDist = currentLookAt.length();
+    if (lookAtDist < planetRadius + 0.5) {
+      currentLookAt.normalize().multiplyScalar(planetRadius + 0.5);
+    }
     
     this.camera.lookAt(currentLookAt);
     this.camera.up.copy(characterUp);
     
+    // Final safety check
     const finalCamDist = this.camera.position.length();
-    if (finalCamDist > planetRadius * 3) {
+    if (finalCamDist < minCamHeight || finalCamDist > planetRadius * 3 || !isFinite(finalCamDist)) {
       this.snapToCharacter();
     }
   }
