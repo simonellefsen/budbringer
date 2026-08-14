@@ -164,6 +164,7 @@ export class Game {
     this.inputManager.enable();
     this.audioManager.startMusic();
     this.deliverySystem.startFirstDelivery();
+    this.cameraController.reset();
   }
 
   public enterDialogue(): void {
@@ -174,6 +175,7 @@ export class Game {
   public exitDialogue(): void {
     this.state = GameState.PLAYING;
     this.inputManager.enable();
+    this.cameraController.reset();
   }
 
   private animate = (): void => {

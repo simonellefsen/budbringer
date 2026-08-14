@@ -182,7 +182,7 @@ export class Secrets {
     if (timeSinceStart < 5) return;
     
     if (this.floatingIsland) {
-      this.floatingIsland.position.y = this.game.planetRadius + 25 + Math.sin(elapsed * 0.3) * 2;
+      this.floatingIsland.position.y = this.game.planetRadius + 50 + Math.sin(elapsed * 0.3) * 2;
       this.floatingIsland.rotation.y = elapsed * 0.1;
     }
     

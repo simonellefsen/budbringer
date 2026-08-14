@@ -27,23 +27,48 @@ export class CameraController {
     this.game = game;
     this.camera = game.camera;
     
-    const charPos = game.character.group.position.clone();
+    this.resetToCharacter();
+  }
+
+  public reset(): void {
+    this.yawOffset = 0;
+    this.pitchOffset = 0;
+    this.resetToCharacter();
+  }
+
+  private resetToCharacter(): void {
+    const charPos = this.game.character.group.position.clone();
     const up = charPos.clone().normalize();
-    this.currentPosition.copy(charPos).add(up.multiplyScalar(this.distance));
-    this.currentLookAt.copy(charPos);
+    const behind = this.game.character.getForward().clone().negate();
+    
+    this.currentPosition.copy(charPos)
+      .add(up.clone().multiplyScalar(this.height))
+      .add(behind.multiplyScalar(this.distance));
+    this.currentLookAt.copy(charPos).add(up.clone().multiplyScalar(2));
+    this.targetPosition.copy(this.currentPosition);
+    this.targetLookAt.copy(this.currentLookAt);
+    
     this.camera.position.copy(this.currentPosition);
     this.camera.lookAt(this.currentLookAt);
+    this.camera.up.copy(up);
   }
 
   public update(delta: number): void {
     if (this.game.state !== GameState.PLAYING) return;
+    
+    const characterPos = this.game.character.group.position;
+    
+    const distToChar = this.camera.position.distanceTo(characterPos);
+    if (distToChar > 50 || !isFinite(distToChar)) {
+      this.resetToCharacter();
+      return;
+    }
     
     const lookDelta = this.game.inputManager.consumeLookDelta();
     this.yawOffset -= lookDelta.x * this.lookSensitivity;
     this.pitchOffset -= lookDelta.y * this.lookSensitivity;
     this.pitchOffset = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitchOffset));
     
-    const characterPos = this.game.character.group.position;
     const characterUp = characterPos.clone().normalize();
     
     const characterForward = this.game.character.getForward();
