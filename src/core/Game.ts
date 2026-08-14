@@ -11,6 +11,7 @@ import { TitleScreen } from '../ui/TitleScreen';
 import { DeliverySystem } from './DeliverySystem';
 import { AudioManager } from '../audio/AudioManager';
 import { Secrets } from '../world/Secrets';
+import { OutlineEffect } from '../utils/OutlinePass';
 
 export enum GameState {
   TITLE,
@@ -37,6 +38,8 @@ export class Game {
   public audioManager!: AudioManager;
   public secrets!: Secrets;
   
+  private outlineEffect!: OutlineEffect;
+  
   public state: GameState = GameState.TITLE;
   public planetRadius: number = 30;
   
@@ -58,6 +61,7 @@ export class Game {
     
     this.setupUI();
     this.setupAudio();
+    this.setupPostProcessing();
     
     this.hideLoading();
     this.animate();
@@ -72,8 +76,7 @@ export class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.container.appendChild(this.renderer.domElement);
@@ -82,12 +85,12 @@ export class Game {
   private setupScene(): void {
     this.scene = new THREE.Scene();
     
-    const skyColor = new THREE.Color(0x87CEEB);
+    const skyColor = new THREE.Color(0x5fbdb0);
     this.scene.background = skyColor;
-    this.scene.fog = new THREE.Fog(skyColor, 60, 150);
+    this.scene.fog = new THREE.Fog(skyColor, 80, 180);
     
     this.camera = new THREE.PerspectiveCamera(
-      60,
+      55,
       window.innerWidth / window.innerHeight,
       0.1,
       500
@@ -95,10 +98,10 @@ export class Game {
   }
 
   private setupLighting(): void {
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     this.scene.add(ambientLight);
     
-    const sunLight = new THREE.DirectionalLight(0xfff5e6, 1.5);
+    const sunLight = new THREE.DirectionalLight(0xfff8f0, 1.2);
     sunLight.position.set(50, 80, 30);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
@@ -112,13 +115,9 @@ export class Game {
     sunLight.shadow.bias = -0.001;
     this.scene.add(sunLight);
     
-    const fillLight = new THREE.DirectionalLight(0x7ec8e3, 0.3);
+    const fillLight = new THREE.DirectionalLight(0x7ec8e3, 0.25);
     fillLight.position.set(-30, 20, -40);
     this.scene.add(fillLight);
-    
-    const rimLight = new THREE.DirectionalLight(0xffeaa7, 0.4);
-    rimLight.position.set(0, -30, -50);
-    this.scene.add(rimLight);
   }
 
   private async setupWorld(): Promise<void> {
@@ -150,6 +149,10 @@ export class Game {
 
   private setupAudio(): void {
     this.audioManager = new AudioManager(this);
+  }
+
+  private setupPostProcessing(): void {
+    this.outlineEffect = new OutlineEffect(this.renderer, this.scene, this.camera);
   }
 
   private hideLoading(): void {
@@ -196,7 +199,7 @@ export class Game {
     this.planet.update(elapsed);
     this.hud.update();
     
-    this.renderer.render(this.scene, this.camera);
+    this.outlineEffect.render();
   };
 
   public resize(): void {
@@ -206,6 +209,7 @@ export class Game {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    this.outlineEffect.setSize(width, height);
   }
 
   public dispose(): void {
@@ -213,5 +217,6 @@ export class Game {
     this.renderer.dispose();
     this.inputManager.dispose();
     this.audioManager.dispose();
+    this.outlineEffect.dispose();
   }
 }

@@ -7,12 +7,14 @@ interface ToonMaterialOptions {
   vertexColors?: boolean;
   flatShading?: boolean;
   side?: THREE.Side;
+  outline?: boolean;
 }
 
 const toonVertexShader = `
 varying vec3 vNormal;
 varying vec3 vViewPosition;
 varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
 
 #ifdef USE_VERTEX_COLORS
   varying vec3 vColor;
@@ -21,6 +23,7 @@ varying vec3 vWorldPosition;
 
 void main() {
   vNormal = normalize(normalMatrix * normal);
+  vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
   
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
   vViewPosition = -mvPosition.xyz;
@@ -45,6 +48,7 @@ uniform vec3 uAmbientColor;
 varying vec3 vNormal;
 varying vec3 vViewPosition;
 varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
 
 #ifdef USE_VERTEX_COLORS
   varying vec3 vColor;
@@ -56,15 +60,14 @@ void main() {
   
   float NdotL = dot(normal, lightDir);
   
+  // Posterized toon shading - 3 bands only, very flat
   float toonShading;
-  if (NdotL > 0.5) {
+  if (NdotL > 0.3) {
     toonShading = 1.0;
-  } else if (NdotL > 0.0) {
-    toonShading = 0.7;
-  } else if (NdotL > -0.3) {
-    toonShading = 0.5;
+  } else if (NdotL > -0.2) {
+    toonShading = 0.75;
   } else {
-    toonShading = 0.35;
+    toonShading = 0.55;
   }
   
   #ifdef USE_VERTEX_COLORS
@@ -73,16 +76,16 @@ void main() {
     vec3 baseColor = uColor;
   #endif
   
+  // Flat color fill with minimal shading variation
   vec3 diffuse = baseColor * toonShading;
-  vec3 ambient = baseColor * uAmbientColor;
+  vec3 ambient = baseColor * uAmbientColor * 0.3;
   vec3 emissive = uEmissive * uEmissiveIntensity;
   
-  vec3 viewDir = normalize(vViewPosition);
-  float rimDot = 1.0 - max(dot(viewDir, normal), 0.0);
-  float rimIntensity = smoothstep(0.6, 1.0, rimDot);
-  vec3 rim = vec3(0.15) * rimIntensity;
+  vec3 finalColor = diffuse + ambient + emissive;
   
-  vec3 finalColor = diffuse * uLightColor + ambient + emissive + rim;
+  // Slight dithering effect for that hand-drawn feel
+  float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  finalColor += (dither - 0.5) * 0.02;
   
   gl_FragColor = vec4(finalColor, 1.0);
 }
@@ -90,8 +93,8 @@ void main() {
 
 export class ToonMaterial {
   private static lightDirection: THREE.Vector3 = new THREE.Vector3(50, 80, 30).normalize();
-  private static lightColor: THREE.Color = new THREE.Color(0xfff5e6);
-  private static ambientColor: THREE.Color = new THREE.Color(0.35, 0.35, 0.4);
+  private static lightColor: THREE.Color = new THREE.Color(0xfff8f0);
+  private static ambientColor: THREE.Color = new THREE.Color(0.5, 0.55, 0.6);
 
   public static init(): void {
   }

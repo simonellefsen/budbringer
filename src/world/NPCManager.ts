@@ -31,7 +31,7 @@ export class NPCManager {
   }
 
   private createPostmasterMaple(): void {
-    const position = this.getPositionInBiome(BiomeType.VILLAGE, 0, 5);
+    const position = this.getPositionInBiome(BiomeType.TOWN, 0, 5);
     const mesh = this.createNPCMesh({
       bodyColor: 0x3498db,
       hatColor: 0x2c3e50,
@@ -55,12 +55,12 @@ export class NPCManager {
         "The mail must flow! Got a fresh batch for you.",
         "Ah, my favorite budbringer! Here's today's route."
       ],
-      biome: BiomeType.VILLAGE
+      biome: BiomeType.TOWN
     });
   }
 
   private createFisherFinn(): void {
-    const position = this.getPositionInBiome(BiomeType.BEACH, Math.PI / 4, 4);
+    const position = this.getPositionInBiome(BiomeType.SEASIDE, Math.PI / 4, 4);
     const mesh = this.createNPCMesh({
       bodyColor: 0xf39c12,
       hatColor: 0x7f8c8d,
@@ -88,13 +88,13 @@ export class NPCManager {
         "Ho there! Come to help an old fisher?",
         "Best spot on the whole planet, right here."
       ],
-      biome: BiomeType.BEACH
+      biome: BiomeType.SEASIDE
     });
   }
 
   private createHermitHazel(): void {
-    const hillsBiome = this.game.planet.getBiomePosition(BiomeType.HILLS);
-    const beachBiome = this.game.planet.getBiomePosition(BiomeType.BEACH);
+    const hillsBiome = this.game.planet.getBiomePosition(BiomeType.HILLSIDE);
+    const beachBiome = this.game.planet.getBiomePosition(BiomeType.SEASIDE);
     const midpoint = hillsBiome.clone().add(beachBiome).multiplyScalar(0.5);
     const position = midpoint.normalize().multiplyScalar(this.game.planetRadius);
     
@@ -121,7 +121,7 @@ export class NPCManager {
         "The stars told me you'd come. They're rarely wrong.",
         "Hmm, another letter? The world hasn't forgotten me, it seems."
       ],
-      biome: BiomeType.HILLS
+      biome: BiomeType.HILLSIDE
     });
   }
 
@@ -156,7 +156,7 @@ export class NPCManager {
   }
 
   private createBakerBrie(): void {
-    const position = this.getPositionInBiome(BiomeType.VILLAGE, Math.PI * 0.7, 6);
+    const position = this.getPositionInBiome(BiomeType.TOWN, Math.PI * 0.7, 6);
     const mesh = this.createNPCMesh({
       bodyColor: 0xecf0f1,
       hatColor: 0xffeaa7,
@@ -180,7 +180,7 @@ export class NPCManager {
         "Careful, the rolls are still hot! Oh, a letter?",
         "The best things in life: good bread and good friends."
       ],
-      biome: BiomeType.VILLAGE
+      biome: BiomeType.TOWN
     });
   }
 

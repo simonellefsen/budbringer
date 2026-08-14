@@ -104,7 +104,7 @@ export class Secrets {
       creature.add(tentacle);
     }
     
-    const beachBiome = this.game.planet.biomes?.find((b: { type: number }) => b.type === 1);
+    const beachBiome = this.game.planet.biomes?.find(b => b.type === 1);
     if (beachBiome) {
       const beachCenter = this.game.planet.getBiomePosition(1);
       const up = beachCenter.clone().normalize();

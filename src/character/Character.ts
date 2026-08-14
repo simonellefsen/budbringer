@@ -27,7 +27,9 @@ export class Character {
   private leftArm!: THREE.Mesh;
   private rightArm!: THREE.Mesh;
   private hat!: THREE.Mesh;
+  private hatBrim!: THREE.Mesh;
   private satchel!: THREE.Group;
+  
 
   constructor(game: Game, spawnPosition: THREE.Vector3) {
     this.game = game;
@@ -68,10 +70,10 @@ export class Character {
     this.group.add(this.hat);
     
     const brimGeo = new THREE.CylinderGeometry(0.32, 0.35, 0.05, 16);
-    const brim = new THREE.Mesh(brimGeo, hatMat);
-    brim.position.y = 1.4;
-    brim.castShadow = true;
-    this.group.add(brim);
+    this.hatBrim = new THREE.Mesh(brimGeo, hatMat);
+    this.hatBrim.position.y = 1.4;
+    this.hatBrim.castShadow = true;
+    this.group.add(this.hatBrim);
     
     const legGeo = new THREE.CapsuleGeometry(0.1, 0.3, 4, 8);
     const legMat = ToonMaterial.create({ color: pantsColor });
@@ -321,5 +323,32 @@ export class Character {
 
   public getPosition(): THREE.Vector3 {
     return this.group.position.clone();
+  }
+
+  public setColor(type: string, color: number): void {
+    const newMat = ToonMaterial.create({ color });
+    
+    switch (type) {
+      case 'hat':
+        (this.hat.material as THREE.ShaderMaterial).dispose();
+        this.hat.material = newMat;
+        (this.hatBrim.material as THREE.ShaderMaterial).dispose();
+        this.hatBrim.material = ToonMaterial.create({ color });
+        break;
+      case 'shirt':
+        (this.body.material as THREE.ShaderMaterial).dispose();
+        this.body.material = newMat;
+        (this.leftArm.material as THREE.ShaderMaterial).dispose();
+        this.leftArm.material = ToonMaterial.create({ color });
+        (this.rightArm.material as THREE.ShaderMaterial).dispose();
+        this.rightArm.material = ToonMaterial.create({ color });
+        break;
+      case 'pants':
+        (this.leftLeg.material as THREE.ShaderMaterial).dispose();
+        this.leftLeg.material = newMat;
+        (this.rightLeg.material as THREE.ShaderMaterial).dispose();
+        this.rightLeg.material = ToonMaterial.create({ color });
+        break;
+    }
   }
 }

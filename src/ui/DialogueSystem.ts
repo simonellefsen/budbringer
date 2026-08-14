@@ -11,7 +11,7 @@ export class DialogueSystem {
   private currentText: string = '';
   private displayedText: string = '';
   private charIndex: number = 0;
-  private charDelay: number = 30;
+  private charDelay: number = 25;
   private lastCharTime: number = 0;
   private isTyping: boolean = false;
   
@@ -25,63 +25,66 @@ export class DialogueSystem {
     this.container.id = 'dialogue-container';
     this.container.innerHTML = `
       <style>
+        @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+        
         #dialogue-container {
           position: fixed;
-          bottom: 10%;
+          bottom: 8%;
           left: 50%;
           transform: translateX(-50%);
           width: 90%;
-          max-width: 600px;
-          background: rgba(30, 30, 40, 0.95);
-          border: 3px solid #ffeaa7;
+          max-width: 550px;
+          background: #fff;
+          border: 4px solid #1a1a1a;
           border-radius: 12px;
           padding: 20px 25px;
-          color: #fff;
-          font-family: 'Segoe UI', system-ui, sans-serif;
+          color: #1a1a1a;
+          font-family: 'Patrick Hand', cursive, system-ui;
           z-index: 200;
           opacity: 0;
           pointer-events: none;
-          transition: opacity 0.2s ease;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+          transition: opacity 0.15s ease;
+          box-shadow: 5px 5px 0 #1a1a1a;
         }
         #dialogue-container.visible {
           opacity: 1;
           pointer-events: auto;
         }
         #dialogue-name {
-          font-size: 1.1rem;
+          font-size: 1.3rem;
           font-weight: bold;
-          color: #ffeaa7;
-          margin-bottom: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
+          color: #1a1a1a;
+          margin-bottom: 8px;
+          padding-bottom: 8px;
+          border-bottom: 2px solid #1a1a1a;
         }
         #dialogue-text {
-          font-size: 1.1rem;
-          line-height: 1.6;
-          color: #ecf0f1;
-          min-height: 3em;
+          font-size: 1.25rem;
+          line-height: 1.5;
+          color: #1a1a1a;
+          min-height: 2.5em;
         }
         #dialogue-continue {
           position: absolute;
-          bottom: 12px;
-          right: 20px;
-          font-size: 0.85rem;
-          color: #ffeaa7;
+          bottom: 10px;
+          right: 15px;
+          font-size: 0.9rem;
+          color: #666;
           opacity: 0;
-          animation: bounce 1s ease infinite;
+          font-family: 'Patrick Hand', cursive;
         }
         #dialogue-continue.visible {
           opacity: 1;
+          animation: blink 1s ease infinite;
         }
-        @keyframes bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-3px); }
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
       </style>
       <div id="dialogue-name"></div>
       <div id="dialogue-text"></div>
-      <div id="dialogue-continue">Press SPACE or tap to continue</div>
+      <div id="dialogue-continue">click to continue ▼</div>
     `;
     
     document.body.appendChild(this.container);
