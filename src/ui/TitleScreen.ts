@@ -3,6 +3,7 @@ import { Game } from '../core/Game';
 export class TitleScreen {
   private game: Game;
   private container: HTMLElement;
+  private boundKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(game: Game) {
     this.game = game;
@@ -365,7 +366,7 @@ export class TitleScreen {
       });
     });
     
-    document.addEventListener('keydown', (e) => {
+    this.boundKeyHandler = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.code === 'Enter') {
         if (!this.container.classList.contains('hidden') && 
             !customizationPanel.classList.contains('visible')) {
@@ -373,7 +374,8 @@ export class TitleScreen {
           this.startGame();
         }
       }
-    });
+    };
+    document.addEventListener('keydown', this.boundKeyHandler);
   }
 
   private startGame(): void {
@@ -387,6 +389,10 @@ export class TitleScreen {
 
   public hide(): void {
     this.container.classList.add('hidden');
+    if (this.boundKeyHandler) {
+      document.removeEventListener('keydown', this.boundKeyHandler);
+      this.boundKeyHandler = null;
+    }
     setTimeout(() => {
       this.container.remove();
     }, 500);
@@ -398,6 +404,10 @@ export class TitleScreen {
   }
 
   public dispose(): void {
+    if (this.boundKeyHandler) {
+      document.removeEventListener('keydown', this.boundKeyHandler);
+      this.boundKeyHandler = null;
+    }
     this.container.remove();
   }
 }

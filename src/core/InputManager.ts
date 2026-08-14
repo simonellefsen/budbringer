@@ -175,7 +175,6 @@ export class InputManager {
   }
 
   public enable(): void {
-    console.log('[Input] InputManager enabled');
     this.enabled = true;
     const mobileControls = document.getElementById('mobile-controls');
     if (mobileControls && this.isMobile()) {
@@ -200,14 +199,10 @@ export class InputManager {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
-    console.log('[Input] keydown:', e.code, 'enabled:', this.enabled);
-    if (!this.enabled) return;
-    
     switch (e.code) {
       case 'KeyW':
       case 'ArrowUp':
         this.state.forward = true;
-        console.log('[Input] forward = true');
         break;
       case 'KeyS':
       case 'ArrowDown':
@@ -222,8 +217,10 @@ export class InputManager {
         this.state.right = true;
         break;
       case 'Space':
-        this.state.jump = true;
-        e.preventDefault();
+        if (this.enabled) {
+          this.state.jump = true;
+          e.preventDefault();
+        }
         break;
       case 'KeyE':
       case 'Enter':
