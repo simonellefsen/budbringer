@@ -382,49 +382,32 @@ export class Character {
   }
 
   private alignToSurface(): void {
-    const up = this.group.position.clone().normalize();
+    const pos = this.group.position;
+    const up = pos.clone().normalize();
     
-    // Project forward onto tangent plane
-    const localForward = this.currentForward.clone();
-    localForward.sub(up.clone().multiplyScalar(localForward.dot(up)));
+    // Project currentForward onto tangent plane
+    let forward = this.currentForward.clone();
+    forward.sub(up.clone().multiplyScalar(forward.dot(up)));
     
-    if (localForward.lengthSq() < 0.001) {
-      // Fallback: use a default tangent direction
-      let tangent = new THREE.Vector3(0, 0, 1);
-      tangent.sub(up.clone().multiplyScalar(tangent.dot(up)));
-      if (tangent.lengthSq() < 0.001) {
-        tangent.set(1, 0, 0);
-        tangent.sub(up.clone().multiplyScalar(tangent.dot(up)));
+    if (forward.lengthSq() < 0.0001) {
+      // Fallback forward direction
+      forward.set(1, 0, 0);
+      forward.sub(up.clone().multiplyScalar(forward.dot(up)));
+      if (forward.lengthSq() < 0.0001) {
+        forward.set(0, 0, 1);
+        forward.sub(up.clone().multiplyScalar(forward.dot(up)));
       }
-      localForward.copy(tangent);
     }
-    localForward.normalize();
+    forward.normalize();
     
-    // Use lookAt approach: character should "stand" on surface with feet down
-    // First align to surface normal (up direction)
-    const defaultUp = new THREE.Vector3(0, 1, 0);
-    const surfaceQuat = new THREE.Quaternion().setFromUnitVectors(defaultUp, up);
+    // Calculate look-at target: position + forward direction
+    const lookTarget = pos.clone().add(forward);
     
-    // Then rotate around up axis to face forward direction
-    // Get the forward after surface alignment
-    const worldForward = new THREE.Vector3(0, 0, 1).applyQuaternion(surfaceQuat);
-    
-    // Calculate angle between aligned forward and desired forward on tangent plane
-    const right = new THREE.Vector3().crossVectors(up, localForward);
-    if (right.lengthSq() > 0.001) {
-      right.normalize();
-      const correctedForward = new THREE.Vector3().crossVectors(right, up).negate().normalize();
-      
-      // Angle between worldForward and correctedForward around up axis
-      let angle = Math.acos(Math.max(-1, Math.min(1, worldForward.dot(correctedForward))));
-      const cross = new THREE.Vector3().crossVectors(worldForward, correctedForward);
-      if (cross.dot(up) < 0) angle = -angle;
-      
-      const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, angle);
-      this.group.quaternion.copy(surfaceQuat).multiply(yawQuat);
-    } else {
-      this.group.quaternion.copy(surfaceQuat);
-    }
+    // Use Three.js lookAt with proper up vector
+    // Create a temporary matrix to compute the rotation
+    const m = new THREE.Matrix4();
+    m.lookAt(pos, lookTarget, up);
+    this.group.quaternion.setFromRotationMatrix(m);
   }
 
   private animate(delta: number): void {

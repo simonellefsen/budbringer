@@ -352,20 +352,24 @@ export class TitleScreen {
     this.titleLetters = new THREE.Group();
     
     // Create chunky 3D block letters for "budbringer"
-    // Arranged in a stacked/wrapped layout like Messenger
-    const letterMat = ToonMaterial.create({ color: 0xffffff });
-    const outlineOpts = { thickness: 0.15, wobble: 0.025 };
+    // Use standard MeshBasicMaterial to ensure visibility
+    const letterMat = new THREE.MeshStandardMaterial({ 
+      color: 0xffffff,
+      roughness: 0.8,
+      metalness: 0.0
+    });
+    const outlineOpts = { thickness: 0.12, wobble: 0.02 };
     
-    // Layout: bud / brin / ger stacked
+    // Layout: bud / brin / ger stacked - positioned to be clearly visible
     const rows = [
-      { text: 'bud', y: 12 },
-      { text: 'brin', y: 4 },
+      { text: 'bud', y: 10 },
+      { text: 'brin', y: 3 },
       { text: 'ger', y: -4 }
     ];
     
     rows.forEach(row => {
       const rowGroup = new THREE.Group();
-      const letterSpacing = 5;
+      const letterSpacing = 4.5;
       const totalWidth = row.text.length * letterSpacing;
       let xOffset = -totalWidth / 2 + letterSpacing / 2;
       
@@ -380,8 +384,8 @@ export class TitleScreen {
       this.titleLetters.add(rowGroup);
     });
     
-    // Position letters in front of camera, behind planet
-    this.titleLetters.position.set(0, 5, 25);
+    // Position letters clearly in front of the planet, visible to camera at z=60
+    this.titleLetters.position.set(0, 8, 35);
     this.titleScene.add(this.titleLetters);
   }
 
