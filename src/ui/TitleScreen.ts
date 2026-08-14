@@ -128,10 +128,10 @@ export class TitleScreen {
     const skyColor = new THREE.Color(0x5ec9be);
     this.titleScene.background = skyColor;
     
-    // Camera looking at planet center, letters positioned low in frame
-    this.titleCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.titleCamera.position.set(0, 0, 75);
-    this.titleCamera.lookAt(0, 0, 0);
+    // Camera looking between planet (y=8) and letters (y=-22) 
+    this.titleCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
+    this.titleCamera.position.set(0, -5, 75);
+    this.titleCamera.lookAt(0, -5, 0);
     
     // Lighting
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -255,8 +255,8 @@ export class TitleScreen {
     lighthouse.rotateX(Math.PI / 2);
     this.titlePlanet.add(lighthouse);
     
-    // Center the planet - it's the hero element
-    this.titlePlanet.position.set(0, 0, 0);
+    // Position planet in UPPER portion of frame
+    this.titlePlanet.position.set(0, 8, 0);
     this.titleScene.add(this.titlePlanet);
   }
 
@@ -375,9 +375,9 @@ export class TitleScreen {
       xOffset += letterSpacing;
     }
     
-    // Position letters in FRONT of planet (close to camera) and LOW in frame
-    // This ensures they appear below the planet visually, not overlapping
-    this.titleLetters.position.set(0, -18, 60);
+    // Position letters in LOWER portion of frame, well below planet
+    // Planet is at y=8, so letters at y=-22 should be clearly separated
+    this.titleLetters.position.set(0, -22, 55);
     this.titleScene.add(this.titleLetters);
   }
 
