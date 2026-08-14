@@ -15,7 +15,7 @@ export interface NPC {
 export class NPCManager {
   private game: Game;
   public npcs: NPC[] = [];
-  private interactionDistance: number = 4;
+  private interactionDistance: number = 6;
 
   constructor(game: Game) {
     this.game = game;
@@ -337,10 +337,17 @@ export class NPCManager {
     let nearest: NPC | null = null;
     let nearestDist = this.interactionDistance;
     
+    const playerDir = position.clone().normalize();
+    const planetRadius = this.game.planetRadius;
+    
     for (const npc of this.npcs) {
-      const dist = position.distanceTo(npc.position);
-      if (dist < nearestDist) {
-        nearestDist = dist;
+      const npcDir = npc.position.clone().normalize();
+      const dot = Math.max(-1, Math.min(1, playerDir.dot(npcDir)));
+      const angle = Math.acos(dot);
+      const arcDist = planetRadius * angle;
+      
+      if (arcDist < nearestDist) {
+        nearestDist = arcDist;
         nearest = npc;
       }
     }

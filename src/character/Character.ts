@@ -8,7 +8,7 @@ export class Character {
   
   private velocity: THREE.Vector3 = new THREE.Vector3();
   private moveSpeed: number = 8;
-  private jumpForce: number = 3;
+  private jumpForce: number = 5;
   private gravity: number = 25;
   
   private isGrounded: boolean = true;

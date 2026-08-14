@@ -279,13 +279,21 @@ export class DeliverySystem {
   }
 
   public getStoryChains(): { id: number; title: string; progress: number; total: number; completed: boolean }[] {
-    return this.storyChains.map(chain => ({
-      id: chain.id,
-      title: chain.title,
-      progress: chain.deliveries.filter(d => d.completed).length,
-      total: chain.deliveries.length,
-      completed: chain.completed
-    }));
+    return this.storyChains.map((chain, chainIndex) => {
+      let progress = chain.deliveries.filter(d => d.completed).length;
+      
+      if (chainIndex === this.currentChainIndex && this.hasLetter && !chain.completed) {
+        progress += 0.5;
+      }
+      
+      return {
+        id: chain.id,
+        title: chain.title,
+        progress: Math.floor(progress * 2),
+        total: chain.deliveries.length * 2,
+        completed: chain.completed
+      };
+    });
   }
 
   public update(): void {
