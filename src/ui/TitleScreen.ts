@@ -128,10 +128,10 @@ export class TitleScreen {
     const skyColor = new THREE.Color(0x5ec9be);
     this.titleScene.background = skyColor;
     
-    // Camera pulled back to show planet as hero with letters around it
-    this.titleCamera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.titleCamera.position.set(0, 8, 85);
-    this.titleCamera.lookAt(0, -2, 0);
+    // Camera pulled back to show planet as hero with letters below
+    this.titleCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
+    this.titleCamera.position.set(0, 5, 70);
+    this.titleCamera.lookAt(0, -8, 0);
     
     // Lighting
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -375,9 +375,9 @@ export class TitleScreen {
       xOffset += letterSpacing;
     }
     
-    // Position letters clearly below the planet, in front so they're visible
-    // Planet is at y=0 with radius=18, so letters at y=-28 should be well below
-    this.titleLetters.position.set(0, -28, 40);
+    // Position letters well below the planet bottom edge (planet radius is 18)
+    // z=50 puts them between camera (z=70) and planet (z=0)
+    this.titleLetters.position.set(0, -30, 50);
     this.titleScene.add(this.titleLetters);
   }
 
