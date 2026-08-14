@@ -199,9 +199,13 @@ export class Game {
     this.planet.update(elapsed);
     this.hud.update();
     
-    this.renderer.setRenderTarget(null);
-    this.renderer.clear();
-    this.renderer.render(this.scene, this.camera);
+    // Only render main game scene when not on title screen
+    // Title screen handles its own rendering
+    if (this.state !== GameState.TITLE) {
+      this.renderer.setRenderTarget(null);
+      this.renderer.clear();
+      this.renderer.render(this.scene, this.camera);
+    }
   };
 
   public resize(): void {
