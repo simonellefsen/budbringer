@@ -1,0 +1,32 @@
+{
+  "name": "budbringer",
+  "version": "1.0.0",
+  "description": "A tiny spherical-planet mail-courier game. Walk around a handcrafted world, deliver letters, meet characters.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
+  "keywords": [
+    "game",
+    "threejs",
+    "browser-game",
+    "indie-game",
+    "spherical-planet"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/three": "^0.185.4",
+    "eslint": "^9.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "howler": "^2.2.4",
+    "three": "^0.170.0"
+  }
+}
