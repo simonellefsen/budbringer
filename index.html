@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="description" content="budbringer - A tiny spherical-planet mail-courier game" />
-    <meta name="theme-color" content="#87CEEB" />
+    <meta name="theme-color" content="#5ec9be" />
     <title>budbringer</title>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
@@ -18,7 +18,7 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #5fbdb0;
+        background: #5ec9be;
         font-family: 'Patrick Hand', cursive, system-ui;
         touch-action: none;
         -webkit-touch-callout: none;
@@ -41,7 +41,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background: linear-gradient(180deg, #5fbdb0 0%, #4a9e94 100%);
+        background: #5ec9be;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -53,39 +53,54 @@
         opacity: 0;
         pointer-events: none;
       }
-      #loading h1 {
-        color: #1a1a1a;
-        font-size: 3.5rem;
-        letter-spacing: 0.05em;
-        margin-bottom: 2rem;
-        text-shadow: 
-          3px 3px 0 #fff,
-          -1px -1px 0 #fff,
-          1px -1px 0 #fff,
-          -1px 1px 0 #fff;
-      }
       .loader {
-        width: 50px;
-        height: 40px;
+        width: 80px;
+        height: 60px;
         position: relative;
       }
-      .loader::before {
-        content: '✉️';
-        font-size: 2.5rem;
-        position: absolute;
-        animation: bounce 0.6s ease infinite;
+      .envelope {
+        width: 80px;
+        height: 55px;
+        background: #fff;
+        border: 4px solid #1a1a1a;
+        border-radius: 4px;
+        position: relative;
+        animation: float 1s ease-in-out infinite;
       }
-      @keyframes bounce {
-        0%, 100% { transform: translateY(0) rotate(-5deg); }
-        50% { transform: translateY(-15px) rotate(5deg); }
+      .envelope::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 0;
+        border-left: 36px solid transparent;
+        border-right: 36px solid transparent;
+        border-top: 28px solid #1a1a1a;
+      }
+      .envelope::after {
+        content: '';
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        right: 4px;
+        height: 0;
+        border-left: 32px solid transparent;
+        border-right: 32px solid transparent;
+        border-top: 24px solid #fff;
+      }
+      @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-12px); }
       }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="loading">
-      <h1>budbringer</h1>
-      <div class="loader"></div>
+      <div class="loader">
+        <div class="envelope"></div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

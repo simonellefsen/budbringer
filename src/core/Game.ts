@@ -82,15 +82,18 @@ export class Game {
   private setupScene(): void {
     this.scene = new THREE.Scene();
     
-    const skyColor = new THREE.Color(0x5fbdb0);
+    // Teal sky matching Messenger aesthetic
+    const skyColor = new THREE.Color(0x6ecbc0);
     this.scene.background = skyColor;
-    this.scene.fog = new THREE.Fog(skyColor, 80, 180);
+    // Tight fog for street-level immersion
+    this.scene.fog = new THREE.Fog(skyColor, 25, 70);
     
+    // Narrower FOV for more human-like view, less fisheye
     this.camera = new THREE.PerspectiveCamera(
-      55,
+      48,
       window.innerWidth / window.innerHeight,
       0.1,
-      500
+      200
     );
   }
 
@@ -196,9 +199,13 @@ export class Game {
     this.planet.update(elapsed);
     this.hud.update();
     
-    this.renderer.setRenderTarget(null);
-    this.renderer.clear();
-    this.renderer.render(this.scene, this.camera);
+    // Only render main game scene when not on title screen
+    // Title screen handles its own rendering
+    if (this.state !== GameState.TITLE) {
+      this.renderer.setRenderTarget(null);
+      this.renderer.clear();
+      this.renderer.render(this.scene, this.camera);
+    }
   };
 
   public resize(): void {
