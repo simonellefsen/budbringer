@@ -198,15 +198,12 @@ export class Character {
       this.velocity.copy(verticalVel);
     }
     
-    if (input.jump && this.jumpCooldown <= 0) {
-      if (this.isGrounded) {
-        this.velocity.add(up.clone().multiplyScalar(this.jumpForce));
-        this.isGrounded = false;
-        this.isJumping = true;
-        this.jumpCooldown = 0.5;
-        this.game.audioManager.playJump();
-        console.log('JUMP! velocity:', this.velocity.length(), 'jumpForce:', this.jumpForce);
-      }
+    if (input.jump && this.isGrounded && this.jumpCooldown <= 0) {
+      this.velocity.add(up.clone().multiplyScalar(this.jumpForce));
+      this.isGrounded = false;
+      this.isJumping = true;
+      this.jumpCooldown = 0.5;
+      this.game.audioManager.playJump();
     }
   }
 
@@ -227,11 +224,6 @@ export class Character {
     const surfaceHeight = this.game.planetRadius + 0.5;
     const maxHeight = this.game.planetRadius + 20;
     const groundTolerance = 0.1;
-    
-    const heightAboveGround = distFromCenter - surfaceHeight;
-    if (this.isJumping && heightAboveGround > 0.1) {
-      console.log('Jump height:', heightAboveGround.toFixed(2), 'velocity:', this.velocity.length().toFixed(2));
-    }
     
     if (distFromCenter < 1) {
       this.group.position.set(0, surfaceHeight, 0);
