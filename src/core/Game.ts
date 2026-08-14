@@ -124,6 +124,7 @@ export class Game {
     this.scene.add(this.planet.mesh);
     
     this.inputManager = new InputManager(this);
+    this.inputManager.setupCanvasEvents();
     
     const startPosition = this.planet.getSpawnPosition();
     this.character = new Character(this, startPosition);

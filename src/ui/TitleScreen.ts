@@ -388,7 +388,7 @@ export class TitleScreen {
   public hide(): void {
     this.container.classList.add('hidden');
     setTimeout(() => {
-      this.container.style.display = 'none';
+      this.container.remove();
     }, 500);
   }
 
