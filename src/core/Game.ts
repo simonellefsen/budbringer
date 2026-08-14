@@ -11,7 +11,6 @@ import { TitleScreen } from '../ui/TitleScreen';
 import { DeliverySystem } from './DeliverySystem';
 import { AudioManager } from '../audio/AudioManager';
 import { Secrets } from '../world/Secrets';
-import { OutlineEffect } from '../utils/OutlinePass';
 
 export enum GameState {
   TITLE,
@@ -38,7 +37,6 @@ export class Game {
   public audioManager!: AudioManager;
   public secrets!: Secrets;
   
-  private outlineEffect!: OutlineEffect;
   
   public state: GameState = GameState.TITLE;
   public planetRadius: number = 30;
@@ -61,7 +59,6 @@ export class Game {
     
     this.setupUI();
     this.setupAudio();
-    this.setupPostProcessing();
     
     this.hideLoading();
     this.animate();
@@ -151,9 +148,6 @@ export class Game {
     this.audioManager = new AudioManager(this);
   }
 
-  private setupPostProcessing(): void {
-    this.outlineEffect = new OutlineEffect(this.renderer, this.scene, this.camera);
-  }
 
   private hideLoading(): void {
     const loading = document.getElementById('loading');
@@ -199,7 +193,7 @@ export class Game {
     this.planet.update(elapsed);
     this.hud.update();
     
-    this.outlineEffect.render();
+    this.renderer.render(this.scene, this.camera);
   };
 
   public resize(): void {
@@ -209,7 +203,6 @@ export class Game {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
-    this.outlineEffect.setSize(width, height);
   }
 
   public dispose(): void {
@@ -217,6 +210,5 @@ export class Game {
     this.renderer.dispose();
     this.inputManager.dispose();
     this.audioManager.dispose();
-    this.outlineEffect.dispose();
   }
 }
