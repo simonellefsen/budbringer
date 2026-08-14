@@ -82,6 +82,17 @@ export class TitleScreen {
           box-shadow: 2px 2px 0 #1a1a1a;
         }
         
+        #title-text {
+          font-family: 'Patrick Hand', cursive;
+          font-size: 4rem;
+          font-weight: bold;
+          color: #ffffff;
+          text-shadow: 4px 4px 0 #1a1a1a, -2px -2px 0 #1a1a1a, 2px -2px 0 #1a1a1a, -2px 2px 0 #1a1a1a;
+          letter-spacing: 0.1em;
+          margin-bottom: 1.5rem;
+          pointer-events: none;
+        }
+        
         #title-controls {
           position: absolute;
           bottom: 20px;
@@ -97,6 +108,7 @@ export class TitleScreen {
       </style>
       
       <div id="title-ui">
+        <div id="title-text">budbringer</div>
         <button id="enter-button">enter</button>
       </div>
       
@@ -128,10 +140,10 @@ export class TitleScreen {
     const skyColor = new THREE.Color(0x5ec9be);
     this.titleScene.background = skyColor;
     
-    // Camera to see both planet (center) and letters (below)
-    this.titleCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.titleCamera.position.set(0, -5, 65);
-    this.titleCamera.lookAt(0, -10, 15);
+    // Camera focused on planet - title text is now HTML overlay
+    this.titleCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+    this.titleCamera.position.set(0, 5, 55);
+    this.titleCamera.lookAt(0, 0, 0);
     
     // Lighting
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -255,8 +267,8 @@ export class TitleScreen {
     lighthouse.rotateX(Math.PI / 2);
     this.titlePlanet.add(lighthouse);
     
-    // Planet centered as the hero, letters behind it
-    this.titlePlanet.position.set(0, 2, 0);
+    // Planet centered as the hero element
+    this.titlePlanet.position.set(0, -3, 0);
     this.titleScene.add(this.titlePlanet);
   }
 
@@ -350,231 +362,10 @@ export class TitleScreen {
   }
 
   private createTitleLetters(): void {
+    // Title text is now HTML overlay (see #title-text in CSS)
+    // 3D letters caused persistent overlap issues with the planet
     this.titleLetters = new THREE.Group();
-    
-    // Smaller chunky letters that don't dominate the planet
-    const letterMat = new THREE.MeshStandardMaterial({ 
-      color: 0xffffff,
-      roughness: 0.8,
-      metalness: 0.0
-    });
-    const outlineOpts = { thickness: 0.06, wobble: 0.01 };
-    
-    // Letters below the planet, in front (between camera and planet)
-    const text = 'budbringer';
-    const letterSpacing = 2.0;
-    const totalWidth = text.length * letterSpacing;
-    let xOffset = -totalWidth / 2 + letterSpacing / 2;
-    
-    for (const char of text) {
-      const letterGroup = this.createSimpleLetter(char, letterMat, outlineOpts);
-      letterGroup.position.x = xOffset;
-      // Small letters so they don't dominate
-      letterGroup.scale.setScalar(0.3);
-      this.titleLetters.add(letterGroup);
-      xOffset += letterSpacing;
-    }
-    
-    // Position letters in front of planet (z=30) and well below it (y=-25)
-    // Camera at z=60, planet at z=0, letters at z=30 - in between
-    this.titleLetters.position.set(0, -25, 30);
     this.titleScene.add(this.titleLetters);
-  }
-
-  private createSimpleLetter(char: string, material: THREE.Material, outlineOpts: { thickness: number; wobble: number }): THREE.Group {
-    const group = new THREE.Group();
-    const depth = 2.5;
-    const height = 6;
-    const width = 4;
-    const thickness = 1.2;
-    
-    // Use simple box combinations for each letter
-    const meshes: THREE.Mesh[] = [];
-    
-    switch (char.toLowerCase()) {
-      case 'b': {
-        // Vertical bar
-        const bar = new THREE.BoxGeometry(thickness, height, depth);
-        const barMesh = new THREE.Mesh(bar, material);
-        barMesh.position.x = -width/2 + thickness/2;
-        meshes.push(barMesh);
-        // Top bump
-        const top = new THREE.BoxGeometry(width * 0.6, thickness, depth);
-        const topMesh = new THREE.Mesh(top, material);
-        topMesh.position.set(0, height/2 - thickness/2, 0);
-        meshes.push(topMesh);
-        // Middle
-        const mid = new THREE.BoxGeometry(width * 0.5, thickness, depth);
-        const midMesh = new THREE.Mesh(mid, material);
-        midMesh.position.set(-0.2, 0, 0);
-        meshes.push(midMesh);
-        // Bottom
-        const bot = new THREE.BoxGeometry(width * 0.6, thickness, depth);
-        const botMesh = new THREE.Mesh(bot, material);
-        botMesh.position.set(0, -height/2 + thickness/2, 0);
-        meshes.push(botMesh);
-        // Right bumps
-        const bump1 = new THREE.BoxGeometry(thickness, height * 0.35, depth);
-        const bump1Mesh = new THREE.Mesh(bump1, material);
-        bump1Mesh.position.set(width/3, height * 0.22, 0);
-        meshes.push(bump1Mesh);
-        const bump2 = new THREE.BoxGeometry(thickness, height * 0.35, depth);
-        const bump2Mesh = new THREE.Mesh(bump2, material);
-        bump2Mesh.position.set(width/3, -height * 0.22, 0);
-        meshes.push(bump2Mesh);
-        break;
-      }
-      case 'u': {
-        // Left bar
-        const left = new THREE.BoxGeometry(thickness, height, depth);
-        const leftMesh = new THREE.Mesh(left, material);
-        leftMesh.position.x = -width/2 + thickness/2;
-        meshes.push(leftMesh);
-        // Right bar
-        const right = new THREE.BoxGeometry(thickness, height, depth);
-        const rightMesh = new THREE.Mesh(right, material);
-        rightMesh.position.x = width/2 - thickness/2;
-        meshes.push(rightMesh);
-        // Bottom
-        const bot = new THREE.BoxGeometry(width, thickness, depth);
-        const botMesh = new THREE.Mesh(bot, material);
-        botMesh.position.y = -height/2 + thickness/2;
-        meshes.push(botMesh);
-        break;
-      }
-      case 'd': {
-        // Same as B but smoother right side
-        const bar = new THREE.BoxGeometry(thickness, height, depth);
-        const barMesh = new THREE.Mesh(bar, material);
-        barMesh.position.x = -width/2 + thickness/2;
-        meshes.push(barMesh);
-        const top = new THREE.BoxGeometry(width * 0.5, thickness, depth);
-        const topMesh = new THREE.Mesh(top, material);
-        topMesh.position.set(-0.2, height/2 - thickness/2, 0);
-        meshes.push(topMesh);
-        const bot = new THREE.BoxGeometry(width * 0.5, thickness, depth);
-        const botMesh = new THREE.Mesh(bot, material);
-        botMesh.position.set(-0.2, -height/2 + thickness/2, 0);
-        meshes.push(botMesh);
-        const bump = new THREE.BoxGeometry(thickness, height * 0.7, depth);
-        const bumpMesh = new THREE.Mesh(bump, material);
-        bumpMesh.position.set(width/3, 0, 0);
-        meshes.push(bumpMesh);
-        break;
-      }
-      case 'r': {
-        const bar = new THREE.BoxGeometry(thickness, height, depth);
-        const barMesh = new THREE.Mesh(bar, material);
-        barMesh.position.x = -width/2 + thickness/2;
-        meshes.push(barMesh);
-        const top = new THREE.BoxGeometry(width * 0.7, thickness, depth);
-        const topMesh = new THREE.Mesh(top, material);
-        topMesh.position.set(0, height/2 - thickness/2, 0);
-        meshes.push(topMesh);
-        const mid = new THREE.BoxGeometry(width * 0.6, thickness, depth);
-        const midMesh = new THREE.Mesh(mid, material);
-        midMesh.position.set(-0.2, height * 0.1, 0);
-        meshes.push(midMesh);
-        const bump = new THREE.BoxGeometry(thickness, height * 0.3, depth);
-        const bumpMesh = new THREE.Mesh(bump, material);
-        bumpMesh.position.set(width/3, height * 0.28, 0);
-        meshes.push(bumpMesh);
-        // Diagonal leg
-        const leg = new THREE.BoxGeometry(thickness * 1.5, height * 0.5, depth);
-        const legMesh = new THREE.Mesh(leg, material);
-        legMesh.position.set(width/4, -height * 0.25, 0);
-        legMesh.rotation.z = -0.4;
-        meshes.push(legMesh);
-        break;
-      }
-      case 'i': {
-        const bar = new THREE.BoxGeometry(thickness, height * 0.7, depth);
-        const barMesh = new THREE.Mesh(bar, material);
-        barMesh.position.y = -height * 0.1;
-        meshes.push(barMesh);
-        // Dot
-        const dot = new THREE.BoxGeometry(thickness * 1.2, thickness * 1.2, depth);
-        const dotMesh = new THREE.Mesh(dot, material);
-        dotMesh.position.y = height * 0.38;
-        meshes.push(dotMesh);
-        break;
-      }
-      case 'n': {
-        const left = new THREE.BoxGeometry(thickness, height, depth);
-        const leftMesh = new THREE.Mesh(left, material);
-        leftMesh.position.x = -width/2 + thickness/2;
-        meshes.push(leftMesh);
-        const right = new THREE.BoxGeometry(thickness, height, depth);
-        const rightMesh = new THREE.Mesh(right, material);
-        rightMesh.position.x = width/2 - thickness/2;
-        meshes.push(rightMesh);
-        const top = new THREE.BoxGeometry(width, thickness, depth);
-        const topMesh = new THREE.Mesh(top, material);
-        topMesh.position.y = height/2 - thickness/2;
-        meshes.push(topMesh);
-        break;
-      }
-      case 'g': {
-        // C shape plus horizontal
-        const left = new THREE.BoxGeometry(thickness, height, depth);
-        const leftMesh = new THREE.Mesh(left, material);
-        leftMesh.position.x = -width/2 + thickness/2;
-        meshes.push(leftMesh);
-        const top = new THREE.BoxGeometry(width, thickness, depth);
-        const topMesh = new THREE.Mesh(top, material);
-        topMesh.position.y = height/2 - thickness/2;
-        meshes.push(topMesh);
-        const bot = new THREE.BoxGeometry(width, thickness, depth);
-        const botMesh = new THREE.Mesh(bot, material);
-        botMesh.position.y = -height/2 + thickness/2;
-        meshes.push(botMesh);
-        const rightBot = new THREE.BoxGeometry(thickness, height * 0.35, depth);
-        const rightBotMesh = new THREE.Mesh(rightBot, material);
-        rightBotMesh.position.set(width/2 - thickness/2, -height * 0.15, 0);
-        meshes.push(rightBotMesh);
-        const mid = new THREE.BoxGeometry(width * 0.4, thickness, depth);
-        const midMesh = new THREE.Mesh(mid, material);
-        midMesh.position.set(width/4, 0, 0);
-        meshes.push(midMesh);
-        break;
-      }
-      case 'e': {
-        const bar = new THREE.BoxGeometry(thickness, height, depth);
-        const barMesh = new THREE.Mesh(bar, material);
-        barMesh.position.x = -width/2 + thickness/2;
-        meshes.push(barMesh);
-        const top = new THREE.BoxGeometry(width * 0.8, thickness, depth);
-        const topMesh = new THREE.Mesh(top, material);
-        topMesh.position.set(0, height/2 - thickness/2, 0);
-        meshes.push(topMesh);
-        const mid = new THREE.BoxGeometry(width * 0.6, thickness, depth);
-        const midMesh = new THREE.Mesh(mid, material);
-        midMesh.position.set(-0.3, 0, 0);
-        meshes.push(midMesh);
-        const bot = new THREE.BoxGeometry(width * 0.8, thickness, depth);
-        const botMesh = new THREE.Mesh(bot, material);
-        botMesh.position.set(0, -height/2 + thickness/2, 0);
-        meshes.push(botMesh);
-        break;
-      }
-      default: {
-        const box = new THREE.BoxGeometry(width, height, depth);
-        meshes.push(new THREE.Mesh(box, material));
-      }
-    }
-    
-    // Add all meshes and their outlines
-    meshes.forEach(mesh => {
-      mesh.castShadow = true;
-      group.add(mesh);
-      group.add(OutlineMaterial.addOutlineToMesh(mesh, outlineOpts));
-    });
-    
-    // Slight random tilt for hand-drawn feel
-    group.rotation.z = (Math.random() - 0.5) * 0.06;
-    group.rotation.x = (Math.random() - 0.5) * 0.04;
-    
-    return group;
   }
 
   private createTitleClouds(): void {
