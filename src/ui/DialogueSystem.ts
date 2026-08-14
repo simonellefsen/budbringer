@@ -11,7 +11,7 @@ export class DialogueSystem {
   private currentText: string = '';
   private displayedText: string = '';
   private charIndex: number = 0;
-  private charDelay: number = 25;
+  private charDelay: number = 15;
   private lastCharTime: number = 0;
   private isTyping: boolean = false;
   
@@ -99,6 +99,13 @@ export class DialogueSystem {
     document.addEventListener('keydown', this.boundKeyHandler);
     this.container.addEventListener('click', this.boundClickHandler);
     this.container.addEventListener('mousedown', (e) => e.stopPropagation());
+    
+    document.addEventListener('click', (e) => {
+      if (this.isShowing) {
+        e.stopPropagation();
+        this.advanceOrClose();
+      }
+    });
     
     this.startTypewriterLoop();
   }
