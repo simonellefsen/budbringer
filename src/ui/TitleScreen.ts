@@ -140,10 +140,10 @@ export class TitleScreen {
     const skyColor = new THREE.Color(0x5ec9be);
     this.titleScene.background = skyColor;
     
-    // Camera focused on planet - title text is now HTML overlay
-    this.titleCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.titleCamera.position.set(0, 5, 55);
-    this.titleCamera.lookAt(0, 0, 0);
+    // Camera closer to planet so town details are readable
+    this.titleCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
+    this.titleCamera.position.set(0, 8, 38);
+    this.titleCamera.lookAt(0, -2, 0);
     
     // Lighting
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -171,220 +171,405 @@ export class TitleScreen {
 
   private createTitlePlanet(): void {
     this.titlePlanet = new THREE.Group();
-    const planetRadius = 18;
+    const planetRadius = 16;
     
-    // Main sphere
+    // Main sphere - lighter green for better contrast
     const sphereGeo = new THREE.IcosahedronGeometry(planetRadius, 4);
-    const sphereMat = ToonMaterial.create({ color: 0x5a7a4a });
+    const sphereMat = ToonMaterial.create({ color: 0x6a8a5a });
     const sphere = new THREE.Mesh(sphereGeo, sphereMat);
     this.titlePlanet.add(sphere);
     
     // Add outline to planet
-    const planetOutline = OutlineMaterial.addOutlineToMesh(sphere, { thickness: 0.2, wobble: 0.03 });
+    const planetOutline = OutlineMaterial.addOutlineToMesh(sphere, { thickness: 0.25, wobble: 0.04 });
     this.titlePlanet.add(planetOutline);
     
-    const outlineOpts = { thickness: 0.1, wobble: 0.015 };
+    // Create SURFACE-PAINTED ribbon roads (latitude rings) using ring geometry
+    this.createTitleRoads(planetRadius);
     
-    // LARGER houses - 3x scale, visible from title camera
-    for (let i = 0; i < 25; i++) {
-      const house = this.createMiniHouse();
-      house.scale.setScalar(3.0); // Scale up significantly
-      const theta = (i / 25) * Math.PI * 2 + Math.random() * 0.3;
-      const phi = 0.3 + Math.random() * 0.5;
-      const pos = new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta),
-        Math.cos(phi),
-        Math.sin(phi) * Math.sin(theta)
+    // Create CHUNKY extruded houses with visible volume
+    this.createTitleHouses(planetRadius);
+    
+    // Create landmark features
+    this.createTitleLandmarks(planetRadius);
+    
+    // Planet centered, slightly lower so houses on top are visible
+    this.titlePlanet.position.set(0, -2, 0);
+    this.titleScene.add(this.titlePlanet);
+  }
+
+  private createTitleRoads(planetRadius: number): void {
+    // Main road - wide ribbon ring around equator using TorusGeometry projected onto sphere
+    // Using ring segments that wrap around the sphere
+    const numRoadSegments = 24;
+    const roadWidth = 1.8;
+    
+    // Equator road
+    for (let i = 0; i < numRoadSegments; i++) {
+      const theta1 = (i / numRoadSegments) * Math.PI * 2;
+      const theta2 = ((i + 1) / numRoadSegments) * Math.PI * 2;
+      
+      const roadSeg = this.createRoadRibbonSegment(planetRadius, theta1, theta2, 0, roadWidth);
+      this.titlePlanet.add(roadSeg);
+    }
+    
+    // Northern latitude road
+    for (let i = 0; i < 20; i++) {
+      const theta1 = (i / 20) * Math.PI * 2;
+      const theta2 = ((i + 1) / 20) * Math.PI * 2;
+      
+      const roadSeg = this.createRoadRibbonSegment(planetRadius, theta1, theta2, 0.5, roadWidth * 0.8);
+      this.titlePlanet.add(roadSeg);
+    }
+    
+    // Southern latitude road
+    for (let i = 0; i < 20; i++) {
+      const theta1 = (i / 20) * Math.PI * 2;
+      const theta2 = ((i + 1) / 20) * Math.PI * 2;
+      
+      const roadSeg = this.createRoadRibbonSegment(planetRadius, theta1, theta2, -0.4, roadWidth * 0.7);
+      this.titlePlanet.add(roadSeg);
+    }
+    
+    // Meridian roads (north-south)
+    for (let m = 0; m < 6; m++) {
+      const theta = (m / 6) * Math.PI * 2;
+      for (let i = 0; i < 12; i++) {
+        const lat1 = -0.6 + (i / 12) * 1.2;
+        const lat2 = -0.6 + ((i + 1) / 12) * 1.2;
+        
+        const roadSeg = this.createMeridianRoadSegment(planetRadius, theta, lat1, lat2, roadWidth * 0.6);
+        this.titlePlanet.add(roadSeg);
+      }
+    }
+  }
+
+  private createRoadRibbonSegment(radius: number, theta1: number, theta2: number, latitude: number, width: number): THREE.Mesh {
+    // Create a curved road segment that follows the sphere surface at given latitude
+    const phi = Math.PI / 2 - latitude; // Convert latitude to phi angle
+    
+    // Create shape for the road cross-section
+    const shape = new THREE.Shape();
+    shape.moveTo(-width / 2, 0);
+    shape.lineTo(width / 2, 0);
+    shape.lineTo(width / 2, 0.15);
+    shape.lineTo(-width / 2, 0.15);
+    shape.closePath();
+    
+    // Create curve path along the latitude
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(
+        Math.sin(phi) * Math.cos(theta1) * radius,
+        Math.cos(phi) * radius,
+        Math.sin(phi) * Math.sin(theta1) * radius
+      ),
+      new THREE.Vector3(
+        Math.sin(phi) * Math.cos((theta1 + theta2) / 2) * radius,
+        Math.cos(phi) * radius,
+        Math.sin(phi) * Math.sin((theta1 + theta2) / 2) * radius
+      ),
+      new THREE.Vector3(
+        Math.sin(phi) * Math.cos(theta2) * radius,
+        Math.cos(phi) * radius,
+        Math.sin(phi) * Math.sin(theta2) * radius
+      )
+    ]);
+    
+    // Use ExtrudeGeometry to create the road
+    const extrudeSettings = {
+      steps: 8,
+      extrudePath: curve,
+    };
+    
+    const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    const mat = ToonMaterial.create({ color: 0x2a2a2a });
+    const road = new THREE.Mesh(geo, mat);
+    
+    return road;
+  }
+
+  private createMeridianRoadSegment(radius: number, theta: number, lat1: number, lat2: number, width: number): THREE.Mesh {
+    const phi1 = Math.PI / 2 - lat1;
+    const phi2 = Math.PI / 2 - lat2;
+    const phiMid = (phi1 + phi2) / 2;
+    
+    const shape = new THREE.Shape();
+    shape.moveTo(-width / 2, 0);
+    shape.lineTo(width / 2, 0);
+    shape.lineTo(width / 2, 0.12);
+    shape.lineTo(-width / 2, 0.12);
+    shape.closePath();
+    
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(
+        Math.sin(phi1) * Math.cos(theta) * radius,
+        Math.cos(phi1) * radius,
+        Math.sin(phi1) * Math.sin(theta) * radius
+      ),
+      new THREE.Vector3(
+        Math.sin(phiMid) * Math.cos(theta) * radius,
+        Math.cos(phiMid) * radius,
+        Math.sin(phiMid) * Math.sin(theta) * radius
+      ),
+      new THREE.Vector3(
+        Math.sin(phi2) * Math.cos(theta) * radius,
+        Math.cos(phi2) * radius,
+        Math.sin(phi2) * Math.sin(theta) * radius
+      )
+    ]);
+    
+    const extrudeSettings = { steps: 6, extrudePath: curve };
+    const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    const mat = ToonMaterial.create({ color: 0x2a2a2a });
+    return new THREE.Mesh(geo, mat);
+  }
+
+  private createTitleHouses(planetRadius: number): void {
+    // Place chunky houses around the planet
+    const housePositions = [
+      // Northern hemisphere cluster (visible from front)
+      { theta: 0, phi: 0.4 }, { theta: 0.4, phi: 0.5 }, { theta: -0.3, phi: 0.35 },
+      { theta: 0.8, phi: 0.45 }, { theta: -0.7, phi: 0.55 }, { theta: 1.2, phi: 0.4 },
+      { theta: -1.0, phi: 0.5 }, { theta: 1.5, phi: 0.6 }, { theta: -1.4, phi: 0.45 },
+      // Equator area
+      { theta: 0.3, phi: 1.5 }, { theta: 0.9, phi: 1.55 }, { theta: 1.5, phi: 1.45 },
+      { theta: 2.1, phi: 1.6 }, { theta: 2.7, phi: 1.5 }, { theta: 3.3, phi: 1.55 },
+      { theta: 3.9, phi: 1.5 }, { theta: 4.5, phi: 1.6 }, { theta: 5.1, phi: 1.45 },
+      { theta: 5.7, phi: 1.55 },
+      // Southern area
+      { theta: 0.5, phi: 2.0 }, { theta: 1.2, phi: 2.1 }, { theta: 2.0, phi: 1.95 },
+      { theta: 2.8, phi: 2.05 }, { theta: 3.6, phi: 2.0 }, { theta: 4.4, phi: 2.1 },
+      // Additional scattered
+      { theta: 0.2, phi: 0.8 }, { theta: 1.8, phi: 0.75 }, { theta: 3.5, phi: 0.85 },
+      { theta: 5.0, phi: 0.7 }, { theta: 4.2, phi: 1.1 }, { theta: 1.1, phi: 1.2 },
+    ];
+    
+    housePositions.forEach((pos, i) => {
+      const house = this.createChunkyHouse(i % 5);
+      // Scale houses to be clearly visible
+      house.scale.setScalar(2.5 + Math.random() * 1.5);
+      
+      const surfacePos = new THREE.Vector3(
+        Math.sin(pos.phi) * Math.cos(pos.theta),
+        Math.cos(pos.phi),
+        Math.sin(pos.phi) * Math.sin(pos.theta)
       ).multiplyScalar(planetRadius);
       
-      house.position.copy(pos);
+      house.position.copy(surfacePos);
       house.lookAt(0, 0, 0);
       house.rotateX(Math.PI / 2);
-      house.rotateY(Math.random() * Math.PI);
+      house.rotateY(Math.random() * Math.PI * 2);
       this.titlePlanet.add(house);
-    }
+    });
     
-    // LARGER roads - continuous ring around equator
-    for (let i = 0; i < 16; i++) {
-      const roadGeo = new THREE.BoxGeometry(2.5, 0.1, 8);
-      const roadMat = ToonMaterial.create({ color: 0x3a3a3a });
-      const road = new THREE.Mesh(roadGeo, roadMat);
+    // Add trees scattered between houses
+    for (let i = 0; i < 30; i++) {
+      const tree = this.createChunkyTree();
+      tree.scale.setScalar(2.0 + Math.random());
       
-      const theta = (i / 16) * Math.PI * 2;
-      const phi = Math.PI * 0.5; // Equator
-      const pos = new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta),
-        Math.cos(phi),
-        Math.sin(phi) * Math.sin(theta)
-      ).multiplyScalar(planetRadius + 0.05);
-      
-      road.position.copy(pos);
-      road.lookAt(0, 0, 0);
-      road.rotateX(Math.PI / 2);
-      road.rotateZ(theta + Math.PI / 2);
-      this.titlePlanet.add(road);
-      this.titlePlanet.add(OutlineMaterial.addOutlineToMesh(road, outlineOpts));
-    }
-    
-    // Second road ring at different latitude
-    for (let i = 0; i < 12; i++) {
-      const roadGeo = new THREE.BoxGeometry(2, 0.1, 6);
-      const roadMat = ToonMaterial.create({ color: 0x3a3a3a });
-      const road = new THREE.Mesh(roadGeo, roadMat);
-      
-      const theta = (i / 12) * Math.PI * 2 + 0.2;
-      const phi = Math.PI * 0.35;
-      const pos = new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta),
-        Math.cos(phi),
-        Math.sin(phi) * Math.sin(theta)
-      ).multiplyScalar(planetRadius + 0.05);
-      
-      road.position.copy(pos);
-      road.lookAt(0, 0, 0);
-      road.rotateX(Math.PI / 2);
-      road.rotateZ(theta + Math.PI / 2);
-      this.titlePlanet.add(road);
-    }
-    
-    // LARGER trees - 2.5x scale
-    for (let i = 0; i < 20; i++) {
-      const tree = this.createMiniTree();
-      tree.scale.setScalar(2.5);
       const theta = Math.random() * Math.PI * 2;
-      const phi = 0.2 + Math.random() * 0.6;
-      const pos = new THREE.Vector3(
+      const phi = 0.3 + Math.random() * 1.8;
+      const surfacePos = new THREE.Vector3(
         Math.sin(phi) * Math.cos(theta),
         Math.cos(phi),
         Math.sin(phi) * Math.sin(theta)
       ).multiplyScalar(planetRadius);
       
-      tree.position.copy(pos);
+      tree.position.copy(surfacePos);
       tree.lookAt(0, 0, 0);
       tree.rotateX(Math.PI / 2);
       this.titlePlanet.add(tree);
     }
+  }
+
+  private createChunkyHouse(variant: number): THREE.Group {
+    const house = new THREE.Group();
+    const outlineOpts = { thickness: 0.08, wobble: 0.015 };
     
-    // LARGER Torii gate - 4x scale
-    const torii = this.createMiniTorii();
-    torii.scale.setScalar(4.0);
-    const toriiPos = new THREE.Vector3(0.6, 0.6, 0.5).normalize().multiplyScalar(planetRadius);
+    // Color variants for visual variety
+    const wallColors = [0xe8e0d0, 0xd8d0c0, 0xf0e8d8, 0xc8c0b0, 0xdad4c4];
+    const roofColors = [0x5a5a5a, 0x4a4a4a, 0x6a4a3a, 0x5a4a4a, 0x4a5a5a];
+    
+    // CHUNKY body - tall enough to be visible
+    const bodyW = 1.5 + Math.random() * 0.8;
+    const bodyH = 1.8 + Math.random() * 1.0;
+    const bodyD = 1.2 + Math.random() * 0.6;
+    
+    const bodyGeo = new THREE.BoxGeometry(bodyW, bodyH, bodyD);
+    const bodyMat = ToonMaterial.create({ color: wallColors[variant] });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = bodyH / 2;
+    house.add(body);
+    house.add(OutlineMaterial.addOutlineToMesh(body, outlineOpts));
+    
+    // CLEAR pitched roof with real volume
+    const roofH = 0.8 + Math.random() * 0.4;
+    const roofGeo = new THREE.ConeGeometry(Math.max(bodyW, bodyD) * 0.75, roofH, 4);
+    const roofMat = ToonMaterial.create({ color: roofColors[variant] });
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.position.y = bodyH + roofH / 2;
+    roof.rotation.y = Math.PI / 4;
+    house.add(roof);
+    house.add(OutlineMaterial.addOutlineToMesh(roof, outlineOpts));
+    
+    // Add a chimney for extra silhouette
+    if (Math.random() > 0.5) {
+      const chimGeo = new THREE.BoxGeometry(0.25, 0.6, 0.25);
+      const chimMat = ToonMaterial.create({ color: 0x8a7a6a });
+      const chim = new THREE.Mesh(chimGeo, chimMat);
+      chim.position.set(bodyW * 0.25, bodyH + roofH * 0.3, 0);
+      house.add(chim);
+    }
+    
+    return house;
+  }
+
+  private createChunkyTree(): THREE.Group {
+    const tree = new THREE.Group();
+    const outlineOpts = { thickness: 0.06, wobble: 0.01 };
+    
+    // Brown trunk
+    const trunkGeo = new THREE.CylinderGeometry(0.15, 0.2, 1.0, 6);
+    const trunkMat = ToonMaterial.create({ color: 0x6b5344 });
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.y = 0.5;
+    tree.add(trunk);
+    
+    // Chunky foliage - multiple overlapping spheres
+    const foliageColors = [0x4a7a4b, 0x5a8a5b, 0x3a6a3b];
+    for (let i = 0; i < 3; i++) {
+      const foliageGeo = new THREE.IcosahedronGeometry(0.6 + Math.random() * 0.3, 1);
+      const foliageMat = ToonMaterial.create({ color: foliageColors[i % 3] });
+      const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+      foliage.position.set(
+        (Math.random() - 0.5) * 0.4,
+        1.2 + i * 0.3,
+        (Math.random() - 0.5) * 0.4
+      );
+      tree.add(foliage);
+      if (i === 0) tree.add(OutlineMaterial.addOutlineToMesh(foliage, outlineOpts));
+    }
+    
+    return tree;
+  }
+
+  private createTitleLandmarks(planetRadius: number): void {
+    // LARGE Torii gate - clearly visible
+    const torii = this.createLargeTorii();
+    torii.scale.setScalar(5.0);
+    const toriiPos = new THREE.Vector3(0.5, 0.7, 0.5).normalize().multiplyScalar(planetRadius);
     torii.position.copy(toriiPos);
     torii.lookAt(0, 0, 0);
     torii.rotateX(Math.PI / 2);
     this.titlePlanet.add(torii);
     
-    // LARGER water/harbor area
-    const waterGeo = new THREE.CircleGeometry(6, 16);
-    const waterMat = ToonMaterial.create({ color: 0x4a9ab0, transparent: true, opacity: 0.85 });
+    // Harbor/water area - larger and more prominent
+    const waterGeo = new THREE.CircleGeometry(5, 24);
+    const waterMat = ToonMaterial.create({ color: 0x3a8aa0, transparent: true, opacity: 0.9 });
     const water = new THREE.Mesh(waterGeo, waterMat);
-    const waterPos = new THREE.Vector3(-0.6, -0.4, 0.65).normalize().multiplyScalar(planetRadius + 0.08);
+    const waterPos = new THREE.Vector3(-0.6, -0.3, 0.7).normalize().multiplyScalar(planetRadius + 0.1);
     water.position.copy(waterPos);
     water.lookAt(0, 0, 0);
     this.titlePlanet.add(water);
-    this.titlePlanet.add(OutlineMaterial.addOutlineToMesh(water, { thickness: 0.15, wobble: 0.02 }));
+    this.titlePlanet.add(OutlineMaterial.addOutlineToMesh(water, { thickness: 0.2, wobble: 0.03 }));
     
-    // LARGER Lighthouse - 4x scale
-    const lighthouse = this.createMiniLighthouse();
-    lighthouse.scale.setScalar(4.0);
-    const lhPos = new THREE.Vector3(-0.55, -0.35, 0.75).normalize().multiplyScalar(planetRadius);
+    // Lighthouse next to water
+    const lighthouse = this.createLargeLighthouse();
+    lighthouse.scale.setScalar(4.5);
+    const lhPos = new THREE.Vector3(-0.5, -0.25, 0.8).normalize().multiplyScalar(planetRadius);
     lighthouse.position.copy(lhPos);
     lighthouse.lookAt(0, 0, 0);
     lighthouse.rotateX(Math.PI / 2);
     this.titlePlanet.add(lighthouse);
     
-    // Planet centered as the hero element
-    this.titlePlanet.position.set(0, -3, 0);
-    this.titleScene.add(this.titlePlanet);
+    // A few boats in the water
+    for (let i = 0; i < 3; i++) {
+      const boat = this.createMiniBoat();
+      boat.scale.setScalar(2.5);
+      const boatPos = new THREE.Vector3(-0.55 + i * 0.08, -0.32, 0.75).normalize().multiplyScalar(planetRadius + 0.15);
+      boat.position.copy(boatPos);
+      boat.lookAt(0, 0, 0);
+      boat.rotateX(Math.PI / 2);
+      boat.rotateY(Math.random() * Math.PI);
+      this.titlePlanet.add(boat);
+    }
   }
 
-  private createMiniHouse(): THREE.Group {
-    const house = new THREE.Group();
-    const outlineOpts = { thickness: 0.04, wobble: 0.008 };
-    
-    // Body
-    const bodyGeo = new THREE.BoxGeometry(1.2, 1, 1);
-    const bodyMat = ToonMaterial.create({ color: 0xd8d0c0 });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.5;
-    house.add(body);
-    house.add(OutlineMaterial.addOutlineToMesh(body, outlineOpts));
-    
-    // Pitched roof
-    const roofGeo = new THREE.ConeGeometry(0.9, 0.6, 4);
-    const roofMat = ToonMaterial.create({ color: 0x4a4a4a });
-    const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.position.y = 1.3;
-    roof.rotation.y = Math.PI / 4;
-    house.add(roof);
-    house.add(OutlineMaterial.addOutlineToMesh(roof, outlineOpts));
-    
-    return house;
-  }
-
-  private createMiniTree(): THREE.Group {
-    const tree = new THREE.Group();
-    const outlineOpts = { thickness: 0.03, wobble: 0.006 };
-    
-    const trunkGeo = new THREE.CylinderGeometry(0.1, 0.15, 0.8, 6);
-    const trunkMat = ToonMaterial.create({ color: 0x6b5344 });
-    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.y = 0.4;
-    tree.add(trunk);
-    
-    const foliageGeo = new THREE.IcosahedronGeometry(0.6, 0);
-    const foliageMat = ToonMaterial.create({ color: 0x4a7a4b });
-    const foliage = new THREE.Mesh(foliageGeo, foliageMat);
-    foliage.position.y = 1.1;
-    tree.add(foliage);
-    tree.add(OutlineMaterial.addOutlineToMesh(foliage, outlineOpts));
-    
-    return tree;
-  }
-
-  private createMiniTorii(): THREE.Group {
+  private createLargeTorii(): THREE.Group {
     const torii = new THREE.Group();
     const mat = ToonMaterial.create({ color: 0xc0392b });
-    const outlineOpts = { thickness: 0.03, wobble: 0.005 };
+    const outlineOpts = { thickness: 0.05, wobble: 0.008 };
     
-    // Posts
+    // Thick posts
     for (let i = 0; i < 2; i++) {
-      const postGeo = new THREE.CylinderGeometry(0.12, 0.15, 2, 6);
+      const postGeo = new THREE.CylinderGeometry(0.18, 0.22, 2.5, 8);
       const post = new THREE.Mesh(postGeo, mat);
-      post.position.set(i === 0 ? -0.8 : 0.8, 1, 0);
+      post.position.set(i === 0 ? -1.0 : 1.0, 1.25, 0);
       torii.add(post);
       torii.add(OutlineMaterial.addOutlineToMesh(post, outlineOpts));
     }
     
-    // Top beam
-    const topGeo = new THREE.BoxGeometry(2.2, 0.2, 0.2);
+    // Top beam - curved ends
+    const topGeo = new THREE.BoxGeometry(2.8, 0.3, 0.3);
     const top = new THREE.Mesh(topGeo, mat);
-    top.position.y = 1.9;
+    top.position.y = 2.4;
     torii.add(top);
     torii.add(OutlineMaterial.addOutlineToMesh(top, outlineOpts));
+    
+    // Second beam
+    const midGeo = new THREE.BoxGeometry(2.2, 0.2, 0.2);
+    const mid = new THREE.Mesh(midGeo, mat);
+    mid.position.y = 2.0;
+    torii.add(mid);
     
     return torii;
   }
 
-  private createMiniLighthouse(): THREE.Group {
+  private createLargeLighthouse(): THREE.Group {
     const lh = new THREE.Group();
-    const outlineOpts = { thickness: 0.03, wobble: 0.005 };
+    const outlineOpts = { thickness: 0.05, wobble: 0.008 };
     
-    const baseGeo = new THREE.CylinderGeometry(0.4, 0.5, 1.5, 8);
-    const baseMat = ToonMaterial.create({ color: 0xf0f0f0 });
+    // Tall white base
+    const baseGeo = new THREE.CylinderGeometry(0.5, 0.7, 2.5, 8);
+    const baseMat = ToonMaterial.create({ color: 0xf5f5f5 });
     const base = new THREE.Mesh(baseGeo, baseMat);
-    base.position.y = 0.75;
+    base.position.y = 1.25;
     lh.add(base);
     lh.add(OutlineMaterial.addOutlineToMesh(base, outlineOpts));
     
     // Red stripe
-    const stripeGeo = new THREE.CylinderGeometry(0.42, 0.45, 0.3, 8);
+    const stripeGeo = new THREE.CylinderGeometry(0.52, 0.58, 0.5, 8);
     const stripeMat = ToonMaterial.create({ color: 0xe74c3c });
     const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-    stripe.position.y = 0.9;
+    stripe.position.y = 1.5;
     lh.add(stripe);
     
+    // Light housing on top
+    const lightGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.4, 8);
+    const lightMat = ToonMaterial.create({ color: 0xffd700 });
+    const light = new THREE.Mesh(lightGeo, lightMat);
+    light.position.y = 2.7;
+    lh.add(light);
+    
+    // Roof
+    const roofGeo = new THREE.ConeGeometry(0.5, 0.4, 8);
+    const roofMat = ToonMaterial.create({ color: 0x4a4a4a });
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.position.y = 3.1;
+    lh.add(roof);
+    
     return lh;
+  }
+
+  private createMiniBoat(): THREE.Group {
+    const boat = new THREE.Group();
+    
+    // Hull
+    const hullGeo = new THREE.BoxGeometry(0.8, 0.25, 0.4);
+    const hullMat = ToonMaterial.create({ color: 0x8b4513 });
+    const hull = new THREE.Mesh(hullGeo, hullMat);
+    boat.add(hull);
+    
+    return boat;
   }
 
   private createTitleLetters(): void {
