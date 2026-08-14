@@ -171,26 +171,26 @@ export class TitleScreen {
 
   private createTitlePlanet(): void {
     this.titlePlanet = new THREE.Group();
-    const planetRadius = 18; // Larger planet as the hero element
+    const planetRadius = 18;
     
     // Main sphere
     const sphereGeo = new THREE.IcosahedronGeometry(planetRadius, 4);
-    const sphereMat = ToonMaterial.create({ color: 0x6a8a5a });
+    const sphereMat = ToonMaterial.create({ color: 0x5a7a4a });
     const sphere = new THREE.Mesh(sphereGeo, sphereMat);
     this.titlePlanet.add(sphere);
     
     // Add outline to planet
-    const planetOutline = OutlineMaterial.addOutlineToMesh(sphere, { thickness: 0.15, wobble: 0.02 });
+    const planetOutline = OutlineMaterial.addOutlineToMesh(sphere, { thickness: 0.2, wobble: 0.03 });
     this.titlePlanet.add(planetOutline);
     
-    // Add mini town elements scattered around
-    const outlineOpts = { thickness: 0.06, wobble: 0.01 };
+    const outlineOpts = { thickness: 0.1, wobble: 0.015 };
     
-    // Mini houses
-    for (let i = 0; i < 20; i++) {
+    // LARGER houses - 3x scale, visible from title camera
+    for (let i = 0; i < 25; i++) {
       const house = this.createMiniHouse();
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.random() * Math.PI * 0.8 + 0.1;
+      house.scale.setScalar(3.0); // Scale up significantly
+      const theta = (i / 25) * Math.PI * 2 + Math.random() * 0.3;
+      const phi = 0.3 + Math.random() * 0.5;
       const pos = new THREE.Vector3(
         Math.sin(phi) * Math.cos(theta),
         Math.cos(phi),
@@ -204,32 +204,55 @@ export class TitleScreen {
       this.titlePlanet.add(house);
     }
     
-    // Roads wrapping around
-    for (let i = 0; i < 8; i++) {
-      const roadGeo = new THREE.BoxGeometry(0.8, 0.05, 4);
-      const roadMat = ToonMaterial.create({ color: 0x4a4a4a });
+    // LARGER roads - continuous ring around equator
+    for (let i = 0; i < 16; i++) {
+      const roadGeo = new THREE.BoxGeometry(2.5, 0.1, 8);
+      const roadMat = ToonMaterial.create({ color: 0x3a3a3a });
       const road = new THREE.Mesh(roadGeo, roadMat);
       
-      const theta = (i / 8) * Math.PI * 2 + 0.2;
-      const phi = Math.PI * 0.4 + Math.random() * 0.3;
+      const theta = (i / 16) * Math.PI * 2;
+      const phi = Math.PI * 0.5; // Equator
       const pos = new THREE.Vector3(
         Math.sin(phi) * Math.cos(theta),
         Math.cos(phi),
         Math.sin(phi) * Math.sin(theta)
-      ).multiplyScalar(planetRadius);
+      ).multiplyScalar(planetRadius + 0.05);
       
       road.position.copy(pos);
       road.lookAt(0, 0, 0);
       road.rotateX(Math.PI / 2);
+      road.rotateZ(theta + Math.PI / 2);
       this.titlePlanet.add(road);
       this.titlePlanet.add(OutlineMaterial.addOutlineToMesh(road, outlineOpts));
     }
     
-    // Trees
-    for (let i = 0; i < 15; i++) {
+    // Second road ring at different latitude
+    for (let i = 0; i < 12; i++) {
+      const roadGeo = new THREE.BoxGeometry(2, 0.1, 6);
+      const roadMat = ToonMaterial.create({ color: 0x3a3a3a });
+      const road = new THREE.Mesh(roadGeo, roadMat);
+      
+      const theta = (i / 12) * Math.PI * 2 + 0.2;
+      const phi = Math.PI * 0.35;
+      const pos = new THREE.Vector3(
+        Math.sin(phi) * Math.cos(theta),
+        Math.cos(phi),
+        Math.sin(phi) * Math.sin(theta)
+      ).multiplyScalar(planetRadius + 0.05);
+      
+      road.position.copy(pos);
+      road.lookAt(0, 0, 0);
+      road.rotateX(Math.PI / 2);
+      road.rotateZ(theta + Math.PI / 2);
+      this.titlePlanet.add(road);
+    }
+    
+    // LARGER trees - 2.5x scale
+    for (let i = 0; i < 20; i++) {
       const tree = this.createMiniTree();
+      tree.scale.setScalar(2.5);
       const theta = Math.random() * Math.PI * 2;
-      const phi = Math.random() * Math.PI * 0.7 + 0.15;
+      const phi = 0.2 + Math.random() * 0.6;
       const pos = new THREE.Vector3(
         Math.sin(phi) * Math.cos(theta),
         Math.cos(phi),
@@ -242,26 +265,29 @@ export class TitleScreen {
       this.titlePlanet.add(tree);
     }
     
-    // Torii gate
+    // LARGER Torii gate - 4x scale
     const torii = this.createMiniTorii();
-    const toriiPos = new THREE.Vector3(0.5, 0.7, 0.5).normalize().multiplyScalar(planetRadius);
+    torii.scale.setScalar(4.0);
+    const toriiPos = new THREE.Vector3(0.6, 0.6, 0.5).normalize().multiplyScalar(planetRadius);
     torii.position.copy(toriiPos);
     torii.lookAt(0, 0, 0);
     torii.rotateX(Math.PI / 2);
     this.titlePlanet.add(torii);
     
-    // Water area (blue patch)
-    const waterGeo = new THREE.CircleGeometry(4, 16);
-    const waterMat = ToonMaterial.create({ color: 0x4a9ab0, transparent: true, opacity: 0.8 });
+    // LARGER water/harbor area
+    const waterGeo = new THREE.CircleGeometry(6, 16);
+    const waterMat = ToonMaterial.create({ color: 0x4a9ab0, transparent: true, opacity: 0.85 });
     const water = new THREE.Mesh(waterGeo, waterMat);
-    const waterPos = new THREE.Vector3(-0.6, -0.3, 0.7).normalize().multiplyScalar(planetRadius + 0.05);
+    const waterPos = new THREE.Vector3(-0.6, -0.4, 0.65).normalize().multiplyScalar(planetRadius + 0.08);
     water.position.copy(waterPos);
     water.lookAt(0, 0, 0);
     this.titlePlanet.add(water);
+    this.titlePlanet.add(OutlineMaterial.addOutlineToMesh(water, { thickness: 0.15, wobble: 0.02 }));
     
-    // Lighthouse
+    // LARGER Lighthouse - 4x scale
     const lighthouse = this.createMiniLighthouse();
-    const lhPos = new THREE.Vector3(-0.5, -0.2, 0.8).normalize().multiplyScalar(planetRadius);
+    lighthouse.scale.setScalar(4.0);
+    const lhPos = new THREE.Vector3(-0.55, -0.35, 0.75).normalize().multiplyScalar(planetRadius);
     lighthouse.position.copy(lhPos);
     lighthouse.lookAt(0, 0, 0);
     lighthouse.rotateX(Math.PI / 2);
