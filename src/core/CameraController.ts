@@ -5,13 +5,13 @@ export class CameraController {
   private game: Game;
   private camera: THREE.PerspectiveCamera;
   
-  // Very close third-person, human height - can't see whole planet as diorama
-  private distance: number = 3.5;
-  private height: number = 1.5;
+  // Close third-person, human height - see the street ahead
+  private distance: number = 4.5;
+  private height: number = 2.0;
   
-  private pitchOffset: number = 0.06;
-  private maxPitch: number = 0.3;
-  private minPitch: number = 0.0; // Never look down into ground
+  private pitchOffset: number = 0.08;
+  private maxPitch: number = 0.25;
+  private minPitch: number = 0.02; // Always look slightly up, never into ground
   
   private lookSensitivity: number = 0.003;
   private smoothing: number = 12;
@@ -56,7 +56,7 @@ export class CameraController {
   private snapToCharacter(): void {
     const charPos = this.game.character.group.position;
     const planetRadius = this.game.planetRadius;
-    const minCamHeight = planetRadius + 2.0;
+    const minCamHeight = planetRadius + 3.0;
     
     if (charPos.length() < 1) {
       this.camera.position.set(0, planetRadius + this.height + this.distance, 0);
@@ -178,7 +178,7 @@ export class CameraController {
       .add(characterUp.clone().multiplyScalar(this.height));
     
     // CRITICAL: Aggressive camera height clamping - never go inside planet
-    const minCamHeight = planetRadius + 2.0;
+    const minCamHeight = planetRadius + 3.0;
     const targetDist = targetPos.length();
     if (targetDist < minCamHeight) {
       // Push camera up along surface normal

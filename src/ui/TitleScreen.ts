@@ -128,10 +128,10 @@ export class TitleScreen {
     const skyColor = new THREE.Color(0x5ec9be);
     this.titleScene.background = skyColor;
     
-    // Camera looking at planet
-    this.titleCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.titleCamera.position.set(0, 15, 60);
-    this.titleCamera.lookAt(0, 0, 0);
+    // Camera pulled back to show planet as hero with letters around it
+    this.titleCamera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+    this.titleCamera.position.set(0, 8, 85);
+    this.titleCamera.lookAt(0, -2, 0);
     
     // Lighting
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -159,7 +159,7 @@ export class TitleScreen {
 
   private createTitlePlanet(): void {
     this.titlePlanet = new THREE.Group();
-    const planetRadius = 12;
+    const planetRadius = 18; // Larger planet as the hero element
     
     // Main sphere
     const sphereGeo = new THREE.IcosahedronGeometry(planetRadius, 4);
@@ -255,7 +255,8 @@ export class TitleScreen {
     lighthouse.rotateX(Math.PI / 2);
     this.titlePlanet.add(lighthouse);
     
-    this.titlePlanet.position.y = -5;
+    // Center the planet - it's the hero element
+    this.titlePlanet.position.set(0, 0, 0);
     this.titleScene.add(this.titlePlanet);
   }
 
@@ -351,41 +352,31 @@ export class TitleScreen {
   private createTitleLetters(): void {
     this.titleLetters = new THREE.Group();
     
-    // Create chunky 3D block letters for "budbringer"
-    // Use standard MeshBasicMaterial to ensure visibility
+    // Smaller chunky letters that don't dominate the planet
     const letterMat = new THREE.MeshStandardMaterial({ 
       color: 0xffffff,
       roughness: 0.8,
       metalness: 0.0
     });
-    const outlineOpts = { thickness: 0.12, wobble: 0.02 };
+    const outlineOpts = { thickness: 0.06, wobble: 0.01 };
     
-    // Layout: bud / brin / ger stacked - positioned to be clearly visible
-    const rows = [
-      { text: 'bud', y: 10 },
-      { text: 'brin', y: 3 },
-      { text: 'ger', y: -4 }
-    ];
+    // Single row "budbringer" below the planet - fits in viewport
+    const text = 'budbringer';
+    const letterSpacing = 2.2;
+    const totalWidth = text.length * letterSpacing;
+    let xOffset = -totalWidth / 2 + letterSpacing / 2;
     
-    rows.forEach(row => {
-      const rowGroup = new THREE.Group();
-      const letterSpacing = 4.5;
-      const totalWidth = row.text.length * letterSpacing;
-      let xOffset = -totalWidth / 2 + letterSpacing / 2;
-      
-      for (const char of row.text) {
-        const letterGroup = this.createSimpleLetter(char, letterMat, outlineOpts);
-        letterGroup.position.x = xOffset;
-        rowGroup.add(letterGroup);
-        xOffset += letterSpacing;
-      }
-      
-      rowGroup.position.y = row.y;
-      this.titleLetters.add(rowGroup);
-    });
+    for (const char of text) {
+      const letterGroup = this.createSimpleLetter(char, letterMat, outlineOpts);
+      letterGroup.position.x = xOffset;
+      // Scale letters down to 40% - planet is the hero
+      letterGroup.scale.setScalar(0.4);
+      this.titleLetters.add(letterGroup);
+      xOffset += letterSpacing;
+    }
     
-    // Position letters clearly in front of the planet, visible to camera at z=60
-    this.titleLetters.position.set(0, 8, 35);
+    // Position letters below the planet, not covering it
+    this.titleLetters.position.set(0, -22, 25);
     this.titleScene.add(this.titleLetters);
   }
 

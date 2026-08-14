@@ -292,11 +292,11 @@ export class Planet {
 
   private fillGlobalDecorations(): void {
     // Scatter houses, trees, and props across the entire sphere
-    // to eliminate barren patches
+    // Fill gaps but keep roads open
     
-    const numGlobalHouses = 30;
-    const numGlobalTrees = 40;
-    const numGlobalProps = 50;
+    const numGlobalHouses = 15; // Fewer scattered houses
+    const numGlobalTrees = 25;
+    const numGlobalProps = 30;
     
     // Random houses everywhere
     for (let i = 0; i < numGlobalHouses; i++) {
@@ -405,19 +405,20 @@ export class Planet {
     const biome = this.biomes.find(b => b.type === BiomeType.TOWN)!;
     const center = biome.center.clone().multiplyScalar(this.radius);
     
-    // Dense ring of houses - multiple rings
-    for (let ring = 0; ring < 3; ring++) {
-      const numHouses = 8 + ring * 4;
-      const ringDist = 4 + ring * 5;
-      
-      for (let i = 0; i < numHouses; i++) {
-        const angle = (i / numHouses) * Math.PI * 2 + ring * 0.2;
-        const dist = ringDist + Math.random() * 2;
+    // Spaced houses along streets - not cramped rings
+    // Leave clear road corridors for open vistas
+    const houseAngles = [0.3, 0.8, 1.4, 2.0, 2.6, 3.2, 3.8, 4.4, 5.0, 5.6];
+    const houseDists = [8, 12, 16]; // Further apart, leaving central road clear
+    
+    for (const baseDist of houseDists) {
+      for (let i = 0; i < houseAngles.length; i += 2) { // Skip every other to leave gaps
+        const angle = houseAngles[i] + baseDist * 0.05;
+        const dist = baseDist + Math.random() * 3;
         const offset = this.getOffsetOnSphere(center, angle, dist);
         
         const house = this.createJapaneseHouse();
         this.placeOnSphere(house, offset);
-        house.rotateY(angle + Math.PI + (Math.random() - 0.5) * 0.3);
+        house.rotateY(angle + Math.PI + (Math.random() - 0.5) * 0.2);
         this.decorations.add(house);
       }
     }
@@ -1197,8 +1198,20 @@ export class Planet {
   }
 
   public getSpawnPosition(): THREE.Vector3 {
-    const townCenter = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
-    return townCenter.clone().multiplyScalar(this.radius + 0.5);
+    const townBiome = this.biomes.find(b => b.type === BiomeType.TOWN)!;
+    // Spawn offset from town center on a road, not in the middle of buildings
+    const townCenter = townBiome.center.clone();
+    
+    // Get a tangent direction to offset spawn point
+    let tangent = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(townCenter.dot(tangent)) > 0.9) {
+      tangent.set(1, 0, 0);
+    }
+    const offset = new THREE.Vector3().crossVectors(townCenter, tangent).normalize();
+    
+    // Spawn slightly offset from center on the road
+    const spawnDir = townCenter.clone().add(offset.multiplyScalar(0.15)).normalize();
+    return spawnDir.multiplyScalar(this.radius + 0.5);
   }
 
   public getBiomePosition(biome: BiomeType): THREE.Vector3 {
