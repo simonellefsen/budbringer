@@ -237,7 +237,7 @@ export class Character {
       return;
     }
     
-    if (distFromCenter <= surfaceHeight) {
+    if (distFromCenter < surfaceHeight) {
       const up = this.group.position.clone().normalize();
       this.group.position.copy(up.multiplyScalar(surfaceHeight));
       
@@ -321,6 +321,15 @@ export class Character {
     
     const nearestNPC = this.game.npcManager.getNearestNPC(this.group.position);
     if (!nearestNPC) return;
+    
+    const npcWorldPos = nearestNPC.mesh.position;
+    const playerDir = this.group.position.clone().normalize();
+    const npcDir = npcWorldPos.clone().normalize();
+    const dot = Math.max(-1, Math.min(1, playerDir.dot(npcDir)));
+    const angle = Math.acos(dot);
+    const arcDist = this.game.planetRadius * angle;
+    
+    if (arcDist > 6) return;
     
     const delivery = this.game.deliverySystem;
     

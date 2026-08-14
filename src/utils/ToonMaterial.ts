@@ -8,6 +8,8 @@ interface ToonMaterialOptions {
   flatShading?: boolean;
   side?: THREE.Side;
   outline?: boolean;
+  transparent?: boolean;
+  opacity?: number;
 }
 
 const toonVertexShader = `
@@ -44,6 +46,7 @@ uniform float uEmissiveIntensity;
 uniform vec3 uLightDirection;
 uniform vec3 uLightColor;
 uniform vec3 uAmbientColor;
+uniform float uOpacity;
 
 varying vec3 vNormal;
 varying vec3 vViewPosition;
@@ -87,7 +90,7 @@ void main() {
   float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
   finalColor += (dither - 0.5) * 0.02;
   
-  gl_FragColor = vec4(finalColor, 1.0);
+  gl_FragColor = vec4(finalColor, uOpacity);
 }
 `;
 
@@ -105,7 +108,9 @@ export class ToonMaterial {
       emissive = 0x000000,
       emissiveIntensity = 0,
       vertexColors = false,
-      side = THREE.FrontSide
+      side = THREE.FrontSide,
+      transparent = false,
+      opacity = 1.0
     } = options;
 
     const defines: Record<string, boolean> = {};
@@ -121,11 +126,14 @@ export class ToonMaterial {
         uEmissiveIntensity: { value: emissiveIntensity },
         uLightDirection: { value: this.lightDirection },
         uLightColor: { value: this.lightColor },
-        uAmbientColor: { value: this.ambientColor }
+        uAmbientColor: { value: this.ambientColor },
+        uOpacity: { value: opacity }
       },
       vertexShader: toonVertexShader,
       fragmentShader: toonFragmentShader,
-      side
+      side,
+      transparent,
+      depthWrite: !transparent
     });
 
     return material;

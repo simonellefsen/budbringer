@@ -375,11 +375,22 @@ export class HUD {
   }
 
   private updateInteractionHint(hintEl: HTMLElement): void {
-    const nearestNPC = this.game.npcManager.getNearestNPC(
-      this.game.character.getPosition()
-    );
+    const playerPos = this.game.character.getPosition();
+    const nearestNPC = this.game.npcManager.getNearestNPC(playerPos);
     
     if (nearestNPC) {
+      const npcWorldPos = nearestNPC.mesh.position;
+      const playerDir = playerPos.clone().normalize();
+      const npcDir = npcWorldPos.clone().normalize();
+      const dot = Math.max(-1, Math.min(1, playerDir.dot(npcDir)));
+      const angle = Math.acos(dot);
+      const arcDist = this.game.planetRadius * angle;
+      
+      if (arcDist > 6) {
+        hintEl.classList.remove('visible');
+        return;
+      }
+      
       const delivery = this.game.deliverySystem;
       if (delivery.canPickupFrom(nearestNPC.name)) {
         hintEl.textContent = 'Press E to pick up letter';
