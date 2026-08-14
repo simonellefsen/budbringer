@@ -380,28 +380,46 @@ export class HUD {
 
   private updateInteractionHint(hintEl: HTMLElement): void {
     const playerPos = this.game.character.getPosition();
-    const nearestNPC = this.game.npcManager.getNearestNPC(playerPos);
+    const delivery = this.game.deliverySystem;
+    const interactionRange = 6;
     
-    if (nearestNPC) {
-      const npcWorldPos = nearestNPC.mesh.position;
+    let targetNPC = this.game.npcManager.getNearestNPC(playerPos);
+    
+    if (delivery.hasLetter && delivery.currentDelivery) {
+      const deliveryTarget = this.game.npcManager.getNPCByName(delivery.currentDelivery.to);
+      if (deliveryTarget) {
+        const targetPos = deliveryTarget.mesh.position;
+        const playerDir = playerPos.clone().normalize();
+        const targetDir = targetPos.clone().normalize();
+        const dot = Math.max(-1, Math.min(1, playerDir.dot(targetDir)));
+        const angle = Math.acos(dot);
+        const arcDist = this.game.planetRadius * angle;
+        
+        if (arcDist <= interactionRange) {
+          targetNPC = deliveryTarget;
+        }
+      }
+    }
+    
+    if (targetNPC) {
+      const npcWorldPos = targetNPC.mesh.position;
       const playerDir = playerPos.clone().normalize();
       const npcDir = npcWorldPos.clone().normalize();
       const dot = Math.max(-1, Math.min(1, playerDir.dot(npcDir)));
       const angle = Math.acos(dot);
       const arcDist = this.game.planetRadius * angle;
       
-      if (arcDist > 6) {
+      if (arcDist > interactionRange) {
         hintEl.classList.remove('visible');
         return;
       }
       
-      const delivery = this.game.deliverySystem;
-      if (delivery.canPickupFrom(nearestNPC.name)) {
-        hintEl.textContent = 'Press E to pick up letter';
-      } else if (delivery.canDeliverTo(nearestNPC.name)) {
-        hintEl.textContent = 'Press E to deliver letter';
+      if (delivery.canPickupFrom(targetNPC.name)) {
+        hintEl.textContent = `Press E to pick up from ${targetNPC.name}`;
+      } else if (delivery.canDeliverTo(targetNPC.name)) {
+        hintEl.textContent = `Press E to deliver to ${targetNPC.name}`;
       } else {
-        hintEl.textContent = `Press E to talk`;
+        hintEl.textContent = `Press E to talk to ${targetNPC.name}`;
       }
       hintEl.classList.add('visible');
     } else {

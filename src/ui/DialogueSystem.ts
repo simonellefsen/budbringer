@@ -101,10 +101,14 @@ export class DialogueSystem {
     this.container.addEventListener('mousedown', (e) => e.stopPropagation());
     
     document.addEventListener('click', (e) => {
-      if (this.isShowing) {
-        e.stopPropagation();
-        this.advanceOrClose();
+      if (!this.isShowing) return;
+      
+      const target = e.target as HTMLElement;
+      if (target.closest('#hud-container') || target.closest('#checklist-toggle') || target.closest('#emote-wheel')) {
+        return;
       }
+      
+      this.advanceOrClose();
     });
     
     this.startTypewriterLoop();
