@@ -128,10 +128,10 @@ export class TitleScreen {
     const skyColor = new THREE.Color(0x5ec9be);
     this.titleScene.background = skyColor;
     
-    // Camera centered to see planet (top) and letters (bottom)
-    this.titleCamera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.titleCamera.position.set(0, -8, 80);
-    this.titleCamera.lookAt(0, -5, 0);
+    // Camera to see planet in front with letters behind/below
+    this.titleCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+    this.titleCamera.position.set(0, 5, 60);
+    this.titleCamera.lookAt(0, 0, 0);
     
     // Lighting
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -255,8 +255,8 @@ export class TitleScreen {
     lighthouse.rotateX(Math.PI / 2);
     this.titlePlanet.add(lighthouse);
     
-    // Position planet in UPPER portion of frame
-    this.titlePlanet.position.set(0, 8, 0);
+    // Planet centered as the hero, letters behind it
+    this.titlePlanet.position.set(0, 2, 0);
     this.titleScene.add(this.titlePlanet);
   }
 
@@ -360,23 +360,24 @@ export class TitleScreen {
     });
     const outlineOpts = { thickness: 0.06, wobble: 0.01 };
     
-    // Small letters at bottom of frame - planet is the star
+    // Letters positioned BEHIND planet so they frame it, not overlap
     const text = 'budbringer';
-    const letterSpacing = 1.8;
+    const letterSpacing = 3.5;
     const totalWidth = text.length * letterSpacing;
     let xOffset = -totalWidth / 2 + letterSpacing / 2;
     
     for (const char of text) {
       const letterGroup = this.createSimpleLetter(char, letterMat, outlineOpts);
       letterGroup.position.x = xOffset;
-      // Scale letters to 25% - much smaller, planet is the hero
-      letterGroup.scale.setScalar(0.25);
+      // Moderate size letters
+      letterGroup.scale.setScalar(0.35);
       this.titleLetters.add(letterGroup);
       xOffset += letterSpacing;
     }
     
-    // Position letters at very bottom of frame, far below planet
-    this.titleLetters.position.set(0, -35, 65);
+    // Position letters BEHIND the planet (negative z) and below center
+    // This way planet appears IN FRONT of the letters
+    this.titleLetters.position.set(0, -12, -20);
     this.titleScene.add(this.titleLetters);
   }
 
