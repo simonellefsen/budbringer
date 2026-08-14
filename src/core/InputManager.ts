@@ -199,8 +199,6 @@ export class InputManager {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
-    if (!this.enabled) return;
-    
     switch (e.code) {
       case 'KeyW':
       case 'ArrowUp':
@@ -219,8 +217,10 @@ export class InputManager {
         this.state.right = true;
         break;
       case 'Space':
-        this.state.jump = true;
-        e.preventDefault();
+        if (this.enabled) {
+          this.state.jump = true;
+          e.preventDefault();
+        }
         break;
       case 'KeyE':
       case 'Enter':
