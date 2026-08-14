@@ -8,9 +8,9 @@ export class Character {
   public group: THREE.Group;
   
   private velocity: THREE.Vector3 = new THREE.Vector3();
-  private moveSpeed: number = 12;
-  private jumpForce: number = 18;
-  private gravity: number = 12;
+  private moveSpeed: number = 10;
+  private jumpForce: number = 12;
+  private gravity: number = 25; // Higher gravity for snappier, less floaty feel
   
   private isGrounded: boolean = true;
   private jumpCooldown: number = 0;
@@ -384,51 +384,59 @@ export class Character {
   private alignToSurface(): void {
     const up = this.group.position.clone().normalize();
     
-    const defaultUp = new THREE.Vector3(0, 1, 0);
-    const surfaceQuat = new THREE.Quaternion().setFromUnitVectors(defaultUp, up);
-    
+    // Project forward onto tangent plane
     const localForward = this.currentForward.clone();
     localForward.sub(up.clone().multiplyScalar(localForward.dot(up)));
+    
+    if (localForward.lengthSq() < 0.001) {
+      // Fallback: use a default tangent direction
+      let tangent = new THREE.Vector3(0, 0, 1);
+      tangent.sub(up.clone().multiplyScalar(tangent.dot(up)));
+      if (tangent.lengthSq() < 0.001) {
+        tangent.set(1, 0, 0);
+        tangent.sub(up.clone().multiplyScalar(tangent.dot(up)));
+      }
+      localForward.copy(tangent);
+    }
     localForward.normalize();
     
-    if (localForward.lengthSq() > 0.001) {
-      const angle = Math.atan2(
-        localForward.dot(new THREE.Vector3().crossVectors(up, new THREE.Vector3(0, 0, 1)).normalize()),
-        localForward.dot(new THREE.Vector3(0, 0, 1).sub(up.clone().multiplyScalar(new THREE.Vector3(0, 0, 1).dot(up))).normalize())
-      );
-      
-      const lookQuat = new THREE.Quaternion().setFromAxisAngle(up, angle);
-      this.group.quaternion.copy(surfaceQuat).multiply(lookQuat);
-    } else {
-      this.group.quaternion.copy(surfaceQuat);
-    }
+    // Build rotation matrix from up and forward
+    const right = new THREE.Vector3().crossVectors(up, localForward).normalize();
+    const correctedForward = new THREE.Vector3().crossVectors(right, up).normalize();
+    
+    // Create rotation matrix
+    const matrix = new THREE.Matrix4();
+    matrix.makeBasis(right, up, correctedForward.negate());
+    
+    this.group.quaternion.setFromRotationMatrix(matrix);
   }
 
   private animate(delta: number): void {
     if (this.isWalking && this.isGrounded) {
-      this.animationTime += delta * 14;
+      this.animationTime += delta * 16; // Faster animation cycle
       
-      // Forward lean while running (like Messenger)
-      this.torso.rotation.x = 0.18;
-      this.head.rotation.x = -0.1;
+      // Strong forward lean while running (Messenger-style sprint)
+      this.torso.rotation.x = 0.25;
+      this.head.rotation.x = -0.15;
       
-      // Leg swing - opposite legs
-      const legSwing = Math.sin(this.animationTime) * 0.65;
+      // Leg swing - wide stride
+      const legSwing = Math.sin(this.animationTime) * 0.75;
       this.leftLeg.rotation.x = legSwing;
       this.rightLeg.rotation.x = -legSwing;
       
-      // Arm swing - opposite to legs
-      const armSwing = Math.sin(this.animationTime) * 0.5;
-      this.leftArm.rotation.x = -armSwing;
-      this.rightArm.rotation.x = armSwing;
+      // Arm swing - pumping motion opposite to legs
+      const armSwing = Math.sin(this.animationTime) * 0.6;
+      this.leftArm.rotation.x = -armSwing - 0.2; // Arms slightly forward
+      this.rightArm.rotation.x = armSwing - 0.2;
       
-      // Bounce
-      const bounce = Math.abs(Math.sin(this.animationTime * 2)) * 0.025;
+      // Bounce - subtle for grounded feel
+      const bounce = Math.abs(Math.sin(this.animationTime * 2)) * 0.02;
       this.torso.position.y = 0.82 + bounce;
       this.head.position.y = 1.2 + bounce;
       
       // Bag sway
-      this.bag.rotation.z = Math.sin(this.animationTime * 0.5) * 0.04;
+      this.bag.rotation.z = Math.sin(this.animationTime * 0.7) * 0.06;
+      this.bag.rotation.x = Math.sin(this.animationTime * 1.4) * 0.03;
       
       this.game.audioManager.playFootstep();
     } else if (this.isJumping) {
