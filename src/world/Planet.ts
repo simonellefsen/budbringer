@@ -270,9 +270,8 @@ export class Planet {
         const road = new THREE.Mesh(roadGeo, roadMat);
         road.receiveShadow = true;
         
-        // Place flush with surface
-        this.placeOnSphere(road, pos, false);
-        road.rotateY(angle + Math.PI / 2);
+        // Place flush with surface with specific orientation
+        this.placeOnSphere(road, pos, angle + Math.PI / 2);
         this.decorations.add(road);
         
         // Center line dashes - on top of road
@@ -366,7 +365,6 @@ export class Planet {
       
       const house = this.createJapaneseHouse();
       this.placeOnSphere(house, pos);
-      house.rotateY(Math.random() * Math.PI * 2);
       this.decorations.add(house);
     }
     
@@ -418,7 +416,6 @@ export class Planet {
       }
       
       this.placeOnSphere(prop, pos);
-      prop.rotateY(Math.random() * Math.PI * 2);
       this.decorations.add(prop);
     }
     
@@ -439,8 +436,7 @@ export class Planet {
         ).normalize().multiplyScalar(this.radius);
         
         const wall = this.createRetainingWall();
-        this.placeOnSphere(wall, pos);
-        wall.rotateY(lon);
+        this.placeOnSphere(wall, pos, lon);
         this.decorations.add(wall);
       }
     }
@@ -462,8 +458,7 @@ export class Planet {
         const offset = this.getOffsetOnSphere(center, angle, dist);
         
         const house = this.createJapaneseHouse();
-        this.placeOnSphere(house, offset);
-        house.rotateY(angle + Math.PI + (Math.random() - 0.5) * 0.2);
+        this.placeOnSphere(house, offset, angle + Math.PI + (Math.random() - 0.5) * 0.2);
         this.decorations.add(house);
       }
     }
@@ -1230,9 +1225,10 @@ export class Planet {
     return newPos.normalize().multiplyScalar(this.radius);
   }
 
-  private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3, randomYaw: boolean = true): void {
-    // Use Matrix4.makeBasis for correct orientation (same as title screen fix)
+  private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3, yawAngle?: number): void {
+    // Use Matrix4.makeBasis for correct orientation
     // This ensures local +Y points outward along the surface normal
+    // IMPORTANT: Do NOT use object.rotateY() after this - it rotates around WORLD Y, not local Y!
     const up = position.clone().normalize();
     
     object.position.copy(position);
@@ -1245,12 +1241,11 @@ export class Planet {
     // Project forward onto tangent plane
     forward.sub(up.clone().multiplyScalar(forward.dot(up))).normalize();
     
-    // Apply random yaw by rotating forward around up
-    if (randomYaw) {
-      const yawAngle = Math.random() * Math.PI * 2;
-      const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, yawAngle);
-      forward.applyQuaternion(yawQuat);
-    }
+    // Apply yaw by rotating forward around the surface normal (up)
+    // Use provided yaw angle, or random if not specified
+    const yaw = yawAngle !== undefined ? yawAngle : Math.random() * Math.PI * 2;
+    const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, yaw);
+    forward.applyQuaternion(yawQuat);
     
     // Right = forward x up (for right-handed coordinate system)
     const right = new THREE.Vector3().crossVectors(forward, up).normalize();
