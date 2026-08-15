@@ -326,20 +326,35 @@ export class TitleScreen {
   private orientOnSphere(obj: THREE.Object3D, surfacePos: THREE.Vector3, randomYaw: boolean = false): void {
     // Properly orient object so its local +Y points outward from sphere center
     // This makes houses/trees stand UP on the surface, not lay flat
-    const outwardNormal = surfacePos.clone().normalize();
-    const defaultUp = new THREE.Vector3(0, 1, 0);
+    const up = surfacePos.clone().normalize(); // This becomes local +Y
     
-    // Create quaternion that rotates from default up to outward normal
-    const quaternion = new THREE.Quaternion();
-    quaternion.setFromUnitVectors(defaultUp, outwardNormal);
-    obj.quaternion.copy(quaternion);
-    
-    // Add random rotation around the local Y axis (now pointing outward)
-    if (randomYaw) {
-      const yawQuat = new THREE.Quaternion();
-      yawQuat.setFromAxisAngle(outwardNormal, Math.random() * Math.PI * 2);
-      obj.quaternion.premultiply(yawQuat);
+    // Create an arbitrary tangent vector for local +Z (forward)
+    let forward = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(up.dot(forward)) > 0.99) {
+      forward = new THREE.Vector3(1, 0, 0);
     }
+    // Project forward onto tangent plane
+    forward.sub(up.clone().multiplyScalar(forward.dot(up))).normalize();
+    
+    // Apply random yaw by rotating forward around up
+    if (randomYaw) {
+      const yawAngle = Math.random() * Math.PI * 2;
+      const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, yawAngle);
+      forward.applyQuaternion(yawQuat);
+    }
+    
+    // Right = forward x up (for right-handed coordinate system)
+    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+    
+    // Recompute forward to ensure orthogonality
+    forward.crossVectors(up, right).normalize();
+    
+    // Build rotation matrix from basis vectors
+    // Matrix columns are: right (X), up (Y), forward (Z)
+    const matrix = new THREE.Matrix4();
+    matrix.makeBasis(right, up, forward);
+    
+    obj.quaternion.setFromRotationMatrix(matrix);
   }
 
   private createTitleHouses(planetRadius: number): void {
