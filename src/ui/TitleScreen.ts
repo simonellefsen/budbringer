@@ -142,8 +142,8 @@ export class TitleScreen {
     
     // Camera closer to planet so town details are readable
     this.titleCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.titleCamera.position.set(0, 8, 38);
-    this.titleCamera.lookAt(0, -2, 0);
+    this.titleCamera.position.set(0, 6, 32);
+    this.titleCamera.lookAt(0, 0, 0);
     
     // Lighting
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -323,30 +323,54 @@ export class TitleScreen {
     return new THREE.Mesh(geo, mat);
   }
 
+  private orientOnSphere(obj: THREE.Object3D, surfacePos: THREE.Vector3, randomYaw: boolean = false): void {
+    // Properly orient object so its local +Y points outward from sphere center
+    // This makes houses/trees stand UP on the surface, not lay flat
+    const outwardNormal = surfacePos.clone().normalize();
+    const defaultUp = new THREE.Vector3(0, 1, 0);
+    
+    // Create quaternion that rotates from default up to outward normal
+    const quaternion = new THREE.Quaternion();
+    quaternion.setFromUnitVectors(defaultUp, outwardNormal);
+    obj.quaternion.copy(quaternion);
+    
+    // Add random rotation around the local Y axis (now pointing outward)
+    if (randomYaw) {
+      const yawQuat = new THREE.Quaternion();
+      yawQuat.setFromAxisAngle(outwardNormal, Math.random() * Math.PI * 2);
+      obj.quaternion.premultiply(yawQuat);
+    }
+  }
+
   private createTitleHouses(planetRadius: number): void {
-    // Place chunky houses around the planet
+    // Place chunky houses on the CAMERA-FACING side of the planet
+    // Camera is at z=38, so we want houses with positive z coordinates
+    // Using theta in range [0.3, 2.8] gives positive z (sin(theta) > 0)
     const housePositions = [
-      // Northern hemisphere cluster (visible from front)
-      { theta: 0, phi: 0.4 }, { theta: 0.4, phi: 0.5 }, { theta: -0.3, phi: 0.35 },
-      { theta: 0.8, phi: 0.45 }, { theta: -0.7, phi: 0.55 }, { theta: 1.2, phi: 0.4 },
-      { theta: -1.0, phi: 0.5 }, { theta: 1.5, phi: 0.6 }, { theta: -1.4, phi: 0.45 },
-      // Equator area
-      { theta: 0.3, phi: 1.5 }, { theta: 0.9, phi: 1.55 }, { theta: 1.5, phi: 1.45 },
-      { theta: 2.1, phi: 1.6 }, { theta: 2.7, phi: 1.5 }, { theta: 3.3, phi: 1.55 },
-      { theta: 3.9, phi: 1.5 }, { theta: 4.5, phi: 1.6 }, { theta: 5.1, phi: 1.45 },
-      { theta: 5.7, phi: 1.55 },
-      // Southern area
-      { theta: 0.5, phi: 2.0 }, { theta: 1.2, phi: 2.1 }, { theta: 2.0, phi: 1.95 },
-      { theta: 2.8, phi: 2.05 }, { theta: 3.6, phi: 2.0 }, { theta: 4.4, phi: 2.1 },
-      // Additional scattered
-      { theta: 0.2, phi: 0.8 }, { theta: 1.8, phi: 0.75 }, { theta: 3.5, phi: 0.85 },
-      { theta: 5.0, phi: 0.7 }, { theta: 4.2, phi: 1.1 }, { theta: 1.1, phi: 1.2 },
+      // Front-facing cluster (clearly visible, positive z)
+      { theta: 0.5, phi: 0.6 }, { theta: 0.8, phi: 0.5 }, { theta: 1.1, phi: 0.55 },
+      { theta: 1.4, phi: 0.45 }, { theta: 1.7, phi: 0.6 }, { theta: 2.0, phi: 0.5 },
+      { theta: 2.3, phi: 0.55 }, { theta: 2.6, phi: 0.48 },
+      // Equator front - clearly visible band
+      { theta: 0.4, phi: 1.5 }, { theta: 0.7, phi: 1.55 }, { theta: 1.0, phi: 1.48 },
+      { theta: 1.3, phi: 1.52 }, { theta: 1.6, phi: 1.5 }, { theta: 1.9, phi: 1.55 },
+      { theta: 2.2, phi: 1.48 }, { theta: 2.5, phi: 1.52 }, { theta: 2.8, phi: 1.5 },
+      // Mid-latitude front
+      { theta: 0.6, phi: 1.0 }, { theta: 1.2, phi: 0.95 }, { theta: 1.8, phi: 1.05 },
+      { theta: 2.4, phi: 1.0 }, { theta: 0.9, phi: 1.2 }, { theta: 1.5, phi: 1.15 },
+      { theta: 2.1, phi: 1.25 },
+      // Lower front
+      { theta: 0.5, phi: 1.9 }, { theta: 1.1, phi: 1.95 }, { theta: 1.7, phi: 1.85 },
+      { theta: 2.3, phi: 1.9 }, { theta: 2.7, phi: 2.0 },
+      // Some on sides for wrap-around feel
+      { theta: 3.0, phi: 1.5 }, { theta: 3.3, phi: 1.0 }, { theta: 0.2, phi: 1.3 },
+      { theta: -0.2, phi: 1.5 }, { theta: 3.5, phi: 0.8 },
     ];
     
     housePositions.forEach((pos, i) => {
       const house = this.createChunkyHouse(i % 5);
-      // Scale houses to be clearly visible
-      house.scale.setScalar(2.5 + Math.random() * 1.5);
+      // LARGER scale - must be visible from camera at z=38
+      house.scale.setScalar(3.5 + Math.random() * 2.0);
       
       const surfacePos = new THREE.Vector3(
         Math.sin(pos.phi) * Math.cos(pos.theta),
@@ -355,19 +379,18 @@ export class TitleScreen {
       ).multiplyScalar(planetRadius);
       
       house.position.copy(surfacePos);
-      house.lookAt(0, 0, 0);
-      house.rotateX(Math.PI / 2);
-      house.rotateY(Math.random() * Math.PI * 2);
+      this.orientOnSphere(house, surfacePos, true);
       this.titlePlanet.add(house);
     });
     
-    // Add trees scattered between houses
-    for (let i = 0; i < 30; i++) {
+    // Add trees - also on front-facing side
+    for (let i = 0; i < 25; i++) {
       const tree = this.createChunkyTree();
-      tree.scale.setScalar(2.0 + Math.random());
+      tree.scale.setScalar(2.5 + Math.random() * 1.5);
       
-      const theta = Math.random() * Math.PI * 2;
-      const phi = 0.3 + Math.random() * 1.8;
+      // Keep trees on front side (theta 0.2 to 2.9)
+      const theta = 0.2 + Math.random() * 2.7;
+      const phi = 0.4 + Math.random() * 1.6;
       const surfacePos = new THREE.Vector3(
         Math.sin(phi) * Math.cos(theta),
         Math.cos(phi),
@@ -375,8 +398,7 @@ export class TitleScreen {
       ).multiplyScalar(planetRadius);
       
       tree.position.copy(surfacePos);
-      tree.lookAt(0, 0, 0);
-      tree.rotateX(Math.PI / 2);
+      this.orientOnSphere(tree, surfacePos, false);
       this.titlePlanet.add(tree);
     }
   }
@@ -453,43 +475,42 @@ export class TitleScreen {
   }
 
   private createTitleLandmarks(planetRadius: number): void {
-    // LARGE Torii gate - clearly visible
+    // LARGE Torii gate - on front-facing upper area (prominent silhouette)
     const torii = this.createLargeTorii();
-    torii.scale.setScalar(5.0);
-    const toriiPos = new THREE.Vector3(0.5, 0.7, 0.5).normalize().multiplyScalar(planetRadius);
+    torii.scale.setScalar(6.0);
+    // Position on front side (positive z), upper area
+    const toriiPos = new THREE.Vector3(0.3, 0.5, 0.8).normalize().multiplyScalar(planetRadius);
     torii.position.copy(toriiPos);
-    torii.lookAt(0, 0, 0);
-    torii.rotateX(Math.PI / 2);
+    this.orientOnSphere(torii, toriiPos, false);
     this.titlePlanet.add(torii);
     
-    // Harbor/water area - larger and more prominent
-    const waterGeo = new THREE.CircleGeometry(5, 24);
+    // Harbor/water area - larger, on front-facing lower-right area
+    const waterGeo = new THREE.CircleGeometry(6, 24);
     const waterMat = ToonMaterial.create({ color: 0x3a8aa0, transparent: true, opacity: 0.9 });
     const water = new THREE.Mesh(waterGeo, waterMat);
-    const waterPos = new THREE.Vector3(-0.6, -0.3, 0.7).normalize().multiplyScalar(planetRadius + 0.1);
+    // Position on front side, lower area (phi > PI/2)
+    const waterPos = new THREE.Vector3(0.6, -0.4, 0.7).normalize().multiplyScalar(planetRadius + 0.12);
     water.position.copy(waterPos);
-    water.lookAt(0, 0, 0);
+    // Water just faces outward (use lookAt but reversed)
+    water.lookAt(water.position.clone().multiplyScalar(2));
     this.titlePlanet.add(water);
-    this.titlePlanet.add(OutlineMaterial.addOutlineToMesh(water, { thickness: 0.2, wobble: 0.03 }));
+    this.titlePlanet.add(OutlineMaterial.addOutlineToMesh(water, { thickness: 0.25, wobble: 0.03 }));
     
-    // Lighthouse next to water
+    // Lighthouse next to water - LARGER and on front side
     const lighthouse = this.createLargeLighthouse();
-    lighthouse.scale.setScalar(4.5);
-    const lhPos = new THREE.Vector3(-0.5, -0.25, 0.8).normalize().multiplyScalar(planetRadius);
+    lighthouse.scale.setScalar(6.0);
+    const lhPos = new THREE.Vector3(0.5, -0.3, 0.8).normalize().multiplyScalar(planetRadius);
     lighthouse.position.copy(lhPos);
-    lighthouse.lookAt(0, 0, 0);
-    lighthouse.rotateX(Math.PI / 2);
+    this.orientOnSphere(lighthouse, lhPos, false);
     this.titlePlanet.add(lighthouse);
     
     // A few boats in the water
     for (let i = 0; i < 3; i++) {
       const boat = this.createMiniBoat();
-      boat.scale.setScalar(2.5);
-      const boatPos = new THREE.Vector3(-0.55 + i * 0.08, -0.32, 0.75).normalize().multiplyScalar(planetRadius + 0.15);
+      boat.scale.setScalar(3.5);
+      const boatPos = new THREE.Vector3(0.55 + i * 0.1, -0.42, 0.72).normalize().multiplyScalar(planetRadius + 0.2);
       boat.position.copy(boatPos);
-      boat.lookAt(0, 0, 0);
-      boat.rotateX(Math.PI / 2);
-      boat.rotateY(Math.random() * Math.PI);
+      this.orientOnSphere(boat, boatPos, true);
       this.titlePlanet.add(boat);
     }
   }
