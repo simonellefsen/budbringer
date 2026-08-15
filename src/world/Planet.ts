@@ -220,13 +220,14 @@ export class Planet {
     // Calculate road length based on arc distance
     const arcLength = from.angleTo(to) * this.radius;
     const roadWidth = 2.2;
-    const roadGeo = new THREE.BoxGeometry(roadWidth, 0.04, Math.max(arcLength * 1.1, 1.5));
+    const roadThickness = 0.08; // Thicker so it embeds into surface
+    const roadGeo = new THREE.BoxGeometry(roadWidth, roadThickness, Math.max(arcLength * 1.1, 1.5));
     const roadMat = ToonMaterial.create({ color: 0x404040 });
     const road = new THREE.Mesh(roadGeo, roadMat);
     road.receiveShadow = true;
     
-    // Position at midpoint on the surface
-    const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius + 0.02);
+    // Position at midpoint FLUSH with the surface (half-embedded)
+    const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius);
     road.position.copy(mid);
     
     // Orient: up is surface normal, forward points along the road
@@ -243,12 +244,12 @@ export class Planet {
     
     this.decorations.add(road);
     
-    // Center line dash
-    const lineGeo = new THREE.BoxGeometry(0.15, 0.045, Math.max(arcLength * 0.4, 0.5));
+    // Center line dash - on top of road
+    const lineGeo = new THREE.BoxGeometry(0.15, 0.02, Math.max(arcLength * 0.4, 0.5));
     const lineMat = ToonMaterial.create({ color: 0xeeeeee });
     const line = new THREE.Mesh(lineGeo, lineMat);
-    line.position.copy(mid);
-    line.position.add(up.clone().multiplyScalar(0.025));
+    const lineMid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius + roadThickness / 2 + 0.01);
+    line.position.copy(lineMid);
     line.quaternion.copy(road.quaternion);
     this.decorations.add(line);
   }
@@ -263,23 +264,24 @@ export class Planet {
         const angle = (i / segments) * Math.PI * 2;
         const pos = this.getOffsetOnSphere(center, angle, ringRadius);
         
-        const roadGeo = new THREE.BoxGeometry(2.2, 0.03, 3);
+        const roadThickness = 0.08;
+        const roadGeo = new THREE.BoxGeometry(2.2, roadThickness, 3);
         const roadMat = ToonMaterial.create({ color: 0x484848 });
         const road = new THREE.Mesh(roadGeo, roadMat);
         road.receiveShadow = true;
         
-        this.placeOnSphere(road, pos);
-        road.rotateY(angle + Math.PI / 2);
+        // Place flush with surface with specific orientation
+        this.placeOnSphere(road, pos, angle + Math.PI / 2);
         this.decorations.add(road);
         
-        // Center line dashes
+        // Center line dashes - on top of road
         for (let d = 0; d < 2; d++) {
-          const dashGeo = new THREE.BoxGeometry(0.1, 0.035, 0.5);
+          const dashGeo = new THREE.BoxGeometry(0.1, 0.02, 0.5);
           const dashMat = ToonMaterial.create({ color: 0xffffff });
           const dash = new THREE.Mesh(dashGeo, dashMat);
           dash.position.copy(road.position);
           dash.quaternion.copy(road.quaternion);
-          dash.translateY(0.01);
+          dash.translateY(roadThickness / 2 + 0.01);
           dash.translateZ(-0.6 + d * 1.2);
           this.decorations.add(dash);
         }
@@ -293,16 +295,29 @@ export class Planet {
       const t = i / steps;
       const pos = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
       
-      const roadGeo = new THREE.BoxGeometry(1.8, 0.02, 2);
+      const roadThickness = 0.08;
+      const roadGeo = new THREE.BoxGeometry(1.8, roadThickness, 2);
       const roadMat = ToonMaterial.create({ color: 0x4a4a4a });
       const road = new THREE.Mesh(roadGeo, roadMat);
-      this.placeOnSphere(road, pos);
       
-      const dir = to.clone().sub(from).normalize();
+      // Use proper orientation with makeBasis
       const up = pos.clone().normalize();
-      const lookDir = dir.clone().sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
-      road.lookAt(pos.clone().add(lookDir));
-      road.rotateX(Math.PI / 2);
+      const dir = to.clone().sub(from);
+      dir.sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
+      
+      if (dir.lengthSq() < 0.01) {
+        dir.set(1, 0, 0);
+        dir.sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
+      }
+      
+      const right = new THREE.Vector3().crossVectors(dir, up).normalize();
+      const forward = new THREE.Vector3().crossVectors(up, right).normalize();
+      
+      const matrix = new THREE.Matrix4();
+      matrix.makeBasis(right, up, forward);
+      
+      road.position.copy(pos);
+      road.quaternion.setFromRotationMatrix(matrix);
       
       this.decorations.add(road);
     }
@@ -350,7 +365,6 @@ export class Planet {
       
       const house = this.createJapaneseHouse();
       this.placeOnSphere(house, pos);
-      house.rotateY(Math.random() * Math.PI * 2);
       this.decorations.add(house);
     }
     
@@ -402,7 +416,6 @@ export class Planet {
       }
       
       this.placeOnSphere(prop, pos);
-      prop.rotateY(Math.random() * Math.PI * 2);
       this.decorations.add(prop);
     }
     
@@ -423,8 +436,7 @@ export class Planet {
         ).normalize().multiplyScalar(this.radius);
         
         const wall = this.createRetainingWall();
-        this.placeOnSphere(wall, pos);
-        wall.rotateY(lon);
+        this.placeOnSphere(wall, pos, lon);
         this.decorations.add(wall);
       }
     }
@@ -446,8 +458,7 @@ export class Planet {
         const offset = this.getOffsetOnSphere(center, angle, dist);
         
         const house = this.createJapaneseHouse();
-        this.placeOnSphere(house, offset);
-        house.rotateY(angle + Math.PI + (Math.random() - 0.5) * 0.2);
+        this.placeOnSphere(house, offset, angle + Math.PI + (Math.random() - 0.5) * 0.2);
         this.decorations.add(house);
       }
     }
@@ -1214,16 +1225,39 @@ export class Planet {
     return newPos.normalize().multiplyScalar(this.radius);
   }
 
-  private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3): void {
+  private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3, yawAngle?: number): void {
+    // Use Matrix4.makeBasis for correct orientation
+    // This ensures local +Y points outward along the surface normal
+    // IMPORTANT: Do NOT use object.rotateY() after this - it rotates around WORLD Y, not local Y!
     const up = position.clone().normalize();
     
     object.position.copy(position);
     
-    const defaultUp = new THREE.Vector3(0, 1, 0);
-    const quaternion = new THREE.Quaternion().setFromUnitVectors(defaultUp, up);
-    object.quaternion.copy(quaternion);
+    // Create an arbitrary tangent vector for local +Z (forward)
+    let forward = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(up.dot(forward)) > 0.99) {
+      forward = new THREE.Vector3(1, 0, 0);
+    }
+    // Project forward onto tangent plane
+    forward.sub(up.clone().multiplyScalar(forward.dot(up))).normalize();
     
-    object.rotateY(Math.random() * Math.PI * 2);
+    // Apply yaw by rotating forward around the surface normal (up)
+    // Use provided yaw angle, or random if not specified
+    const yaw = yawAngle !== undefined ? yawAngle : Math.random() * Math.PI * 2;
+    const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, yaw);
+    forward.applyQuaternion(yawQuat);
+    
+    // Right = forward x up (for right-handed coordinate system)
+    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+    
+    // Recompute forward to ensure orthogonality
+    forward.crossVectors(up, right).normalize();
+    
+    // Build rotation matrix from basis vectors: right (X), up (Y), forward (Z)
+    const matrix = new THREE.Matrix4();
+    matrix.makeBasis(right, up, forward);
+    
+    object.quaternion.setFromRotationMatrix(matrix);
   }
 
   public getSpawnPosition(): THREE.Vector3 {
