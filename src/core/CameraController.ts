@@ -31,7 +31,7 @@ export class CameraController {
   }
 
   public reset(): void {
-    this.pitchOffset = 0.2;
+    this.pitchOffset = 0.1; // Start with slight downward look, not top-down
     this.initializeStableHeading();
     this.snapToCharacter();
   }

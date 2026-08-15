@@ -140,9 +140,9 @@ export class TitleScreen {
     const skyColor = new THREE.Color(0x5ec9be);
     this.titleScene.background = skyColor;
     
-    // Camera closer to planet so town details are readable
-    this.titleCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.titleCamera.position.set(0, 6, 32);
+    // Camera pulled back to show FULL globe with padding - not inside houses
+    this.titleCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+    this.titleCamera.position.set(0, 8, 55);
     this.titleCamera.lookAt(0, 0, 0);
     
     // Lighting
@@ -384,8 +384,8 @@ export class TitleScreen {
     
     housePositions.forEach((pos, i) => {
       const house = this.createChunkyHouse(i % 5);
-      // LARGER scale - must be visible from camera at z=38
-      house.scale.setScalar(3.5 + Math.random() * 2.0);
+      // Moderate scale - visible silhouettes but not filling the frame
+      house.scale.setScalar(1.2 + Math.random() * 0.8);
       
       const surfacePos = new THREE.Vector3(
         Math.sin(pos.phi) * Math.cos(pos.theta),
@@ -401,7 +401,7 @@ export class TitleScreen {
     // Add trees - also on front-facing side
     for (let i = 0; i < 25; i++) {
       const tree = this.createChunkyTree();
-      tree.scale.setScalar(2.5 + Math.random() * 1.5);
+      tree.scale.setScalar(1.0 + Math.random() * 0.6);
       
       // Keep trees on front side (theta 0.2 to 2.9)
       const theta = 0.2 + Math.random() * 2.7;
@@ -490,9 +490,9 @@ export class TitleScreen {
   }
 
   private createTitleLandmarks(planetRadius: number): void {
-    // LARGE Torii gate - on front-facing upper area (prominent silhouette)
+    // Torii gate - visible silhouette, not giant
     const torii = this.createLargeTorii();
-    torii.scale.setScalar(6.0);
+    torii.scale.setScalar(2.5);
     // Position on front side (positive z), upper area
     const toriiPos = new THREE.Vector3(0.3, 0.5, 0.8).normalize().multiplyScalar(planetRadius);
     torii.position.copy(toriiPos);
@@ -511,9 +511,9 @@ export class TitleScreen {
     this.titlePlanet.add(water);
     this.titlePlanet.add(OutlineMaterial.addOutlineToMesh(water, { thickness: 0.25, wobble: 0.03 }));
     
-    // Lighthouse next to water - LARGER and on front side
+    // Lighthouse next to water - visible silhouette
     const lighthouse = this.createLargeLighthouse();
-    lighthouse.scale.setScalar(6.0);
+    lighthouse.scale.setScalar(2.5);
     const lhPos = new THREE.Vector3(0.5, -0.3, 0.8).normalize().multiplyScalar(planetRadius);
     lighthouse.position.copy(lhPos);
     this.orientOnSphere(lighthouse, lhPos, false);
@@ -522,7 +522,7 @@ export class TitleScreen {
     // A few boats in the water
     for (let i = 0; i < 3; i++) {
       const boat = this.createMiniBoat();
-      boat.scale.setScalar(3.5);
+      boat.scale.setScalar(1.5);
       const boatPos = new THREE.Vector3(0.55 + i * 0.1, -0.42, 0.72).normalize().multiplyScalar(planetRadius + 0.2);
       boat.position.copy(boatPos);
       this.orientOnSphere(boat, boatPos, true);
