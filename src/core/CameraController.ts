@@ -19,6 +19,9 @@ export class CameraController {
   // Stable heading direction for parallel transport
   private stableHeading: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
   private lastCharacterUp: THREE.Vector3 = new THREE.Vector3(0, 1, 0);
+  
+  // Raycaster for collision detection
+  private raycaster: THREE.Raycaster = new THREE.Raycaster();
 
   constructor(game: Game) {
     this.game = game;
@@ -186,6 +189,10 @@ export class CameraController {
       targetPos.copy(surfaceNormal.multiplyScalar(minCamHeight));
     }
     
+    // COLLISION CHECK: Raycast from character to target camera position
+    // If there's a building in the way, move camera closer to character
+    targetPos = this.avoidBuildingCollision(characterPos, targetPos, characterUp);
+    
     // Look at character's back for street-level feel
     const targetLookAt = characterPos.clone().add(characterUp.clone().multiplyScalar(1.2));
     
@@ -232,5 +239,65 @@ export class CameraController {
     const forward = this.stableHeading.clone();
     
     return new THREE.Vector3().crossVectors(forward, up).normalize().negate();
+  }
+
+  private avoidBuildingCollision(charPos: THREE.Vector3, targetCamPos: THREE.Vector3, charUp: THREE.Vector3): THREE.Vector3 {
+    // Cast a ray from character (slightly above) toward the target camera position
+    const rayOrigin = charPos.clone().add(charUp.clone().multiplyScalar(1.5));
+    const rayDir = targetCamPos.clone().sub(rayOrigin);
+    const maxDist = rayDir.length();
+    
+    if (maxDist < 0.1) {
+      return targetCamPos;
+    }
+    
+    rayDir.normalize();
+    this.raycaster.set(rayOrigin, rayDir);
+    this.raycaster.far = maxDist;
+    
+    // Get all scene meshes except the character and planet ground
+    const meshesToTest: THREE.Mesh[] = [];
+    this.game.scene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh && 
+          obj.parent !== this.game.character.group &&
+          !obj.name.includes('ground') &&
+          !obj.name.includes('planet')) {
+        // Only test building-like objects (not tiny props)
+        const box = new THREE.Box3().setFromObject(obj);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        // Only test objects with some volume (buildings)
+        if (size.x > 1 && size.y > 1 && size.z > 1) {
+          meshesToTest.push(obj);
+        }
+      }
+    });
+    
+    if (meshesToTest.length === 0) {
+      return targetCamPos;
+    }
+    
+    const intersections = this.raycaster.intersectObjects(meshesToTest, false);
+    
+    if (intersections.length > 0) {
+      // There's an obstacle between character and camera
+      // Place camera just before the intersection point
+      const hitDist = intersections[0].distance;
+      const safeDist = Math.max(0.5, hitDist - 0.5);
+      
+      // Move camera closer along the ray
+      const safePos = rayOrigin.clone().add(rayDir.clone().multiplyScalar(safeDist));
+      
+      // Also push camera slightly upward to avoid clipping through roofs
+      const planetRadius = this.game.planetRadius;
+      const minHeight = planetRadius + 2.5;
+      if (safePos.length() < minHeight) {
+        safePos.normalize().multiplyScalar(minHeight);
+      }
+      
+      return safePos;
+    }
+    
+    return targetCamPos;
   }
 }
