@@ -238,7 +238,10 @@ export class CameraController {
     const up = characterPos.clone().normalize();
     const forward = this.stableHeading.clone();
     
-    return new THREE.Vector3().crossVectors(forward, up).normalize().negate();
+    // right = forward × up (no negate - standard right-handed system)
+    // A key (left) subtracts right → moves left on screen
+    // D key (right) adds right → moves right on screen
+    return new THREE.Vector3().crossVectors(forward, up).normalize();
   }
 
   private avoidBuildingCollision(charPos: THREE.Vector3, targetCamPos: THREE.Vector3, charUp: THREE.Vector3): THREE.Vector3 {
