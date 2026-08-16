@@ -10,6 +10,10 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- A leftover seaside water disc sat at planet radius and painted a blue
+  halo through the hills; kit waterfalls on the lake ridge looked like
+  a mystery building. That disc is gone, lake water writes depth, and
+  falls stay smaller and away from Le Lac.
 - Map place-marks were silent — a tap on a name, your pin or the
   delivery pin now eases the orbit to face that region.
 - Trees, sheep and the mill read as giants next to the courier, and the

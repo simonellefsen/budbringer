@@ -771,9 +771,16 @@ export class Planet {
     const v = new THREE.Vector3().crossVectors(this.riverAxis, u).normalize();
 
     let placed = 0;
-    for (let i = 0; i < 56 && placed < 5; i++) {
+    for (let i = 0; i < 56 && placed < 2; i++) {
       const a = (i / 56) * Math.PI * 2;
       const centre = u.clone().multiplyScalar(Math.cos(a)).addScaledVector(v, Math.sin(a));
+
+      // Keep falls off the lake — a kit waterfall on that ridge reads as a
+      // mystery building with a blue halo.
+      const toLake = this.radius * Math.acos(
+        THREE.MathUtils.clamp(centre.dot(this.lakeCenter), -1, 1)
+      );
+      if (toLake < 22) continue;
 
       // Sample the bank a little off the water, both sides, keep the steeper.
       let bestBank: THREE.Vector3 | null = null;
@@ -786,7 +793,7 @@ export class Planet {
           bestBank = bank;
         }
       }
-      if (!bestBank || bestDrop < 6.2) continue;
+      if (!bestBank || bestDrop < 8.5) continue;
 
       const pool = centre.clone().multiplyScalar(this.radius);
       const bankSpot = bestBank.clone().multiplyScalar(this.radius);
@@ -1499,7 +1506,9 @@ export class Planet {
       Windmill: 0.68,
       Barn: 0.82,
       Hedge: 0.8,
-      Church: 0.88
+      Church: 0.88,
+      Waterfall: 0.52,
+      Cliff_Rock: 0.62
     };
     const s = scale[name];
     if (s && s !== 1) object.scale.multiplyScalar(s);
@@ -1649,8 +1658,6 @@ export class Planet {
     const biome = this.biomes.find(b => b.type === BiomeType.SEASIDE)!;
     const center = biome.center.clone().multiplyScalar(this.radius);
     
-    this.createWater(center);
-    
     const pier = this.createPier();
     this.placeOnSphere(pier, this.getOffsetOnSphere(center, 0.5, 3));
     this.decorations.add(pier);
@@ -1669,57 +1676,6 @@ export class Planet {
     const lighthouse = this.createLighthouse();
     this.placeOnSphere(lighthouse, this.getOffsetOnSphere(center, Math.PI, 6));
     this.decorations.add(lighthouse);
-  }
-
-  private createWater(center: THREE.Vector3): void {
-    const waterGroup = new THREE.Group();
-    
-    const waterMat = this.waterMaterial(0.85);
-    
-    for (let ring = 0; ring < 3; ring++) {
-      const innerRadius = 6 + ring * 3;
-      const outerRadius = 9 + ring * 3;
-      const segments = 24;
-      
-      for (let i = 0; i < segments; i++) {
-        const angle1 = (i / segments) * Math.PI * 2;
-        const angle2 = ((i + 1) / segments) * Math.PI * 2;
-        
-        const waterGeo = new THREE.BufferGeometry();
-        const positions: number[] = [];
-        
-        const p1 = this.getOffsetOnSphere(center, angle1, innerRadius);
-        const p2 = this.getOffsetOnSphere(center, angle2, innerRadius);
-        const p3 = this.getOffsetOnSphere(center, angle2, outerRadius);
-        const p4 = this.getOffsetOnSphere(center, angle1, outerRadius);
-        
-        const offset = 0.05;
-        const up1 = p1.clone().normalize();
-        const up2 = p2.clone().normalize();
-        const up3 = p3.clone().normalize();
-        const up4 = p4.clone().normalize();
-        
-        p1.sub(up1.multiplyScalar(offset));
-        p2.sub(up2.multiplyScalar(offset));
-        p3.sub(up3.multiplyScalar(offset));
-        p4.sub(up4.multiplyScalar(offset));
-        
-        positions.push(p1.x, p1.y, p1.z);
-        positions.push(p2.x, p2.y, p2.z);
-        positions.push(p3.x, p3.y, p3.z);
-        positions.push(p1.x, p1.y, p1.z);
-        positions.push(p3.x, p3.y, p3.z);
-        positions.push(p4.x, p4.y, p4.z);
-        
-        waterGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        waterGeo.computeVertexNormals();
-        
-        const waterMesh = new THREE.Mesh(waterGeo, waterMat);
-        waterGroup.add(waterMesh);
-      }
-    }
-    
-    this.decorations.add(waterGroup);
   }
 
   private createPier(): THREE.Group {
@@ -2324,6 +2280,12 @@ export class Planet {
       map: PaintedTextures.get('water', 3),
       unique: true
     });
+    // Transparent + no depth write let the lake paint over distant hills
+    // as a blue halo. Write depth so a hillside in front stays grass.
+    material.depthWrite = true;
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = -1;
+    material.polygonOffsetUnits = -1;
     PaintedTextures.shimmerWater(material);
     return material;
   }
