@@ -637,23 +637,27 @@ export class Planet {
   private createTelephonePole(): THREE.Group {
     const pole = new THREE.Group();
     
-    const poleGeo = new THREE.CylinderGeometry(0.08, 0.1, 5, 8);
+    // Shorter pole to match house scale (~3 units, similar to house height)
+    // On a small curved planet, tall poles appear to diverge/lean
+    const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 3, 8);
     const poleMat = ToonMaterial.create({ color: 0x6b5344 });
     const poleM = new THREE.Mesh(poleGeo, poleMat);
-    poleM.position.y = 2.5;
+    poleM.position.y = 1.5; // Base at y=0, top at y=3
     poleM.castShadow = true;
     pole.add(poleM);
     
-    const armGeo = new THREE.BoxGeometry(1.5, 0.08, 0.08);
+    // Cross arm near top
+    const armGeo = new THREE.BoxGeometry(1.0, 0.06, 0.06);
     const arm = new THREE.Mesh(armGeo, poleMat);
-    arm.position.y = 4.5;
+    arm.position.y = 2.8;
     pole.add(arm);
     
+    // Shorter wires
     for (let i = 0; i < 2; i++) {
-      const wireGeo = new THREE.CylinderGeometry(0.01, 0.01, 3, 4);
+      const wireGeo = new THREE.CylinderGeometry(0.01, 0.01, 1.5, 4);
       const wireMat = ToonMaterial.create({ color: 0x2c2c2c });
       const wire = new THREE.Mesh(wireGeo, wireMat);
-      wire.position.set(i === 0 ? -0.5 : 0.5, 4.5, 0);
+      wire.position.set(i === 0 ? -0.35 : 0.35, 2.8, 0);
       wire.rotation.z = Math.PI / 2;
       pole.add(wire);
     }
