@@ -11,10 +11,6 @@ don't let it go stale.
   account for terrain height. Seen clipping the courier's view into a
   building interior. Needs: a cheaper broad-phase (three-mesh-bvh is already
   installed for this) and terrain-aware clearance.
-- **No terrain-aware collision for props/buildings placed via `addPiece`
-  and the region scatter helpers** beyond the flat-spot system and the new
-  slope skip (`tooSteep`). Worth a walk of hamlet edges now that ridge
-  amplitude is higher.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
@@ -22,14 +18,16 @@ don't let it go stale.
   cliffs sharpened, and waterfalls (`Les Chutes`) placed on high river banks.
 - Road ribbons read as separate tiles — each street is now one strip of
   geometry with painted cobble, not a row of boxes.
-- Scatter on new cliffs — `tooSteep` skips trees and props on near-vertical
-  ground so extra relief does not plant a barn in mid-air.
+- Props floating on the new cliffs — trees stand upright and skip steep
+  ground, animals need nearly-flat pads, and `settleOnGround` drops each
+  piece until its downhill feet meet the mesh. Farm, pasture, ruin, shrine
+  and the hillside lookout now get flattened pads.
 - Flat cardboard look vs the painted reference — mint sky dome, paper grain,
   gouache albedo maps (grass/rock/plaster/water/foliage), illustrated trees,
   and a yellow-tee courier with a bob and sling.
-- Toy-keyboard music vs the Messenger bed — sine-chord loop replaced with a
-  quiet Bb-pentatonic pad, brown wind, water that rises on the banks, and
-  darker SFX (noise footsteps, low dialogue ticks).
+- Toy-keyboard music vs a real ambient bed — slow A-minor pad progression
+  with reverb, delayed piano phrases, and quieter wind/water underneath.
+  SFX stay dark (noise footsteps, low dialogue ticks).
 
 - Buildings tipping over on slopes — now stand upright, only small props
   lean (55% of slope).
