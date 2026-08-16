@@ -3,38 +3,39 @@ import { Game, GameState } from '../core/Game';
 /**
  * Background music and SFX.
  *
- * The iPhone recording of the reference is a mid-range music-box bed in Bb
- * (G4 as the home note, then Bb, C, D, F) — not a dark healing drone.
- * Pads stay light; the melody is the thing you hear. Nature sits underneath.
+ * Same Bb family as the reference (G, Bb, C, D, F) but treated as weather,
+ * not a performance. Pads and air do most of the work. Melody is rare,
+ * mid-range, and rolled off so it cannot tinkle every few seconds.
  *
  * All generated in the Web Audio graph so it stays offline and tiny.
  */
 
-/** Light Bb-family pads. Melody does the talking. */
+/** Soft Bb-family pads. No bright top note. */
 const CHORDS: number[][] = [
-  [116.54, 174.61, 233.08, 392.00],
-  [155.56, 196.00, 233.08, 311.13],
-  [174.61, 233.08, 261.63, 349.23],
-  [196.00, 233.08, 293.66, 392.00]
+  [116.54, 174.61, 233.08, 293.66],
+  [146.83, 196.00, 233.08, 293.66],
+  [174.61, 220.00, 261.63, 349.23],
+  [130.81, 196.00, 233.08, 311.13]
 ];
 
+/** Sparse mid-range fragments. Nothing above G4. */
 const PHRASES: number[][] = [
-  [392.00, 466.16, 523.25],
-  [466.16, 392.00, 349.23],
-  [392.00, 523.25, 466.16, 392.00],
-  [311.13, 349.23, 392.00],
-  [523.25, 466.16, 392.00],
-  [349.23, 392.00, 466.16],
-  [392.00, 349.23, 311.13, 349.23]
+  [196.00, 233.08],
+  [233.08, 196.00, 174.61],
+  [261.63, 233.08],
+  [196.00],
+  [174.61, 196.00, 233.08],
+  [293.66, 261.63, 233.08],
+  [196.00, 174.61]
 ];
 
-const MASTER = 0.9;
-const SFX_BUS = 0.9;
-const PAD = 0.16;
-const PAD_TOWN = 0.18;
-const PAD_TALK = 0.1;
-const WIND = 0.035;
-const WATER = 0.08;
+const MASTER = 0.58;
+const SFX_BUS = 0.85;
+const PAD = 0.12;
+const PAD_TOWN = 0.14;
+const PAD_TALK = 0.07;
+const WIND = 0.04;
+const WATER = 0.07;
 
 export class AudioManager {
   private game: Game;
@@ -94,8 +95,13 @@ export class AudioManager {
         this.masterGain.gain.value = MASTER;
 
         this.musicGain = this.audioContext.createGain();
-        this.musicGain.connect(this.masterGain);
         this.musicGain.gain.value = 1;
+        const airCut = this.audioContext.createBiquadFilter();
+        airCut.type = 'highshelf';
+        airCut.frequency.value = 1600;
+        airCut.gain.value = -8;
+        this.musicGain.connect(airCut);
+        airCut.connect(this.masterGain);
 
         this.sfxGain = this.audioContext.createGain();
         this.sfxGain.connect(this.masterGain);
@@ -118,9 +124,9 @@ export class AudioManager {
     this.buildBed();
     const now = this.audioContext.currentTime;
     this.chordIndex = 0;
-    this.nextChord = now + 20;
-    this.nextPhrase = now + 1.6;
-    this.nextBird = now + 10;
+    this.nextChord = now + 28;
+    this.nextPhrase = now + 10 + Math.random() * 6;
+    this.nextBird = now + 16;
     this.tickScheduler();
   }
 
@@ -171,9 +177,9 @@ export class AudioManager {
     const music = this.musicGain!;
 
     const reverb = ctx.createConvolver();
-    reverb.buffer = this.impulse(2.1, 2.2);
+    reverb.buffer = this.impulse(3.4, 2.6);
     const verbBus = ctx.createGain();
-    verbBus.gain.value = 0.7;
+    verbBus.gain.value = 0.9;
     reverb.connect(verbBus);
     verbBus.connect(music);
 
@@ -201,8 +207,8 @@ export class AudioManager {
     this.padBus.gain.value = PAD;
     this.padFilter = ctx.createBiquadFilter();
     this.padFilter.type = 'lowpass';
-    this.padFilter.frequency.value = 2200;
-    this.padFilter.Q.value = 0.35;
+    this.padFilter.frequency.value = 1100;
+    this.padFilter.Q.value = 0.3;
     this.padBus.connect(this.padFilter);
     this.padFilter.connect(music);
     const padWet = ctx.createGain();
@@ -224,10 +230,10 @@ export class AudioManager {
       const oscB = ctx.createOscillator();
       const gain = ctx.createGain();
       oscA.type = 'sine';
-      oscB.type = i === 0 ? 'sine' : 'triangle';
+      oscB.type = 'sine';
       oscA.frequency.value = freq;
-      oscB.frequency.value = freq * 1.0035;
-      gain.gain.value = i === 0 ? 0.28 : 0.22 + i * 0.03;
+      oscB.frequency.value = freq * 1.002;
+      gain.gain.value = i === 0 ? 0.26 : 0.16;
       oscA.connect(gain);
       oscB.connect(gain);
       gain.connect(this.padBus!);
@@ -237,21 +243,29 @@ export class AudioManager {
     });
 
     this.melodyBus = ctx.createGain();
-    this.melodyBus.gain.value = 0.42;
-    const delay = ctx.createDelay(1.6);
-    delay.delayTime.value = 0.52;
+    this.melodyBus.gain.value = 0.14;
+    const air = ctx.createBiquadFilter();
+    air.type = 'lowpass';
+    air.frequency.value = 1250;
+    air.Q.value = 0.4;
+    const delay = ctx.createDelay(1.8);
+    delay.delayTime.value = 0.72;
     const delayFb = ctx.createGain();
-    delayFb.gain.value = 0.42;
+    delayFb.gain.value = 0.22;
     const delayFilter = ctx.createBiquadFilter();
     delayFilter.type = 'lowpass';
-    delayFilter.frequency.value = 2400;
-    this.melodyBus.connect(delayFilter);
+    delayFilter.frequency.value = 1100;
+    this.melodyBus.connect(air);
+    air.connect(delayFilter);
     delayFilter.connect(delay);
     delay.connect(delayFb);
     delayFb.connect(delay);
     delay.connect(reverb);
-    this.melodyBus.connect(music);
-    delay.connect(music);
+    air.connect(reverb);
+    const melodyDry = ctx.createGain();
+    melodyDry.gain.value = 0.35;
+    air.connect(melodyDry);
+    melodyDry.connect(music);
   }
 
   private tickScheduler = (): void => {
@@ -269,7 +283,7 @@ export class AudioManager {
 
   private shiftChord(now: number): void {
     if (now < this.nextChord || this.padVoices.length === 0) return;
-    this.nextChord = now + 18 + Math.random() * 8;
+    this.nextChord = now + 24 + Math.random() * 12;
     this.chordIndex = (this.chordIndex + 1) % CHORDS.length;
     const chord = CHORDS[this.chordIndex];
     const t = now + 5.5;
@@ -280,26 +294,30 @@ export class AudioManager {
     });
   }
 
-  /** Slow piano-like phrase through delay, the "melody" layer of the bed. */
+  /**
+   * A quiet fragment every so often — not a loop. Long gaps so the pads
+   * and wind can be the thing you live in.
+   */
   private schedulePhrase(now: number): void {
     if (now < this.nextPhrase || !this.melodyBus) return;
-    this.nextPhrase = now + 2.4 + Math.random() * 2.2;
+    this.nextPhrase = now + 9 + Math.random() * 10;
+    if (Math.random() < 0.22) return;
     const phrase = this.pick(PHRASES);
     phrase.forEach((freq, i) => {
-      this.mallet(freq, 0.16 - i * 0.015, 1.6, this.melodyBus!, now + i * 0.42);
+      this.mallet(freq, 0.09 - i * 0.012, 2.4, this.melodyBus!, now + i * 0.7);
     });
   }
 
   /** Two-note chirp, only away from town. */
   private scheduleBirds(now: number): void {
     if (now < this.nextBird || !this.musicGain || !this.audioContext) return;
-    this.nextBird = now + 7 + Math.random() * 12;
+    this.nextBird = now + 14 + Math.random() * 18;
     if (this.game.state === GameState.TITLE) return;
     const pos = this.game.character?.group.position;
     if (pos && this.game.planet.urbanAmount(pos) > 0.65) return;
 
     const ctx = this.audioContext;
-    const start = 1800 + Math.random() * 900;
+    const start = 980 + Math.random() * 420;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
@@ -311,7 +329,7 @@ export class AudioManager {
     filter.frequency.value = start;
     filter.Q.value = 6;
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.055, now + 0.02);
+    gain.gain.linearRampToValueAtTime(0.028, now + 0.03);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
     osc.connect(filter);
     filter.connect(gain);
@@ -330,9 +348,9 @@ export class AudioManager {
     osc.type = 'sine';
     osc.frequency.value = freq;
     filter.type = 'lowpass';
-    filter.frequency.value = Math.min(3200, freq * 5.5);
+    filter.frequency.value = Math.min(1400, freq * 3.2);
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(peak, t + 0.012);
+    gain.gain.linearRampToValueAtTime(peak, t + 0.045);
     gain.gain.exponentialRampToValueAtTime(0.001, t + life);
     osc.connect(filter);
     filter.connect(gain);

@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Music-box phrases fired every few seconds in the bright midrange and
+  read as a loop — the bed is quieter now, melody is rare and rolled
+  off, and pads plus wind do the sitting.
 - The world map only pinned you and the current delivery — named regions
   you have already walked now show a small teal mark and their name.
 - Waterfalls were a painted slab — the WATER sheets now scroll down the
