@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { GROUND, BUILDING, ROAD, MATERIAL, ACCENT, SKY, pick } from '../utils/palette';
 import { Kit, SHOP_SIGNS } from './Kit';
+import { distributeRegions, PlacedRegion } from './Regions';
 
 export enum BiomeType {
   TOWN,
@@ -234,8 +235,150 @@ export class Planet {
     this.createShrineArea();
     this.createPark();
 
+    // Every other part of the globe gets a character of its own.
+    this.createRegions();
+
     // Loose scatter last, into whatever ground is left.
     this.fillGlobalDecorations();
+  }
+
+  // ---------------------------------------------------------------- regions
+
+  /** Scatter `count` pieces over a disc, each upright and randomly turned. */
+  private scatterInDisc(
+    center: THREE.Vector3, radius: number, count: number,
+    pieces: string[], clearance = 2.2
+  ): void {
+    for (let i = 0; i < count; i++) {
+      // sqrt keeps the density even rather than crowding the middle.
+      const dist = radius * Math.sqrt(Math.random());
+      const spot = this.getOffsetOnSphere(center, Math.random() * Math.PI * 2, dist);
+      if (!this.isFree(spot, clearance)) continue;
+      this.addPiece(pieces[Math.floor(Math.random() * pieces.length)], spot);
+    }
+  }
+
+  /**
+   * Lay pieces in parallel rows across a disc — vines, lavender, orchards.
+   *
+   * Rows are what make cultivated land read as cultivated: scattered vines
+   * look like scrub, and the same vines in lines look like a vineyard.
+   */
+  private layRows(
+    center: THREE.Vector3, radius: number, piece: string,
+    rowGap: number, alongGap: number
+  ): void {
+    const bearing = Math.random() * Math.PI * 2;
+    for (let r = -radius; r <= radius; r += rowGap) {
+      const halfChord = Math.sqrt(Math.max(0, radius * radius - r * r));
+      const rowMid = this.getOffsetOnSphere(center, bearing + Math.PI / 2, r);
+
+      for (let a = -halfChord; a <= halfChord; a += alongGap) {
+        const spot = this.getOffsetOnSphere(rowMid, bearing, a);
+        if (!this.isFree(spot, 1.1)) continue;
+        // Face along the row so the piece's length runs with it.
+        const ahead = this.getOffsetOnSphere(rowMid, bearing, a + 2);
+        this.addPiece(piece, spot, ahead);
+      }
+    }
+  }
+
+  /** A short lane with houses either side — the shape of every hamlet. */
+  private buildHamlet(center: THREE.Vector3, radius: number): void {
+    const bearing = Math.random() * Math.PI * 2;
+    const from = this.getOffsetOnSphere(center, bearing, radius * 0.55);
+    const to = this.getOffsetOnSphere(center, bearing + Math.PI, radius * 0.55);
+
+    const lane = this.lineStations(from, to, 5);
+    this.layRoad(lane, 2.4);
+    this.layFrontage(lane, { setback: 6.4, gapChance: 0.28 });
+
+    this.addPiece('Well', this.getOffsetOnSphere(center, bearing + 1.3, 4));
+    this.scatterInDisc(center, radius, 7, ['Tree_Plane', 'Wall_Low', 'Hedge']);
+  }
+
+  /**
+   * Give every part of the globe a character.
+   *
+   * Regions are spread by a Fibonacci lattice rather than at random: random
+   * points on a sphere clump, which is precisely how you end up with a crowded
+   * hemisphere and a bare one.
+   */
+  private createRegions(): void {
+    const avoid = this.areas.map(a => ({ center: a.center, radius: a.radius }));
+    const regions: PlacedRegion[] = distributeRegions(16, avoid, this.radius);
+
+    for (const region of regions) {
+      const center = region.center.clone().multiplyScalar(this.radius);
+      const r = region.radius;
+
+      switch (region.kind) {
+        case 'hamlet':
+          this.buildHamlet(center, r);
+          break;
+
+        case 'vineyard':
+          this.layRows(center, r * 0.8, 'Vine_Row', 3.4, 6.4);
+          this.scatterInDisc(center, r, 3, ['Wall_Low', 'Tree_Plane']);
+          break;
+
+        case 'lavender':
+          this.layRows(center, r * 0.8, 'Lavender_Row', 2.6, 5.8);
+          this.scatterInDisc(center, r, 3, ['Tree_Plane', 'Hedge']);
+          break;
+
+        case 'orchard':
+          this.layRows(center, r * 0.78, 'Tree_Orchard', 4.2, 4.2);
+          this.scatterInDisc(center, r, 4, ['Hedge', 'Wall_Low']);
+          break;
+
+        case 'wheat':
+          this.scatterInDisc(center, r * 0.85, 16, ['Haystack'], 2.6);
+          this.scatterInDisc(center, r, 6, ['Hedge', 'Wall_Low', 'Tree_Plane']);
+          this.addPiece('Barn', this.getOffsetOnSphere(center, 1.0, r * 0.6), center);
+          break;
+
+        case 'forest':
+          this.scatterInDisc(center, r, 46, ['Tree_Plane', 'Tree_Orchard'], 2.0);
+          break;
+
+        case 'pasture':
+          this.scatterInDisc(center, r * 0.9, 12, ['Sheep', 'Goat'], 2.0);
+          this.scatterInDisc(center, r, 10, ['Fence', 'Wall_Low', 'Hedge'], 2.4);
+          this.addPiece('Barn', this.getOffsetOnSphere(center, 2.4, r * 0.55), center);
+          break;
+
+        case 'graveyard':
+          this.addPiece('Chapel', center, this.getOffsetOnSphere(center, 0, 8));
+          this.layRows(center, r * 0.62, 'Grave_A', 3.0, 2.2);
+          this.scatterInDisc(center, r * 0.7, 10, ['Grave_B', 'Grave_C'], 1.6);
+          this.scatterInDisc(center, r, 8, ['Wall_Low', 'Tree_Plane']);
+          break;
+
+        case 'ruin':
+          this.addPiece('Ruin_Arch', center);
+          this.scatterInDisc(center, r * 0.7, 5, ['Ruin_Arch', 'Wall_Low'], 5.0);
+          this.scatterInDisc(center, r, 12, ['Tree_Plane', 'Hedge']);
+          break;
+
+        case 'mill':
+          this.addPiece('Windmill', center, this.getOffsetOnSphere(center, 0, 8));
+          this.scatterInDisc(center, r * 0.8, 5, ['Haystack'], 2.6);
+          this.scatterInDisc(center, r, 6, ['Wall_Low', 'Tree_Plane', 'Hedge']);
+          break;
+
+        case 'chapel':
+          this.addPiece('Chapel', center, this.getOffsetOnSphere(center, 0, 8));
+          this.scatterInDisc(center, r, 10, ['Tree_Plane', 'Wall_Low', 'Hedge']);
+          break;
+
+        default:
+          this.scatterInDisc(center, r, 12, ['Tree_Plane', 'Hedge']);
+      }
+
+      this.markArea(region.name, center, region.radius);
+      this.claim(center, 2);
+    }
   }
 
   // ------------------------------------------------------------ set pieces
@@ -616,8 +759,12 @@ export class Planet {
     // Scatter houses, trees, and props across the entire sphere
     // Dense content to wrap the entire sphere - no empty patches
     
-    const numGlobalTrees = 70;
-    const numGlobalProps = 80;
+    // Seen from orbit the gaps between regions are what read as bare, so the
+    // in-between fill is generous. The occupancy check keeps it from landing
+    // on anything, and most candidates are rejected — these are attempts, not
+    // guaranteed placements.
+    const numGlobalTrees = 260;
+    const numGlobalProps = 220;
 
     // Roadside hamlets rather than 60 houses scattered at random bearings.
     // Buildings only exist where a road gives them something to address.
