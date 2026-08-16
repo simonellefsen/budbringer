@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ToonMaterial } from '../utils/ToonMaterial';
-import { BUILDING, MATERIAL, ACCENT, INK, pick } from '../utils/palette';
+import { PaintedTextures, PaintedSlot } from '../utils/PaintedTextures';
+import { BUILDING, MATERIAL, ACCENT, GROUND, INK, pick } from '../utils/palette';
 
 /**
  * Loads the Blender village kit and hands out instances.
@@ -23,7 +24,9 @@ export type KitPiece =
   | 'House_TimberD' | 'House_TimberE'
   | 'Shop_A' | 'Shop_B'
   | 'Church' | 'Bridge_Stone' | 'Fountain' | 'Well'
-  | 'Tree_Plane' | 'Wall_Low' | 'Barn' | 'Sheep' | 'Goat' | 'Fence';
+  | 'Tree_Plane' | 'Tree_Forest' | 'Tree_Orchard'
+  | 'Wall_Low' | 'Barn' | 'Sheep' | 'Goat' | 'Fence'
+  | 'Waterfall' | 'Cliff_Rock';
 
 /** House pieces suitable for ordinary street frontage. */
 export const HOUSE_PIECES: KitPiece[] = [
@@ -61,8 +64,24 @@ const SLOT_COLOURS: Record<string, number> = {
   GLASS: BUILDING.window,
   SHUTTER: BUILDING.shutters[0],
   ACCENT: ACCENT.geranium,
-  FOLIAGE: MATERIAL.foliage,
+  FOLIAGE: 0xdde8c8,
+  CROP: 0xe8d9a8,
+  BLOOM: ACCENT.lavender,
+  WATER: 0xd4ecec,
   SIGN: BUILDING.timberDark
+};
+
+/** Which painted tile each slot multiplies with, if the texture loaded. */
+const SLOT_MAPS: Partial<Record<string, PaintedSlot>> = {
+  WALL: 'plaster',
+  WALL_ALT: 'plaster',
+  PAINTED: 'plaster',
+  TRIM: 'plaster',
+  STONE: 'rock',
+  FOLIAGE: 'foliage',
+  CROP: 'grass',
+  WATER: 'water',
+  WOOD: 'plaster'
 };
 
 export class Kit {
@@ -122,14 +141,19 @@ export class Kit {
       case 'SHUTTER':
         colour = BUILDING.shutters[variant % BUILDING.shutters.length];
         break;
+      case 'WATER':
+        colour = GROUND.water;
+        break;
       default:
         colour = SLOT_COLOURS[slotName] ?? BUILDING.walls[0];
     }
 
-    const key = `${slotName}|${colour}`;
+    const mapName = SLOT_MAPS[slotName];
+    const map = mapName ? PaintedTextures.get(mapName) : undefined;
+    const key = `${slotName}|${colour}|${map?.uuid ?? '-'}`;
     let material = this.materialCache.get(key);
     if (!material) {
-      material = ToonMaterial.create({ color: colour });
+      material = ToonMaterial.create({ color: colour, map });
       this.materialCache.set(key, material);
     }
     return material;

@@ -11,22 +11,25 @@ don't let it go stale.
   account for terrain height. Seen clipping the courier's view into a
   building interior. Needs: a cheaper broad-phase (three-mesh-bvh is already
   installed for this) and terrain-aware clearance.
-- **Relief is gentler than the Messenger reference.** Current terrain gives
-  ~14 units of relief on a 30-unit radius; the reference globe reads as much
-  more dramatic (cliffs, coves, layered structures). Pushing amplitude
-  further will expose props scattered *between* regions that aren't
-  flattened yet (only settlements/hamlets/mills/graveyards/chapels/ruins
-  register flat spots) — those will need to either avoid steep slopes or
-  get their own flattening.
-- **Road ribbons still read as separate tiles**, not a continuous cobbled
-  surface. Each station lays its own box; needs merging into one ribbon
-  geometry per road.
 - **No terrain-aware collision for props/buildings placed via `addPiece`
-  and the region scatter helpers** beyond the flat-spot system — verify
-  edge cases (e.g. cliffs cutting through a hamlet's outer houses) if relief
-  amplitude increases.
+  and the region scatter helpers** beyond the flat-spot system and the new
+  slope skip (`tooSteep`). Worth a walk of hamlet edges now that ridge
+  amplitude is higher.
 
 ## Recently fixed (for context — remove once confident these don't regress)
+
+- Relief too gentle vs the Messenger reference — ridge amplitude pushed up,
+  cliffs sharpened, and waterfalls (`Les Chutes`) placed on high river banks.
+- Road ribbons read as separate tiles — each street is now one strip of
+  geometry with painted cobble, not a row of boxes.
+- Scatter on new cliffs — `tooSteep` skips trees and props on near-vertical
+  ground so extra relief does not plant a barn in mid-air.
+- Flat cardboard look vs the painted reference — mint sky dome, paper grain,
+  gouache albedo maps (grass/rock/plaster/water/foliage), illustrated trees,
+  and a yellow-tee courier with a bob and sling.
+- Toy-keyboard music vs the Messenger bed — sine-chord loop replaced with a
+  quiet Bb-pentatonic pad, brown wind, water that rises on the banks, and
+  darker SFX (noise footsteps, low dialogue ticks).
 
 - Buildings tipping over on slopes — now stand upright, only small props
   lean (55% of slope).
@@ -57,9 +60,13 @@ don't let it go stale.
 ## Possible future work
 
 - Modelled character animation improvements (currently simple node
-  rotations, no blending).
+  rotations, no blending). The courier is now the right silhouette; the
+  walk is still unblended joint rotations.
 - Expand region variety further (currently 18 named areas from a fixed
-  rota of ~12 kinds).
+  rota of ~12 kinds, plus `Les Chutes`).
 - Investigate whether `postprocessing`'s ink/outline pass could also apply
   to the title-screen orbit view for visual consistency (should already
   work now that title reuses the main scene/composer — verify).
+- Hand-paint a second grass variant in Krita so the 2×2 tile is less
+  recognisable at walking speed.
+- Camera collision (still open above) is the next non-art blocker.

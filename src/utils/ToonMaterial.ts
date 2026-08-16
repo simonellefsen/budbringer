@@ -25,6 +25,7 @@ interface ToonMaterialOptions {
   emissive?: number;
   emissiveIntensity?: number;
   vertexColors?: boolean;
+  map?: THREE.Texture | null;
   side?: THREE.Side;
   transparent?: boolean;
   opacity?: number;
@@ -40,7 +41,7 @@ const BANDS = 3;
  * faces should stay coloured and let the cool hemisphere fill tint them, not
  * crush to black the way a 0.0 first stop does.
  */
-const BAND_STOPS = [0.46, 0.74, 1.0];
+const BAND_STOPS = [0.52, 0.78, 1.0];
 
 export class ToonMaterial {
   private static gradientMap: THREE.DataTexture | null = null;
@@ -81,6 +82,7 @@ export class ToonMaterial {
       emissive = 0x000000,
       emissiveIntensity = 0,
       vertexColors = false,
+      map = null,
       side = THREE.FrontSide,
       transparent = false,
       opacity = 1.0,
@@ -92,6 +94,7 @@ export class ToonMaterial {
     const key = [
       color, emissive, emissiveIntensity,
       vertexColors ? 1 : 0,
+      map ? map.uuid : '-',
       side, transparent ? 1 : 0, opacity
     ].join('|');
 
@@ -112,6 +115,7 @@ export class ToonMaterial {
       depthWrite: !transparent,
       fog: true
     });
+    if (map) material.map = map;
 
     if (!unique) {
       this.cache.set(key, material);

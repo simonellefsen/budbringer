@@ -14,6 +14,9 @@ import { Secrets } from '../world/Secrets';
 import { SKY, LIGHT } from '../utils/palette';
 import { EffectComposer, RenderPass, EffectPass, NormalPass } from 'postprocessing';
 import { InkEffect } from '../utils/InkEffect';
+import { GrainEffect } from '../utils/GrainEffect';
+import { createSkyDome } from '../utils/SkyDome';
+import { PaintedTextures } from '../utils/PaintedTextures';
 import { Kit } from '../world/Kit';
 import { Characters } from '../world/Characters';
 import { MapView } from '../ui/MapView';
@@ -106,7 +109,8 @@ export class Game {
     this.scene.background = skyColor;
     // The horizon on a radius-30 sphere sits ~14 units from the camera, so the
     // old 25-70 range meant fog never engaged at all. This band actually bites.
-    this.scene.fog = new THREE.Fog(skyColor, 9, 34);
+    this.scene.fog = new THREE.Fog(skyColor, 10, 36);
+    this.scene.add(createSkyDome());
 
     this.camera = new THREE.PerspectiveCamera(
       48,
@@ -139,7 +143,7 @@ export class Game {
 
     // Cool sky over warm ground bounce. This is what tints the shadows: unlit
     // faces pick up blue from above and sand from below instead of going grey.
-    const hemi = new THREE.HemisphereLight(LIGHT.skyFill, LIGHT.groundBounce, 1.15);
+    const hemi = new THREE.HemisphereLight(LIGHT.skyFill, LIGHT.groundBounce, 1.22);
     this.scene.add(hemi);
 
     // A whisper of ambient so nothing ever reads as pure black.
@@ -178,6 +182,12 @@ export class Game {
 
   private async setupWorld(): Promise<void> {
     ToonMaterial.init();
+
+    try {
+      await PaintedTextures.load();
+    } catch (err) {
+      console.warn('Painted textures failed to load:', err);
+    }
 
     // Load the Blender kit before the world is built; Planet falls back to the
     // old primitive houses if it fails, so a bad export never blocks the game.
@@ -257,7 +267,8 @@ export class Game {
       normalBuffer: normalPass.texture,
       maxDistance: fog ? fog.far : 60
     });
-    this.composer.addPass(new EffectPass(this.camera, this.inkEffect));
+    const grain = new GrainEffect(0.048, 0.36);
+    this.composer.addPass(new EffectPass(this.camera, this.inkEffect, grain));
 
     this.composer.setSize(window.innerWidth, window.innerHeight);
   }
@@ -270,6 +281,13 @@ export class Game {
 
   private setupAudio(): void {
     this.audioManager = new AudioManager(this);
+    const unlock = () => {
+      this.audioManager.unlock();
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
   }
 
 
@@ -317,12 +335,14 @@ export class Game {
   public enterDialogue(): void {
     this.state = GameState.DIALOGUE;
     this.inputManager.disable();
+    this.audioManager.setDialogue(true);
   }
 
   public exitDialogue(): void {
     this.state = GameState.PLAYING;
     this.inputManager.enable();
     this.cameraController.reset();
+    this.audioManager.setDialogue(false);
   }
 
   private animate = (): void => {
@@ -348,6 +368,7 @@ export class Game {
     this.mapView?.update(delta);
 
     this.planet.update(elapsed);
+    this.audioManager.update();
     this.hud.update();
     
     this.composer.render(delta);

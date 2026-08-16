@@ -179,6 +179,7 @@ export class DialogueSystem {
       this.charIndex = this.currentText.length;
       this.isTyping = false;
       this.continuePrompt.classList.add('visible');
+      this.game.audioManager.playDialogue();
     } else {
       this.close();
     }

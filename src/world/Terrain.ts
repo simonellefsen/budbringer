@@ -102,20 +102,22 @@ export class Terrain {
     const { x, y, z } = d;
 
     // Broad land masses, then hills, then a little roughness.
-    let h = this.noiseBase(x * 1.15, y * 1.15, z * 1.15) * 4.2;
-    h += this.noiseHill(x * 2.7, y * 2.7, z * 2.7) * 2.1;
-    h += this.noiseDetail(x * 6.4, y * 6.4, z * 6.4) * 0.55;
+    let h = this.noiseBase(x * 1.15, y * 1.15, z * 1.15) * 5.6;
+    h += this.noiseHill(x * 2.7, y * 2.7, z * 2.7) * 2.8;
+    h += this.noiseDetail(x * 6.4, y * 6.4, z * 6.4) * 0.7;
 
     // Ridged noise for escarpments: folding the noise about zero and
-    // squaring the result gives sharp crests and flat-bottomed valleys,
+    // cubing the result gives sharp crests and flat-bottomed valleys,
     // which is what reads as cliffs rather than as more rolling hills.
     const r = 1 - Math.abs(this.noiseRidge(x * 2.1, y * 2.1, z * 2.1));
     const ridge = r * r * r;
 
     // Only let ridges bite where the base land is already high, so cliffs
-    // crown the uplands instead of erupting out of meadows.
-    const upland = THREE.MathUtils.smoothstep(h, 0.6, 4.0);
-    h += ridge * 6.5 * upland;
+    // crown the uplands instead of erupting out of meadows. The extra
+    // ridge*ridge term sharpens the drop so a crest reads as a cliff face.
+    const upland = THREE.MathUtils.smoothstep(h, 0.4, 4.4);
+    h += ridge * 9.6 * upland;
+    h += ridge * ridge * 3.4 * upland;
 
     return h;
   }

@@ -52,10 +52,11 @@ MAT_FOLIAGE = "FOLIAGE"
 MAT_CROP = "CROP"        # straw, wheat, thatch
 MAT_BLOOM = "BLOOM"      # lavender, blossom
 MAT_SIGN = "SIGN"        # blank board; the game letters it with troika text
+MAT_WATER = "WATER"      # waterfall sheets and foam-adjacent water
 
 SLOTS = [MAT_WALL, MAT_WALL_ALT, MAT_PAINTED, MAT_ROOF, MAT_TIMBER, MAT_TRIM,
          MAT_WOOD, MAT_STONE, MAT_METAL, MAT_GLASS, MAT_SHUTTER, MAT_ACCENT,
-         MAT_FOLIAGE, MAT_CROP, MAT_BLOOM, MAT_SIGN]
+         MAT_FOLIAGE, MAT_CROP, MAT_BLOOM, MAT_SIGN, MAT_WATER]
 
 # Viewport-only colours so the Blender viewport is legible while working.
 # The game ignores these entirely.
@@ -76,6 +77,7 @@ PREVIEW = {
     MAT_CROP:     (0.83, 0.71, 0.40, 1.0),
     MAT_BLOOM:    (0.55, 0.47, 0.71, 1.0),
     MAT_SIGN:     (0.16, 0.13, 0.10, 1.0),
+    MAT_WATER:    (0.45, 0.68, 0.72, 1.0),
 }
 
 
@@ -230,6 +232,25 @@ def arch_wall(width, thickness, height, opening_w, opening_h, location,
     return Part(_place(parts_v, location, rotation_z), parts_f, material)
 
 
+def apply_box_uvs(mesh, scale=0.35):
+    """Triplanar UVs from vertex positions so painted maps land on the kit."""
+    if mesh.uv_layers.active is None:
+        mesh.uv_layers.new(name="UVMap")
+    uv = mesh.uv_layers.active
+    for poly in mesh.polygons:
+        n = poly.normal
+        ax, ay, az = abs(n.x), abs(n.y), abs(n.z)
+        for loop_i in poly.loop_indices:
+            v = mesh.vertices[mesh.loops[loop_i].vertex_index].co
+            if az >= ax and az >= ay:
+                u, vv = v.x, v.y
+            elif ax >= ay:
+                u, vv = v.y, v.z
+            else:
+                u, vv = v.x, v.z
+            uv.data[loop_i].uv = (u * scale, vv * scale)
+
+
 def get_material(name):
     mat = bpy.data.materials.get(name)
     if mat is None:
@@ -269,6 +290,7 @@ def assemble(name, parts, location=(0.0, 0.0, 0.0)):
         poly.use_smooth = False
 
     mesh.update()
+    apply_box_uvs(mesh)
 
     obj = bpy.data.objects.new(name, mesh)
     obj.location = location
@@ -513,11 +535,51 @@ def fountain():
 
 
 def plane_tree():
-    """A pollarded plane, the tree of every French village square."""
-    parts = [prism(7, 0.22, 2.4, (0, 0, 0), MAT_WOOD)]
-    for i, (r, z, sq) in enumerate(((1.5, 2.2, 1.0), (1.15, 3.4, 0.85), (0.7, 4.2, 0.7))):
-        parts.append(prism(9, r, 1.25 * sq, (0, 0, z), MAT_FOLIAGE,
-                           rotation_z=i * 0.4))
+    """
+    An illustrated plane: a leaning trunk and a handful of foliage blobs.
+
+    The reference trees are not lollipops. Overlapping irregular masses with
+    hard edges are what the ink pass turns into a drawn canopy.
+    """
+    parts = [
+        prism(6, 0.18, 2.9, (0, 0, 0), MAT_WOOD, taper=0.62),
+        box((0.14, 0.85, 0.14), (0.38, 0.15, 2.35), MAT_WOOD, rotation_z=0.55),
+        box((0.72, 0.13, 0.13), (-0.18, -0.2, 2.55), MAT_WOOD, rotation_z=0.35),
+        box((0.12, 0.55, 0.12), (-0.35, 0.25, 2.15), MAT_WOOD, rotation_z=-0.4),
+    ]
+    clusters = [
+        (1.35, (0.15, 0.1, 3.15), 0.2),
+        (1.05, (-0.55, 0.35, 3.55), 0.9),
+        (0.95, (0.5, -0.45, 3.7), 1.4),
+        (0.8, (-0.15, -0.55, 2.85), 0.5),
+        (0.72, (0.62, 0.42, 2.7), 1.15),
+        (0.9, (0.05, 0.05, 4.35), 0.15),
+        (0.7, (-0.4, -0.15, 4.05), 0.7),
+    ]
+    for r, loc, rot in clusters:
+        parts.append(prism(8, r, r * 1.05, loc, MAT_FOLIAGE, rotation_z=rot, taper=0.62))
+    return parts
+
+
+def forest_tree():
+    """Taller, denser cousin of the plane — used to wall a sightline."""
+    parts = [
+        prism(6, 0.22, 4.2, (0, 0, 0), MAT_WOOD, taper=0.55),
+        box((0.16, 1.1, 0.16), (0.5, 0.1, 3.2), MAT_WOOD, rotation_z=0.45),
+        box((0.9, 0.14, 0.14), (-0.3, -0.25, 3.5), MAT_WOOD, rotation_z=0.3),
+    ]
+    clusters = [
+        (1.7, (0.1, 0.05, 4.4), 0.1),
+        (1.25, (-0.7, 0.4, 5.0), 0.8),
+        (1.15, (0.7, -0.5, 5.15), 1.3),
+        (1.0, (-0.2, -0.7, 4.1), 0.4),
+        (0.95, (0.75, 0.5, 3.9), 1.1),
+        (1.1, (0.0, 0.1, 5.9), 0.2),
+        (0.85, (-0.55, -0.2, 5.55), 0.65),
+        (0.8, (0.4, 0.55, 5.4), 1.5),
+    ]
+    for r, loc, rot in clusters:
+        parts.append(prism(8, r, r * 1.0, loc, MAT_FOLIAGE, rotation_z=rot, taper=0.6))
     return parts
 
 
@@ -694,10 +756,44 @@ def lavender_row(length=5.5):
 
 def orchard_tree():
     """Smaller and rounder than the plane tree, planted in rows."""
-    parts = [prism(6, 0.16, 1.3, (0, 0, 0), MAT_WOOD)]
-    for r, z in ((1.05, 1.15), (0.78, 2.0)):
-        parts.append(prism(8, r, 0.95, (0, 0, z), MAT_FOLIAGE, taper=0.72))
+    parts = [prism(6, 0.14, 1.45, (0, 0, 0), MAT_WOOD, taper=0.7)]
+    for r, loc, rot in (
+        (0.95, (0.05, 0.0, 1.35), 0.2),
+        (0.72, (-0.35, 0.2, 1.9), 0.9),
+        (0.68, (0.35, -0.25, 2.0), 1.3),
+        (0.55, (0.0, 0.05, 2.45), 0.4),
+    ):
+        parts.append(prism(7, r, r * 0.95, loc, MAT_FOLIAGE, rotation_z=rot, taper=0.65))
     return parts
+
+
+def waterfall():
+    """
+    A hanging sheet of water with a rocky lip and foam.
+
+    Origin sits at the plunge pool so it can be placed on the river and
+    reach up the bank. The game tints WATER from the palette.
+    """
+    return [
+        box((5.4, 2.4, 1.9), (0, 0.7, 8.3), MAT_STONE, taper=0.9),
+        box((6.0, 2.8, 1.1), (0.2, 0.35, 7.25), MAT_STONE, taper=0.92),
+        box((2.2, 1.6, 2.4), (1.6, 0.2, 6.4), MAT_STONE),
+        box((3.6, 0.22, 7.6), (0, -0.35, 3.7), MAT_WATER),
+        box((2.5, 0.18, 6.8), (0.75, -0.18, 3.5), MAT_WATER),
+        box((2.1, 0.18, 6.0), (-0.85, -0.22, 3.1), MAT_WATER),
+        box((4.2, 0.75, 0.48), (0, -0.22, 7.7), MAT_TRIM),
+        box((4.8, 2.1, 0.55), (0, -0.65, 0.32), MAT_TRIM),
+        box((3.3, 2.7, 0.35), (0.45, -1.05, 0.22), MAT_TRIM),
+    ]
+
+
+def cliff_rock():
+    """A chunk of cliff face for the lip above a fall."""
+    return [
+        box((4.8, 2.4, 3.6), (0, 0, 1.8), MAT_STONE, taper=0.84),
+        box((3.4, 1.7, 2.5), (0.9, -0.45, 2.9), MAT_STONE, taper=0.9),
+        box((2.5, 1.5, 1.7), (-1.1, 0.35, 3.3), MAT_STONE),
+    ]
 
 
 def hedge(length=5.0):
@@ -750,6 +846,7 @@ def build():
     assemble("Bridge_Stone", stone_bridge(), (60, 0, 0))
     assemble("Fountain", fountain(), (70, 0, 0))
     assemble("Tree_Plane", plane_tree(), (75, 0, 0))
+    assemble("Tree_Forest", forest_tree(), (81, 0, 0))
     assemble("Wall_Low", low_wall(), (80, 0, 0))
     assemble("Well", well(), (86, 0, 0))
     assemble("Barn", barn(), (94, 0, 0))
@@ -768,6 +865,8 @@ def build():
     assemble("Hedge", hedge(), (175, 0, 0))
     assemble("Ruin_Arch", ruin_arch(), (184, 0, 0))
     assemble("Boathouse", boathouse(), (194, 0, 0))
+    assemble("Waterfall", waterfall(), (204, 0, 0))
+    assemble("Cliff_Rock", cliff_rock(), (214, 0, 0))
 
     return {o.name: len(o.data.polygons) for o in bpy.data.objects}
 

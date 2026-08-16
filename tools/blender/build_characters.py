@@ -49,8 +49,8 @@ SLOTS = [MAT_SKIN, MAT_HAIR, MAT_COAT, MAT_COAT_ALT, MAT_APRON,
 PREVIEW = {
     MAT_SKIN:     (0.94, 0.82, 0.69, 1.0),
     MAT_HAIR:     (0.23, 0.17, 0.12, 1.0),
-    MAT_COAT:     (0.24, 0.32, 0.48, 1.0),
-    MAT_COAT_ALT: (0.30, 0.28, 0.26, 1.0),
+    MAT_COAT:     (0.94, 0.77, 0.29, 1.0),
+    MAT_COAT_ALT: (0.17, 0.19, 0.21, 1.0),
     MAT_APRON:    (0.90, 0.87, 0.79, 1.0),
     MAT_BOOT:     (0.20, 0.16, 0.13, 1.0),
     MAT_BAG:      (0.45, 0.31, 0.19, 1.0),
@@ -176,6 +176,22 @@ def head_parts(hair=MAT_HAIR, hat=None, z=1.42, scale=1.0):
                          (side * 0.105 * k, 0.005 * k, z), MAT_SKIN))
         parts.append(box((0.03 * k, 0.02 * k, 0.035 * k),
                          (side * 0.05 * k, -0.098 * k, z + 0.012 * k), MAT_HAIR))
+
+    if hat == "bob":
+        # Messy short bob — the courier's silhouette from behind.
+        parts.extend([
+            box((0.23 * k, 0.22 * k, 0.14 * k), (0, 0.02 * k, z + 0.1 * k),
+                MAT_HAIR, taper=0.9),
+            box((0.2 * k, 0.09 * k, 0.1 * k), (0, -0.08 * k, z + 0.07 * k), MAT_HAIR),
+            box((0.075 * k, 0.1 * k, 0.18 * k), (-0.11 * k, 0.0, z), MAT_HAIR),
+            box((0.075 * k, 0.1 * k, 0.18 * k), (0.11 * k, 0.0, z), MAT_HAIR),
+            box((0.18 * k, 0.1 * k, 0.14 * k), (0, 0.09 * k, z - 0.02 * k), MAT_HAIR),
+            box((0.06 * k, 0.07 * k, 0.08 * k), (-0.06 * k, -0.04 * k, z + 0.14 * k),
+                MAT_HAIR),
+            box((0.055 * k, 0.06 * k, 0.07 * k), (0.05 * k, 0.02 * k, z + 0.15 * k),
+                MAT_HAIR),
+        ])
+        return parts
 
     if hat == "cap":
         parts.append(box((0.225 * k, 0.215 * k, 0.08 * k),
@@ -305,10 +321,37 @@ def tote_parts(scale=1.0):
     ]
 
 
+def sling_bag(scale=1.0):
+    """Cross-body satchel, the reference kid's bag."""
+    k = scale
+    return [
+        box((0.2 * k, 0.13 * k, 0.26 * k), (-0.18 * k, 0.1 * k, 0.78 * k), MAT_BAG),
+        box((0.18 * k, 0.05 * k, 0.08 * k), (-0.18 * k, 0.03 * k, 0.92 * k), MAT_BAG),
+        box((0.055 * k, 0.04 * k, 0.58 * k), (0.08 * k, -0.02 * k, 1.12 * k), MAT_BAG),
+        box((0.05 * k, 0.04 * k, 0.22 * k), (-0.08 * k, 0.06 * k, 0.92 * k), MAT_BAG),
+    ]
+
+
+def short_leg_parts(side, z=0.72, scale=1.0):
+    """Cropped trousers, socks, shoes."""
+    k = scale
+    z = z * k
+    x = side * 0.088 * k
+    return [
+        box((0.12 * k, 0.13 * k, 0.28 * k), (x, 0, z - 0.14 * k),
+            MAT_COAT_ALT, taper=0.94),
+        box((0.09 * k, 0.1 * k, 0.22 * k), (x, 0, z - 0.42 * k), MAT_SKIN),
+        box((0.085 * k, 0.09 * k, 0.07 * k), (x, 0, z - 0.56 * k), MAT_SOLE),
+        box((0.11 * k, 0.18 * k, 0.07 * k), (x, -0.03 * k, z - 0.64 * k), MAT_BOOT),
+        box((0.115 * k, 0.19 * k, 0.03 * k), (x, -0.03 * k, z - 0.69 * k), MAT_SOLE),
+    ]
+
+
 # --------------------------------------------------------------- characters
 
 def build_figure(name, hat=None, coat=MAT_COAT, style="hoodie", apron=False,
-                 carry=None, props=None, scale=1.0, location=(0, 0, 0)):
+                 carry=None, props=None, scale=1.0, location=(0, 0, 0),
+                 shorts=False):
     """
     Assemble one person as a parented rig of named parts.
 
@@ -326,6 +369,8 @@ def build_figure(name, hat=None, coat=MAT_COAT, style="hoodie", apron=False,
         root_parts.extend(backpack_parts(scale))
     elif carry == "tote":
         root_parts.extend(tote_parts(scale))
+    elif carry == "sling":
+        root_parts.extend(sling_bag(scale))
     if props:
         root_parts.extend(props)
 
@@ -341,8 +386,10 @@ def build_figure(name, hat=None, coat=MAT_COAT, style="hoodie", apron=False,
                     arm_parts(side, coat, scale=scale, short=short_sleeves),
                     root, origin=(side * 0.215 * scale, 0, 1.3 * scale))
     for side, label in ((-1, "LEG_L"), (1, "LEG_R")):
-        make_object(f"{name}.{label}", leg_parts(side, scale=scale), root,
-                    origin=(side * 0.088 * scale, 0, 0.74 * scale))
+        legs = short_leg_parts if shorts else leg_parts
+        make_object(f"{name}.{label}",
+                    legs(side, scale=scale),
+                    root, origin=(side * 0.088 * scale, 0, 0.74 * scale))
     return root
 
 
@@ -376,9 +423,9 @@ def reset_scene():
 def build():
     reset_scene()
 
-    # The courier: a teenager in a hoodie, backwards cap and a backpack.
-    build_figure("Courier", hat="cap_back", style="hoodie", carry="backpack",
-                 scale=0.87, location=(0, 0, 0))
+    # The courier: yellow tee, cropped trousers, sling bag, messy bob.
+    build_figure("Courier", hat="bob", style="tee", carry="sling", shorts=True,
+                 scale=0.9, location=(0, 0, 0))
 
     # The villagers, in present-day clothes rather than period costume.
     build_figure("Villager_Postmaster", hat="cap", style="jacket",
