@@ -1,5 +1,5 @@
 {
-  "name": "budbringer",
+  "name": "postilion",
   "version": "1.0.0",
   "description": "A tiny spherical-planet mail-courier game. Walk around a handcrafted world, deliver letters, meet characters.",
   "type": "module",
@@ -26,7 +26,15 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
+    "@gltf-transform/cli": "^4.4.2",
     "howler": "^2.2.4",
-    "three": "^0.170.0"
+    "postprocessing": "^6.39.4",
+    "simplex-noise": "^4.0.3",
+    "stats-gl": "^4.2.3",
+    "three": "^0.170.0",
+    "three-custom-shader-material": "^6.4.0",
+    "three-mesh-bvh": "^0.9.14",
+    "troika-three-text": "^0.52.5",
+    "tweakpane": "^4.0.5"
   }
 }

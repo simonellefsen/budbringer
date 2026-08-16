@@ -53,7 +53,7 @@ export class NPCManager {
       greetings: [
         "Welcome, young courier! Ready to deliver some letters?",
         "The mail must flow! Got a fresh batch for you.",
-        "Ah, my favorite budbringer! Here's today's route."
+        "Ah, my favorite postilion! Here's today's route."
       ],
       biome: BiomeType.TOWN
     });

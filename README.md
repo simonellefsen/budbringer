@@ -1,4 +1,4 @@
-# budbringer
+# the postilion
 
 A tiny spherical-planet mail-courier game. Walk around a handcrafted world, deliver letters, meet characters, and discover secrets.
 
@@ -8,7 +8,7 @@ A tiny spherical-planet mail-courier game. Walk around a handcrafted world, deli
 
 ## About
 
-**budbringer** is an original browser game inspired by the pocket-world delivery genre. You play as a young courier on a small spherical planet, delivering letters between the villagers while exploring charming biomes and uncovering secrets.
+**the postilion** is an original browser game inspired by the pocket-world delivery genre. You play as a young courier on a small spherical planet, delivering letters between the villagers while exploring charming biomes and uncovering secrets.
 
 ### Features
 
@@ -91,7 +91,7 @@ npm run preview
 ## Project Structure
 
 ```
-budbringer/
+postilion/
 ├── src/
 │   ├── main.ts              # Entry point
 │   ├── core/                # Game engine (Game, Camera, Input, Delivery)
