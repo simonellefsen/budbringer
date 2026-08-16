@@ -3,6 +3,7 @@ import { ToonMaterial } from '../utils/ToonMaterial';
 import { GROUND, BUILDING, ROAD, MATERIAL, ACCENT, SKY, pick } from '../utils/palette';
 import { Kit, SHOP_SIGNS } from './Kit';
 import { distributeRegions, PlacedRegion } from './Regions';
+import { Terrain } from './Terrain';
 
 export enum BiomeType {
   TOWN,
@@ -68,6 +69,8 @@ export class Planet {
   public anchors: Map<string, THREE.Vector3> = new Map();
   /** Named regions, for the place-name card and for directing deliveries. */
   public areas: Area[] = [];
+  /** The height field. Everything that touches the ground asks this. */
+  public terrain!: Terrain;
 
   constructor(radius: number, kit: Kit | null = null) {
     this.kit = kit;
@@ -76,9 +79,16 @@ export class Planet {
     this.decorations = new THREE.Group();
     this.clouds = new THREE.Group();
     
-    this.createPlanetSphere();
     this.defineBiomes();
     this.spawnPoint = this.computeSpawnPoint();
+
+    // The river axis decides where the valley is carved, so it is fixed before
+    // the terrain is built rather than inside createRiver.
+    this.riverAxis = new THREE.Vector3(0.52, 0.74, -0.42).normalize();
+    this.terrain = new Terrain({ planetRadius: radius, riverAxis: this.riverAxis });
+    this.reserveLevelGround();
+
+    this.createPlanetSphere();
     this.createRoads();
     this.createDecorations();
     this.createClouds();
@@ -87,22 +97,48 @@ export class Planet {
     this.mesh.add(this.clouds);
   }
 
+  /**
+   * Level ground for everywhere people built, before the mesh is generated.
+   *
+   * A townhouse on a 30-degree slope has its floor at the height of its centre
+   * and its corners in the air, so settlements get flattened rather than the
+   * buildings being made to conform.
+   */
+  private reserveLevelGround(): void {
+    const town = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
+    this.terrain.addFlatSpot(town, 22);
+    this.terrain.addFlatSpot(this.spawnPoint, 12);
+
+    // The bridge approach, so the crossing meets the banks squarely.
+    const nearest = town.clone()
+      .sub(this.riverAxis.clone().multiplyScalar(town.dot(this.riverAxis)))
+      .normalize();
+    this.terrain.addFlatSpot(nearest, 9);
+  }
+
   private createPlanetSphere(): void {
     const geometry = new THREE.IcosahedronGeometry(this.radius, 5);
-    
+
     const posAttr = geometry.getAttribute('position');
     const colors: number[] = [];
-    
+    const dir = new THREE.Vector3();
+
     for (let i = 0; i < posAttr.count; i++) {
-      const x = posAttr.getX(i);
-      const y = posAttr.getY(i);
-      const z = posAttr.getZ(i);
-      
-      const pos = new THREE.Vector3(x, y, z);
-      const color = this.getBiomeColorAtPosition(pos);
+      dir.set(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)).normalize();
+
+      // Displace to the height field. Elevation depends only on direction, so
+      // the icosahedron's duplicated corner vertices move identically and the
+      // mesh cannot split along a seam.
+      const surface = this.terrain.surfacePoint(dir);
+      posAttr.setXYZ(i, surface.x, surface.y, surface.z);
+
+      const color = this.getBiomeColorAtPosition(dir, this.terrain.heightAt(dir));
       colors.push(color.r, color.g, color.b);
     }
-    
+
+    posAttr.needsUpdate = true;
+    geometry.computeVertexNormals();
+
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     
     const material = ToonMaterial.create({
@@ -143,12 +179,11 @@ export class Planet {
     ];
   }
 
-  private getBiomeColorAtPosition(pos: THREE.Vector3): THREE.Color {
+  private getBiomeColorAtPosition(pos: THREE.Vector3, height: number = 0): THREE.Color {
     const normalizedPos = pos.clone().normalize();
-    
-    const baseGreen = new THREE.Color(GROUND.base);
-    let finalColor = baseGreen.clone();
-    
+
+    const finalColor = new THREE.Color(GROUND.base);
+
     for (const biome of this.biomes) {
       const dist = normalizedPos.distanceTo(biome.center);
       if (dist < biome.radius) {
@@ -157,7 +192,17 @@ export class Planet {
         finalColor.lerp(biome.color, smoothWeight);
       }
     }
-    
+
+    // Bare rock on the high ground and silt down in the valley, so relief
+    // reads in colour as well as in silhouette.
+    if (height > 3.2) {
+      finalColor.lerp(new THREE.Color(MATERIAL.stoneCool),
+        THREE.MathUtils.smoothstep(height, 3.2, 8.5) * 0.75);
+    } else if (height < -1.2) {
+      finalColor.lerp(new THREE.Color(GROUND.seaside),
+        THREE.MathUtils.smoothstep(-height, 1.2, 3.2) * 0.7);
+    }
+
     return finalColor;
   }
 
@@ -208,9 +253,9 @@ export class Planet {
       const matrix = new THREE.Matrix4();
       matrix.makeBasis(right, up, forward);
       
-      road.position.copy(pos);
+      road.position.copy(this.terrain.surfacePoint(pos.clone().normalize()));
       road.quaternion.setFromRotationMatrix(matrix);
-      
+
       this.decorations.add(road);
     }
   }
@@ -394,15 +439,11 @@ export class Planet {
   private createRiver(): void {
     const townCenter = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
 
-    // The river runs on the great circle perpendicular to this axis, so how
-    // far it passes from the village depends only on the axis' Y component
-    // (the village sits on +Y): distance = R * (90deg - angle(town, axis)).
-    //
-    // The old axis put it 7 units out, which stacked the bridge, the square and
-    // the churchyard on top of each other — the place-name lookup takes the
-    // smallest matching region, so standing at the church announced Le Vieux
-    // Pont. At 25 units the riverside is its own part of the map.
-    this.riverAxis = new THREE.Vector3(0.52, 0.74, -0.42).normalize();
+    // The axis is fixed in the constructor: the terrain needs it to carve the
+    // valley before any geometry exists. How far the river passes from the
+    // village depends only on its Y component (the village sits on +Y):
+    // distance = R * (90deg - angle(town, axis)). At 25 units the riverside is
+    // its own part of the map rather than stacked on the square.
 
     let u = new THREE.Vector3().crossVectors(this.riverAxis, townCenter);
     if (u.lengthSq() < 1e-6) u = new THREE.Vector3().crossVectors(this.riverAxis, new THREE.Vector3(1, 0, 0));
@@ -424,9 +465,11 @@ export class Planet {
       const w0 = halfWidth * (1 + Math.sin(a0 * 3) * 0.22);
       const w1 = halfWidth * (1 + Math.sin(a1 * 3) * 0.22);
 
+      // Water surface sits a little above the carved valley floor.
+      const waterRadius = this.radius + this.terrain.waterLevel + 0.55;
       const edge = (centre: THREE.Vector3, w: number, side: number) =>
         centre.clone().addScaledVector(this.riverAxis, (side * w) / this.radius)
-          .normalize().multiplyScalar(this.radius - 0.28);
+          .normalize().multiplyScalar(waterRadius);
 
       const a = edge(centre0, w0, 1);
       const b = edge(centre1, w1, 1);
@@ -641,7 +684,11 @@ export class Planet {
     position: THREE.Vector3,
     faceToward: THREE.Vector3
   ): void {
-    const up = position.clone().normalize();
+    // Sit on the ground, and lean with it. Using the radial direction as "up"
+    // on sloping terrain leaves things standing vertically out of a hillside.
+    const dir = position.clone().normalize();
+    position = this.terrain.surfacePoint(dir);
+    const up = this.terrain.normalAt(dir);
 
     const forward = faceToward.clone().sub(position);
     forward.sub(up.clone().multiplyScalar(forward.dot(up)));
@@ -702,9 +749,13 @@ export class Planet {
       const road = new THREE.Mesh(geo, ToonMaterial.create({ color: ROAD.asphalt }));
       road.receiveShadow = true;
 
-      const right = new THREE.Vector3().crossVectors(station.up, station.tangent).normalize();
-      const matrix = new THREE.Matrix4().makeBasis(right, station.up, station.tangent);
-      road.position.copy(station.pos);
+      const groundUp = this.terrain.normalAt(station.pos.clone().normalize());
+      let along = station.tangent.clone();
+      along.sub(groundUp.clone().multiplyScalar(along.dot(groundUp))).normalize();
+
+      const right = new THREE.Vector3().crossVectors(groundUp, along).normalize();
+      const matrix = new THREE.Matrix4().makeBasis(right, groundUp, along);
+      road.position.copy(this.terrain.surfacePoint(station.pos.clone().normalize()));
       road.quaternion.setFromRotationMatrix(matrix);
 
       this.decorations.add(road);
@@ -1648,10 +1699,12 @@ export class Planet {
   }
 
   private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3, yawAngle?: number): void {
+    const groundDir = position.clone().normalize();
+    position = this.terrain.surfacePoint(groundDir);
     // Use Matrix4.makeBasis for correct orientation
     // This ensures local +Y points outward along the surface normal
     // IMPORTANT: Do NOT use object.rotateY() after this - it rotates around WORLD Y, not local Y!
-    const up = position.clone().normalize();
+    const up = this.terrain.normalAt(groundDir);
     
     object.position.copy(position);
     
@@ -1706,7 +1759,13 @@ export class Planet {
   }
 
   public getSpawnPosition(): THREE.Vector3 {
-    return this.spawnPoint.clone().normalize().multiplyScalar(this.radius + 0.5);
+    const dir = this.spawnPoint.clone().normalize();
+    return dir.multiplyScalar(this.terrain.surfaceRadius(dir) + 0.5);
+  }
+
+  /** Distance from the planet centre to the ground below a direction. */
+  public getGroundRadius(direction: THREE.Vector3): number {
+    return this.terrain.surfaceRadius(direction);
   }
 
   /**
@@ -1736,7 +1795,7 @@ export class Planet {
   }
 
   public getSurfacePosition(direction: THREE.Vector3): THREE.Vector3 {
-    return direction.clone().normalize().multiplyScalar(this.radius);
+    return this.terrain.surfacePoint(direction);
   }
 
   /** True if the mesh belongs to the cloud layer. */
