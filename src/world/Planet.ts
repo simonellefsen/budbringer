@@ -806,34 +806,37 @@ export class Planet {
   }
 
   /**
-   * Hang a waterfall wherever a high bank drops into the river.
+   * A painted sheet down a real bank, not the kit tower.
    *
-   * The reference globe is full of these — a painted sheet of water against
-   * a cliff is the fastest way to make relief read as landscape rather than
-   * as a lumpy ball.
+   * The kit piece is timber boxes with a blue face. Sitting that on the
+   * river and then settling it by a world AABB launched it up the hillside,
+   * which is the "sky waterfall" next to the houses. This follows the cliff
+   * from the lip into the river instead.
    */
   private createWaterfalls(): void {
-    if (!this.kit?.has('Waterfall')) return;
-
     const town = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
     let u = new THREE.Vector3().crossVectors(this.riverAxis, town);
     if (u.lengthSq() < 1e-6) u = new THREE.Vector3().crossVectors(this.riverAxis, new THREE.Vector3(1, 0, 0));
     u.normalize();
     const v = new THREE.Vector3().crossVectors(this.riverAxis, u).normalize();
 
+    const waterRadius = this.radius + this.terrain.waterLevel + 0.55;
     let placed = 0;
     for (let i = 0; i < 56 && placed < 2; i++) {
       const a = (i / 56) * Math.PI * 2;
       const centre = u.clone().multiplyScalar(Math.cos(a)).addScaledVector(v, Math.sin(a));
 
-      // Keep falls off the lake — a kit waterfall on that ridge reads as a
-      // mystery building with a blue halo.
       const toLake = this.radius * Math.acos(
         THREE.MathUtils.clamp(centre.dot(this.lakeCenter), -1, 1)
       );
       if (toLake < 22) continue;
 
-      // Sample the bank a little off the water, both sides, keep the steeper.
+      // Keep falls out of the village so a sheet does not land on a facade.
+      const toTown = this.radius * Math.acos(
+        THREE.MathUtils.clamp(centre.dot(town), -1, 1)
+      );
+      if (toTown < 22) continue;
+
       let bestBank: THREE.Vector3 | null = null;
       let bestDrop = 0;
       for (const side of [-1, 1]) {
@@ -847,16 +850,102 @@ export class Planet {
       if (!bestBank || bestDrop < 8.5) continue;
 
       const pool = centre.clone().multiplyScalar(this.radius);
-      const bankSpot = bestBank.clone().multiplyScalar(this.radius);
       if (!this.isFree(pool, 6)) continue;
 
-      const fall = this.addPiece('Waterfall', pool, bankSpot);
-      if (!fall) continue;
+      const sheet = this.buildFallSheet(bestBank, centre, waterRadius);
+      if (!sheet) continue;
+      this.decorations.add(sheet);
 
-      this.addPiece('Cliff_Rock', bankSpot, pool);
       if (placed === 0) this.markArea('Les Chutes', pool, 11);
+      this.claim(pool, 6);
       placed++;
     }
+  }
+
+  /**
+   * Ribbon from the visible bank down onto the river.
+   *
+   * Upper rows sit just outside the grass mesh; the last stretch eases onto
+   * the water plane so the sheet meets the river instead of hanging above it.
+   */
+  private buildFallSheet(
+    lipDir: THREE.Vector3,
+    poolDir: THREE.Vector3,
+    waterRadius: number
+  ): THREE.Mesh | null {
+    const along = new THREE.Vector3().crossVectors(lipDir, poolDir);
+    if (along.lengthSq() < 1e-8) {
+      along.crossVectors(lipDir, new THREE.Vector3(0, 1, 0));
+      if (along.lengthSq() < 1e-8) along.crossVectors(lipDir, new THREE.Vector3(1, 0, 0));
+    }
+    along.normalize();
+
+    const rows = 10;
+    const cols = 6;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const dir = new THREE.Vector3();
+
+    const pointAt = (row: number, col: number): THREE.Vector3 => {
+      const t = row / (rows - 1);
+      dir.copy(lipDir).lerp(poolDir, t).normalize();
+      const cliffR = this.meshRadiusAt(dir);
+      const meetWater = THREE.MathUtils.smoothstep(t, 0.72, 1);
+      const r = THREE.MathUtils.lerp(cliffR + 0.16, waterRadius + 0.05, meetWater);
+      const halfW = 1.45 * (1 + 0.1 * Math.sin(t * Math.PI));
+      const s = (col / (cols - 1)) * 2 - 1;
+      return dir.clone()
+        .addScaledVector(along, (s * halfW) / this.radius)
+        .normalize()
+        .multiplyScalar(r);
+    };
+
+    for (let row = 0; row < rows - 1; row++) {
+      for (let col = 0; col < cols - 1; col++) {
+        const p00 = pointAt(row, col);
+        const p10 = pointAt(row, col + 1);
+        const p01 = pointAt(row + 1, col);
+        const p11 = pointAt(row + 1, col + 1);
+        const u0 = col / (cols - 1);
+        const u1 = (col + 1) / (cols - 1);
+        const v0 = (row / (rows - 1)) * 1.8;
+        const v1 = ((row + 1) / (rows - 1)) * 1.8;
+        positions.push(
+          p00.x, p00.y, p00.z, p01.x, p01.y, p01.z, p10.x, p10.y, p10.z
+        );
+        uvs.push(u0, v0, u0, v1, u1, v0);
+        positions.push(
+          p10.x, p10.y, p10.z, p01.x, p01.y, p01.z, p11.x, p11.y, p11.z
+        );
+        uvs.push(u1, v0, u0, v1, u1, v1);
+      }
+    }
+
+    if (positions.length < 9) return null;
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.computeVertexNormals();
+
+    const mesh = new THREE.Mesh(geometry, this.fallMaterial());
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  /** Scrolling gouache, used only by the hanging sheets. */
+  private fallMaterial(): THREE.MeshToonMaterial {
+    const material = ToonMaterial.create({
+      color: GROUND.water,
+      transparent: true,
+      opacity: 0.94,
+      map: PaintedTextures.get('water', 3),
+      unique: true,
+      side: THREE.DoubleSide
+    });
+    material.depthWrite = true;
+    PaintedTextures.fallWater(material);
+    return material;
   }
 
   /** The church, set back from the square on its own patch of ground. */
@@ -1528,7 +1617,6 @@ export class Planet {
     } else {
       this.placeOnSphere(piece, position, undefined, lean);
     }
-    this.settleOnGround(piece);
     this.decorations.add(piece);
 
     const footprint: Record<string, number> = {
@@ -2136,45 +2224,60 @@ export class Planet {
   }
 
   /**
-   * Drop an object along `up` until its lowest corners meet the ground.
+   * Local-space bounds of an assembled kit piece.
    *
-   * Standing a box upright on a slope puts the downhill feet in the air.
-   * This pulls the whole piece down so those feet touch, and a little
-   * further so the uphill side sits in the dirt rather than hovering.
+   * World AABBs on a sphere have corners that are not on the object. Sampling
+   * the ground there is what launched the waterfall up the hillside.
+   */
+  private localBounds(object: THREE.Object3D): THREE.Box3 {
+    const box = new THREE.Box3();
+    const tmp = new THREE.Box3();
+    const toLocal = new THREE.Matrix4();
+    const invWorld = new THREE.Matrix4().copy(object.matrixWorld).invert();
+    object.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      const gb = mesh.geometry.boundingBox;
+      if (!gb || gb.isEmpty()) return;
+      tmp.copy(gb);
+      toLocal.multiplyMatrices(invWorld, mesh.matrixWorld);
+      tmp.applyMatrix4(toLocal);
+      box.union(tmp);
+    });
+    return box;
+  }
+
+  /**
+   * Drop an object along `up` until its downhill feet meet the grass.
+   *
+   * Only drops. Lifting from a world AABB is what put props in the sky.
    */
   private settleOnGround(object: THREE.Object3D): void {
     object.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(object);
-    if (box.isEmpty()) return;
+    const local = this.localBounds(object);
+    if (local.isEmpty()) return;
 
     const up = object.position.clone().normalize();
     const corners = [
-      new THREE.Vector3(box.min.x, box.min.y, box.min.z),
-      new THREE.Vector3(box.min.x, box.min.y, box.max.z),
-      new THREE.Vector3(box.max.x, box.min.y, box.min.z),
-      new THREE.Vector3(box.max.x, box.min.y, box.max.z),
-      new THREE.Vector3(box.min.x, box.max.y, box.min.z),
-      new THREE.Vector3(box.min.x, box.max.y, box.max.z),
-      new THREE.Vector3(box.max.x, box.max.y, box.min.z),
-      new THREE.Vector3(box.max.x, box.max.y, box.max.z)
+      new THREE.Vector3(local.min.x, local.min.y, local.min.z),
+      new THREE.Vector3(local.min.x, local.min.y, local.max.z),
+      new THREE.Vector3(local.max.x, local.min.y, local.min.z),
+      new THREE.Vector3(local.max.x, local.min.y, local.max.z)
     ];
-    corners.sort((a, b) => a.dot(up) - b.dot(up));
 
     let maxAir = -Infinity;
-    for (const corner of corners.slice(0, 4)) {
-      const radius = corner.length();
+    const world = new THREE.Vector3();
+    for (const corner of corners) {
+      world.copy(corner).applyMatrix4(object.matrixWorld);
+      const radius = world.length();
       if (radius < 1e-4) continue;
-      const ground = this.meshRadiusAt(corner);
-      maxAir = Math.max(maxAir, radius - ground);
+      maxAir = Math.max(maxAir, radius - this.meshRadiusAt(world));
     }
-    if (!isFinite(maxAir)) return;
+    if (!isFinite(maxAir) || maxAir < 0.04) return;
 
-    // Positive: downhill feet in the air. Negative: already in the dirt
-    // (the triangle sits above the analytic floor in a valley). A little
-    // extra drop seats the uphill side in the grass.
-    const shift = THREE.MathUtils.clamp(maxAir + 0.08, -6, 6);
-    if (Math.abs(shift) < 0.03) return;
-    object.position.addScaledVector(up, -shift);
+    const drop = Math.min(maxAir + 0.08, 2.4);
+    object.position.addScaledVector(up, -drop);
   }
 
   private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3, yawAngle?: number, lean = 0.12): void {

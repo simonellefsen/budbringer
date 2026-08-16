@@ -10,6 +10,10 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- The kit waterfall was a timber tower. Settling it by a world bounding
+  box launched it up the hillside as a "sky waterfall". Falls are now a
+  painted sheet that follows the cliff into the river, and props only
+  drop onto their own feet — they are never lifted by phantom corners.
 - Courier and villagers hovered on ridges: the planet was 980 triangles
   (~5 m facets) and walkers stood on the analytic crest above those
   faces, plus a leftover 0.5 m foot pad. The sphere is denser now,
