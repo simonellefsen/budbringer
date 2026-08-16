@@ -359,9 +359,13 @@ export class Game {
       this.character.update(delta);
       this.cameraController.update(delta);
       this.updateSunShadow();
-      this.npcManager.update(delta, elapsed);
       this.deliverySystem.update();
       this.secrets.update(elapsed);
+    }
+
+    // Title orbit shows the real village, so villagers keep strolling there.
+    if (this.state === GameState.PLAYING || this.state === GameState.TITLE) {
+      this.npcManager.update(delta, elapsed);
     }
     
     // The title screen orbits the real planet, so it drives the shared camera.
