@@ -92,8 +92,9 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
 
   float edge = max(depthEdge, normalEdge);
 
-  // Let lines fade out toward the far plane so the horizon doesn't turn solid.
-  float fade = 1.0 - smoothstep(uMaxDistance * 0.55, uMaxDistance, dC);
+  // Fade lines out across the same band the fog works over, so ink and fill
+  // disappear together instead of leaving outlines floating in the haze.
+  float fade = 1.0 - smoothstep(uMaxDistance * 0.35, uMaxDistance * 0.95, dC);
   edge *= fade * uOpacity;
 
   outputColor = vec4(mix(inputColor.rgb, uInkColor, edge), inputColor.a);

@@ -17,6 +17,13 @@ const ROAD_THICKNESS = 0.08;
 /** Radius of clear ground kept around the player's start, in world units. */
 const SPAWN_CLEARANCE = 9;
 
+/** A point along a street: where it is, which way it runs, which way is up. */
+interface StreetStation {
+  pos: THREE.Vector3;
+  tangent: THREE.Vector3;
+  up: THREE.Vector3;
+}
+
 interface BiomeData {
   type: BiomeType;
   color: THREE.Color;
@@ -149,28 +156,6 @@ export class Planet {
         this.createConnectingRoad(from, to);
       }
     }
-
-    // A single loop through each settlement, not three concentric ones.
-    for (const biome of this.biomes) {
-      this.createLocalRoadNetwork(biome.center.clone().multiplyScalar(this.radius), 15);
-    }
-  }
-
-  private createLocalRoadNetwork(center: THREE.Vector3, _radius: number): void {
-    const ringRadius = 7;
-    const segments = 22;
-
-    for (let i = 0; i < segments; i++) {
-      const angle = (i / segments) * Math.PI * 2;
-      const pos = this.getOffsetOnSphere(center, angle, ringRadius);
-
-      const roadGeo = new THREE.BoxGeometry(2.6, ROAD_THICKNESS, 2.4);
-      const road = new THREE.Mesh(roadGeo, ToonMaterial.create({ color: ROAD.asphalt }));
-      road.receiveShadow = true;
-
-      this.placeOnSphere(road, pos, angle + Math.PI / 2);
-      this.decorations.add(road);
-    }
   }
 
   private createConnectingRoad(from: THREE.Vector3, to: THREE.Vector3): void {
@@ -212,46 +197,147 @@ export class Planet {
     this.createSeasideArea();
     this.createHillsideArea();
     this.createShrineArea();
-    
+
     // Fill gaps between biomes with additional houses and props
     this.fillGlobalDecorations();
+  }
+
+  // ---------------------------------------------------------------- streets
+
+  /**
+   * Orient an object so its local +Y is the surface normal and its local +Z
+   * points at `faceToward`.
+   *
+   * The kit's buildings have their fronts on +Z: Blender models them facing -Y,
+   * and the glTF exporter's Z-up to Y-up conversion maps Blender -Y onto +Z.
+   */
+  private placeFacing(
+    object: THREE.Object3D,
+    position: THREE.Vector3,
+    faceToward: THREE.Vector3
+  ): void {
+    const up = position.clone().normalize();
+
+    const forward = faceToward.clone().sub(position);
+    forward.sub(up.clone().multiplyScalar(forward.dot(up)));
+
+    if (forward.lengthSq() < 1e-8) {
+      // Degenerate: the target is directly overhead. Any tangent will do.
+      forward.set(0, 1, 0).sub(up.clone().multiplyScalar(up.y));
+      if (forward.lengthSq() < 1e-8) forward.set(1, 0, 0);
+    }
+    forward.normalize();
+
+    // right x up = forward, so makeBasis gives a right-handed frame with the
+    // building's face along +Z.
+    const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+    const matrix = new THREE.Matrix4().makeBasis(right, up, forward);
+
+    object.position.copy(position);
+    object.quaternion.setFromRotationMatrix(matrix);
+  }
+
+  /** Evenly spaced points around a circle of surface-arc `radius` about `center`. */
+  private ringStations(center: THREE.Vector3, radius: number, count: number): StreetStation[] {
+    const stations: StreetStation[] = [];
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const pos = this.getOffsetOnSphere(center, angle, radius);
+      const next = this.getOffsetOnSphere(center, angle + 0.01, radius);
+      const up = pos.clone().normalize();
+      const tangent = next.sub(pos);
+      tangent.sub(up.clone().multiplyScalar(tangent.dot(up))).normalize();
+      stations.push({ pos, tangent, up });
+    }
+    return stations;
+  }
+
+  /** Points along the great-circle arc from `from` to `to`. */
+  private lineStations(from: THREE.Vector3, to: THREE.Vector3, count: number): StreetStation[] {
+    const stations: StreetStation[] = [];
+    for (let i = 0; i <= count; i++) {
+      const t = i / count;
+      const pos = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
+      const ahead = from.clone().lerp(to, Math.min(1, t + 0.01))
+        .normalize().multiplyScalar(this.radius);
+      const up = pos.clone().normalize();
+      const tangent = ahead.sub(pos);
+      tangent.sub(up.clone().multiplyScalar(tangent.dot(up)));
+      if (tangent.lengthSq() < 1e-8) continue;
+      tangent.normalize();
+      stations.push({ pos, tangent, up });
+    }
+    return stations;
+  }
+
+  /** Lay road slabs down the centreline of a run of stations. */
+  private layRoad(stations: StreetStation[], width: number = 2.6): void {
+    for (const station of stations) {
+      const geo = new THREE.BoxGeometry(width, ROAD_THICKNESS, 2.6);
+      const road = new THREE.Mesh(geo, ToonMaterial.create({ color: ROAD.asphalt }));
+      road.receiveShadow = true;
+
+      const right = new THREE.Vector3().crossVectors(station.up, station.tangent).normalize();
+      const matrix = new THREE.Matrix4().makeBasis(right, station.up, station.tangent);
+      road.position.copy(station.pos);
+      road.quaternion.setFromRotationMatrix(matrix);
+
+      this.decorations.add(road);
+    }
+  }
+
+  /**
+   * Line both sides of a street with buildings that face it.
+   *
+   * This is what replaces uniform-random scatter. Placement used to drop
+   * houses at arbitrary positions and arbitrary yaw, so nothing addressed a
+   * road and the town read as a field with objects in it.
+   */
+  private layFrontage(
+    stations: StreetStation[],
+    options: { setback?: number; gapChance?: number; sides?: number[]; stride?: number } = {}
+  ): void {
+    const {
+      setback = 4.6,
+      gapChance = 0.22,
+      sides = [1, -1],
+      stride = 1
+    } = options;
+
+    for (let i = 0; i < stations.length; i += stride) {
+      const station = stations[i];
+      const across = new THREE.Vector3()
+        .crossVectors(station.up, station.tangent).normalize();
+
+      for (const side of sides) {
+        // Alleys: the gaps between buildings are as much of the look as the
+        // buildings, so leave some plots empty.
+        if (Math.random() < gapChance) continue;
+
+        const plot = station.pos.clone()
+          .addScaledVector(across, side * setback)
+          .normalize().multiplyScalar(this.radius);
+
+        if (!this.clearOfSpawn(plot, SPAWN_CLEARANCE * 0.8)) continue;
+
+        const house = this.createHouse();
+        this.placeFacing(house, plot, station.pos);
+        this.decorations.add(house);
+      }
+    }
   }
 
   private fillGlobalDecorations(): void {
     // Scatter houses, trees, and props across the entire sphere
     // Dense content to wrap the entire sphere - no empty patches
     
-    const numGlobalHouses = 60; // Dense houses across the globe
     const numGlobalTrees = 70;
     const numGlobalProps = 80;
-    
-    // Random houses everywhere
-    for (let i = 0; i < numGlobalHouses; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const pos = new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta),
-        Math.cos(phi),
-        Math.sin(phi) * Math.sin(theta)
-      ).multiplyScalar(this.radius);
-      
-      // Check distance from biome centers to avoid overlap
-      let tooClose = false;
-      for (const biome of this.biomes) {
-        const dist = pos.clone().normalize().distanceTo(biome.center);
-        if (dist < biome.radius * 0.6) {
-          tooClose = true;
-          break;
-        }
-      }
-      if (tooClose) continue;
-      if (!this.clearOfSpawn(pos)) continue;
 
-      const house = this.createHouse();
-      this.placeOnSphere(house, pos);
-      this.decorations.add(house);
-    }
-    
+    // Roadside hamlets rather than 60 houses scattered at random bearings.
+    // Buildings only exist where a road gives them something to address.
+    this.createRoadsideHamlets();
+
     // Trees everywhere
     for (let i = 0; i < numGlobalTrees; i++) {
       const theta = Math.random() * Math.PI * 2;
@@ -312,6 +398,35 @@ export class Planet {
     this.createGlobalRetainingWalls();
   }
 
+  /**
+   * Small clusters of frontage along the trunk roads between settlements, so
+   * the walk between biomes passes through inhabited places instead of an
+   * evenly dusted field of houses.
+   */
+  private createRoadsideHamlets(): void {
+    for (let i = 0; i < this.biomes.length; i++) {
+      for (let j = i + 1; j < this.biomes.length; j++) {
+        const from = this.biomes[i].center.clone().multiplyScalar(this.radius);
+        const to = this.biomes[j].center.clone().multiplyScalar(this.radius);
+
+        // Two hamlets per trunk road, at a third and two thirds along.
+        for (const t of [0.34, 0.66]) {
+          const mid = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
+          const ahead = from.clone().lerp(to, t + 0.04)
+            .normalize().multiplyScalar(this.radius);
+
+          const span = this.lineStations(
+            mid.clone().lerp(ahead, -1.6).normalize().multiplyScalar(this.radius),
+            mid.clone().lerp(ahead, 2.6).normalize().multiplyScalar(this.radius),
+            3
+          );
+
+          this.layFrontage(span, { setback: 4.6, gapChance: 0.35 });
+        }
+      }
+    }
+  }
+
   private createGlobalRetainingWalls(): void {
     // Add retaining walls at various points around the sphere
     for (let lat = -0.5; lat <= 0.5; lat += 0.5) {
@@ -335,24 +450,37 @@ export class Planet {
     const biome = this.biomes.find(b => b.type === BiomeType.TOWN)!;
     const center = biome.center.clone().multiplyScalar(this.radius);
     
-    // Spaced houses along streets - not cramped rings
-    // Leave clear road corridors for open vistas
-    const houseAngles = [0.3, 0.8, 1.4, 2.0, 2.6, 3.2, 3.8, 4.4, 5.0, 5.6];
-    const houseDists = [8, 12, 16]; // Further apart, leaving central road clear
-    
-    for (const baseDist of houseDists) {
-      for (let i = 0; i < houseAngles.length; i += 2) { // Skip every other to leave gaps
-        const angle = houseAngles[i] + baseDist * 0.05;
-        const dist = baseDist + Math.random() * 3;
-        const offset = this.getOffsetOnSphere(center, angle, dist);
-        
-        if (!this.clearOfSpawn(offset)) continue;
+    // The town is a ring road with buildings addressing it from both sides,
+    // plus radial lanes running out of it. Everything faces a street.
+    const ringRadius = 11;
+    const ring = this.ringStations(center, ringRadius, 20);
+    this.layRoad(ring, 3.0);
+    this.layFrontage(ring, { setback: 5.0, gapChance: 0.24 });
 
-        const house = this.createHouse();
-        this.placeOnSphere(house, offset, angle + Math.PI + (Math.random() - 0.5) * 0.2);
-        this.decorations.add(house);
-      }
+    // Radial lanes off the ring. Their outer frontage forms the town edge.
+    const laneCount = 4;
+    for (let i = 0; i < laneCount; i++) {
+      const angle = (i / laneCount) * Math.PI * 2 + 0.4;
+      const inner = this.getOffsetOnSphere(center, angle, ringRadius + 1);
+      const outer = this.getOffsetOnSphere(center, angle, ringRadius + 11);
+
+      const lane = this.lineStations(inner, outer, 5);
+      this.layRoad(lane, 2.4);
+      this.layFrontage(lane, { setback: 4.4, gapChance: 0.3, stride: 1 });
     }
+
+    // A short high street running past the start, so the opening shot looks
+    // down a corridor rather than across open ground.
+    const spawn = this.spawnPoint.clone();
+    const towardCenter = center.clone().sub(spawn).normalize();
+    const highStart = spawn.clone().addScaledVector(towardCenter, -7)
+      .normalize().multiplyScalar(this.radius);
+    const highEnd = spawn.clone().addScaledVector(towardCenter, 16)
+      .normalize().multiplyScalar(this.radius);
+
+    const highStreet = this.lineStations(highStart, highEnd, 7);
+    this.layRoad(highStreet, 3.0);
+    this.layFrontage(highStreet, { setback: 5.2, gapChance: 0.18 });
     
     // Multiple vending machines
     for (let i = 0; i < 5; i++) {

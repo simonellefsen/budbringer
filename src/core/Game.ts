@@ -238,7 +238,14 @@ export class Game {
     const normalPass = new NormalPass(this.scene, this.camera);
     this.composer.addPass(normalPass);
 
-    this.inkEffect = new InkEffect({ normalBuffer: normalPass.texture });
+    // Fade the lines out over the same range the fog dissolves geometry.
+    // Left on its own constant, the ink kept drawing edges on shapes the fog
+    // had already erased, so distance read as wireframe in mist.
+    const fog = this.scene.fog as THREE.Fog;
+    this.inkEffect = new InkEffect({
+      normalBuffer: normalPass.texture,
+      maxDistance: fog ? fog.far : 60
+    });
     this.composer.addPass(new EffectPass(this.camera, this.inkEffect));
 
     this.composer.setSize(window.innerWidth, window.innerHeight);
