@@ -14,6 +14,7 @@ import { Secrets } from '../world/Secrets';
 import { SKY, LIGHT } from '../utils/palette';
 import { EffectComposer, RenderPass, EffectPass, NormalPass } from 'postprocessing';
 import { InkEffect } from '../utils/InkEffect';
+import { Kit } from '../world/Kit';
 
 export enum GameState {
   TITLE,
@@ -40,6 +41,7 @@ export class Game {
   public audioManager!: AudioManager;
   public secrets!: Secrets;
   private sunLight!: THREE.DirectionalLight;
+  public kit!: Kit;
   private composer!: EffectComposer;
   private inkEffect!: InkEffect;
 
@@ -166,8 +168,17 @@ export class Game {
 
   private async setupWorld(): Promise<void> {
     ToonMaterial.init();
-    
-    this.planet = new Planet(this.planetRadius);
+
+    // Load the Blender kit before the world is built; Planet falls back to the
+    // old primitive houses if it fails, so a bad export never blocks the game.
+    this.kit = new Kit();
+    try {
+      await this.kit.load();
+    } catch (err) {
+      console.warn('Building kit failed to load, using primitive houses:', err);
+    }
+
+    this.planet = new Planet(this.planetRadius, this.kit);
     this.scene.add(this.planet.mesh);
     
     this.inputManager = new InputManager(this);

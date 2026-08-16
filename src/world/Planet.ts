@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { GROUND, BUILDING, ROAD, MATERIAL, ACCENT, SKY, pick } from '../utils/palette';
+import { Kit, KitPiece } from './Kit';
 
 export enum BiomeType {
   TOWN,
@@ -34,8 +35,11 @@ export class Planet {
   private windTime: number = 0;
   private clouds: THREE.Group;
   private spawnPoint!: THREE.Vector3;
+  private kit: Kit | null = null;
+  private houseVariant = 0;
 
-  constructor(radius: number) {
+  constructor(radius: number, kit: Kit | null = null) {
+    this.kit = kit;
     this.radius = radius;
     this.mesh = new THREE.Group();
     this.decorations = new THREE.Group();
@@ -243,7 +247,7 @@ export class Planet {
       if (tooClose) continue;
       if (!this.clearOfSpawn(pos)) continue;
 
-      const house = this.createJapaneseHouse();
+      const house = this.createHouse();
       this.placeOnSphere(house, pos);
       this.decorations.add(house);
     }
@@ -344,7 +348,7 @@ export class Planet {
         
         if (!this.clearOfSpawn(offset)) continue;
 
-        const house = this.createJapaneseHouse();
+        const house = this.createHouse();
         this.placeOnSphere(house, offset, angle + Math.PI + (Math.random() - 0.5) * 0.2);
         this.decorations.add(house);
       }
@@ -391,7 +395,26 @@ export class Planet {
     this.decorations.add(wall);
   }
 
-  private createJapaneseHouse(): THREE.Group {
+  private static readonly HOUSE_PIECES: KitPiece[] = [
+    'House_TallA', 'House_MidB', 'House_NarrowC'
+  ];
+
+  /**
+   * A street-front building. Comes from the Blender kit when it has loaded,
+   * and falls back to the old primitive assembly so a missing GLB degrades
+   * to a playable world rather than an empty one.
+   */
+  private createHouse(): THREE.Object3D {
+    if (this.kit && this.kit.isLoaded) {
+      const piece = Planet.HOUSE_PIECES[this.houseVariant % Planet.HOUSE_PIECES.length];
+      const built = this.kit.instance(piece, this.houseVariant);
+      this.houseVariant++;
+      if (built) return built;
+    }
+    return this.createPrimitiveHouse();
+  }
+
+  private createPrimitiveHouse(): THREE.Group {
     const house = new THREE.Group();
     
     // Random house colors for variety
