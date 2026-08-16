@@ -11,8 +11,8 @@ import { ACCENT, INK, SKY } from '../utils/palette';
  * because you have already built the thing you would be drawing.
  *
  * Toggling holds the courier still, lifts the camera off the surface and out
- * to an orbit, and marks the places that matter: where you are, and who you
- * are looking for.
+ * to an orbit, and marks the places that matter: where you are, who you are
+ * looking for, and every named region you have already walked through.
  */
 
 /** How far out the camera sits, as a multiple of the planet radius. */
@@ -23,6 +23,8 @@ export class MapView {
   private markers: THREE.Group;
   private playerPin!: THREE.Object3D;
   private targetPin!: THREE.Object3D;
+  private placeMarks: Map<string, THREE.Object3D> = new Map();
+  private labelCache: Map<string, THREE.Sprite> = new Map();
 
   private active = false;
   private spin = 0;
@@ -65,6 +67,76 @@ export class MapView {
     return pin;
   }
 
+  /** A small disc plus a name, for a region the courier has already visited. */
+  private createPlaceMark(name: string): THREE.Object3D {
+    const mark = new THREE.Group();
+    const disc = new THREE.Mesh(
+      new THREE.SphereGeometry(0.7, 8, 6),
+      new THREE.MeshBasicMaterial({ color: ACCENT.teal })
+    );
+    disc.position.y = 2.1;
+    mark.add(disc);
+
+    const label = this.nameSprite(name);
+    label.position.y = 4.4;
+    mark.add(label);
+    return mark;
+  }
+
+  private nameSprite(name: string): THREE.Sprite {
+    const cached = this.labelCache.get(name);
+    if (cached) return cached;
+
+    const width = 512;
+    const height = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, width, height);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    let size = 52;
+    do {
+      ctx.font = `700 ${size}px "Patrick Hand", "Georgia", serif`;
+      if (ctx.measureText(name).width <= width - 36) break;
+      size -= 2;
+    } while (size > 28);
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = '#2a2118';
+    ctx.fillStyle = '#fffdf6';
+    ctx.strokeText(name, width / 2, height / 2);
+    ctx.fillText(name, width / 2, height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: texture,
+      depthTest: true,
+      sizeAttenuation: true
+    }));
+    sprite.scale.set(11, 2.75, 1);
+    this.labelCache.set(name, sprite);
+    return sprite;
+  }
+
+  private syncPlaceMarks(): void {
+    const visited = this.game.visitedPlaces;
+    for (const [name, mark] of this.placeMarks) {
+      if (visited.has(name)) continue;
+      this.markers.remove(mark);
+      this.placeMarks.delete(name);
+    }
+    for (const name of visited) {
+      if (this.placeMarks.has(name)) continue;
+      const area = this.game.planet.areas.find(a => a.name === name);
+      if (!area) continue;
+      const mark = this.createPlaceMark(name);
+      this.placeMarks.set(name, mark);
+      this.markers.add(mark);
+    }
+  }
+
   public get isOpen(): boolean {
     return this.active;
   }
@@ -94,6 +166,7 @@ export class MapView {
 
     this.game.state = GameState.PAUSED;
     this.game.inputManager.disable();
+    this.syncPlaceMarks();
     this.markers.visible = true;
   }
 
@@ -154,6 +227,16 @@ export class MapView {
       this.placePin(this.targetPin, target.mesh.position);
     } else {
       this.targetPin.visible = false;
+    }
+
+    for (const [name, mark] of this.placeMarks) {
+      const area = this.game.planet.areas.find(a => a.name === name);
+      if (!area) {
+        mark.visible = false;
+        continue;
+      }
+      mark.visible = true;
+      this.placePin(mark, area.center);
     }
   }
 

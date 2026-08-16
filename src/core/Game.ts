@@ -59,6 +59,8 @@ export class Game {
 
   public state: GameState = GameState.TITLE;
   public planetRadius: number = 30;
+  /** Named regions the courier has stood in, for the world map. */
+  public visitedPlaces: Set<string> = new Set();
   
   private animationId: number = 0;
   private container!: HTMLElement;
@@ -353,6 +355,10 @@ export class Game {
     this.camera.near = 0.1;
     this.camera.far = 200;
     this.camera.updateProjectionMatrix();
+  }
+
+  public rememberPlace(name: string): void {
+    this.visitedPlaces.add(name);
   }
 
   public startGame(): void {

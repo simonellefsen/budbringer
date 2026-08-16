@@ -6,11 +6,12 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- The world map only pins you and the current delivery — named regions
-  you have already walked through have no marks.
+- Map place-marks are silent — you cannot tap a name to face that region.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- The world map only pinned you and the current delivery — named regions
+  you have already walked now show a small teal mark and their name.
 - Waterfalls were a painted slab — the WATER sheets now scroll down the
   cliff face, so Les Chutes reads as falling water.
 - The lake and river were a painted sheet — the gouache tile now drifts
@@ -80,5 +81,4 @@ don't let it go stale.
 
 ## Possible future work
 
-- Mark named regions on the world map, not only the courier and the
-  current delivery.
+- Let a tap on a map name spin the orbit to face that region.

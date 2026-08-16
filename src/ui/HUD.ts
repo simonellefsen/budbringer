@@ -544,6 +544,7 @@ export class HUD {
       return;
     }
 
+    this.game.rememberPlace(name);
     this.areaLabel.textContent = name;
     this.areaLabel.classList.add('visible');
     this.areaHideTimer = window.setTimeout(() => {
