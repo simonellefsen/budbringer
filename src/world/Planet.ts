@@ -24,6 +24,21 @@ interface StreetStation {
   up: THREE.Vector3;
 }
 
+/**
+ * A named region of the village.
+ *
+ * These do the wayfinding: the HUD announces the one you are standing in, and
+ * a delivery task names the one its recipient is waiting in, so "find Fisher
+ * Finn" becomes "go to Les Berges" rather than a hunt around a sphere.
+ */
+export interface Area {
+  name: string;
+  /** Unit vector to the region's middle. */
+  center: THREE.Vector3;
+  /** Surface radius in world units. */
+  radius: number;
+}
+
 interface BiomeData {
   type: BiomeType;
   color: THREE.Color;
@@ -50,6 +65,8 @@ export class Planet {
   private occupied: { pos: THREE.Vector3; radius: number }[] = [];
   /** Named places the NPCs are posted to. */
   public anchors: Map<string, THREE.Vector3> = new Map();
+  /** Named regions, for the place-name card and for directing deliveries. */
+  public areas: Area[] = [];
 
   constructor(radius: number, kit: Kit | null = null) {
     this.kit = kit;
@@ -234,8 +251,15 @@ export class Planet {
   private createRiver(): void {
     const townCenter = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
 
-    // Tilt the river's plane so it passes near, but not through, the village.
-    this.riverAxis = new THREE.Vector3(0.82, 0.24, -0.52).normalize();
+    // The river runs on the great circle perpendicular to this axis, so how
+    // far it passes from the village depends only on the axis' Y component
+    // (the village sits on +Y): distance = R * (90deg - angle(town, axis)).
+    //
+    // The old axis put it 7 units out, which stacked the bridge, the square and
+    // the churchyard on top of each other — the place-name lookup takes the
+    // smallest matching region, so standing at the church announced Le Vieux
+    // Pont. At 25 units the riverside is its own part of the map.
+    this.riverAxis = new THREE.Vector3(0.52, 0.74, -0.42).normalize();
 
     let u = new THREE.Vector3().crossVectors(this.riverAxis, townCenter);
     if (u.lengthSq() < 1e-6) u = new THREE.Vector3().crossVectors(this.riverAxis, new THREE.Vector3(1, 0, 0));
@@ -291,6 +315,8 @@ export class Planet {
     const bridge = this.addPiece('Bridge_Stone', nearest,
       nearest.clone().addScaledVector(along, 5));
 
+    this.markArea('Le Vieux Pont', nearest, 7);
+
     if (bridge) {
       // The kit bridge spans along its own X, so face it across the water.
       const across = nearest.clone().addScaledVector(this.riverAxis, 5);
@@ -308,6 +334,7 @@ export class Planet {
 
     // The keeper stands at the west door, not inside the nave.
     this.anchors.set('church', this.getOffsetOnSphere(site, 2.3 + Math.PI, 9));
+    this.markArea('Église Saint-Martin', site, 14);
 
     // Churchyard wall and a couple of trees.
     for (let i = 0; i < 6; i++) {
@@ -330,6 +357,7 @@ export class Planet {
     this.addPiece('Fountain', square);
     this.addPiece('Well', this.getOffsetOnSphere(square, 1.2, 5));
     this.anchors.set('square', this.getOffsetOnSphere(square, 3.0, 3.2));
+    this.markArea('Place du Marché', square, 11);
 
     // Two shops on the square, so the baker and the postmaster each have a
     // doorway to stand outside rather than a spot in an empty field.
@@ -377,6 +405,8 @@ export class Planet {
 
     const along = new THREE.Vector3().crossVectors(this.riverAxis, onRiver).normalize();
 
+    this.markArea('Les Berges', onRiver, 17);
+
     // The fisher sits on the bank, a little upstream of the bridge.
     this.anchors.set('riverbank', onRiver.clone()
       .addScaledVector(along, 7)
@@ -404,16 +434,38 @@ export class Planet {
 
   /** A smallholding outside the village: barn, fenced paddock, sheep and goats. */
   private createFarm(): void {
-    const center = this.biomes.find(b => b.type === BiomeType.HILLSIDE)!
+    const hillside = this.biomes.find(b => b.type === BiomeType.HILLSIDE)!
       .center.clone().multiplyScalar(this.radius);
+
+    // Put the farm on whichever side of the hillside is furthest from the
+    // water. The river's great circle runs through this biome, and nudging the
+    // site by hand just moved the problem — one attempt parked the paddock
+    // five metres from the bridge, another shunted it next to the village
+    // square. Distance from the river is R * |asin(p . riverAxis)|, so sweep
+    // the bearings and take the best one.
+    let center = hillside;
+    if (this.riverAxis) {
+      let bestOffset = -1;
+      for (let i = 0; i < 24; i++) {
+        const bearing = (i / 24) * Math.PI * 2;
+        const candidate = this.getOffsetOnSphere(hillside, bearing, 13);
+        const offset = Math.abs(candidate.clone().normalize().dot(this.riverAxis));
+        if (offset > bestOffset) {
+          bestOffset = offset;
+          center = candidate;
+        }
+      }
+    }
 
     const yard = this.getOffsetOnSphere(center, 1.1, 6);
     this.addPiece('Barn', yard, center);
     this.anchors.set('outskirts', this.getOffsetOnSphere(center, 4.4, 17));
+    this.markArea('Les Hauteurs', this.getOffsetOnSphere(center, 4.4, 17), 12);
 
     // Paddock fence, a ring of panels each facing the middle.
     const paddock = this.getOffsetOnSphere(yard, 2.6, 10);
     this.anchors.set('farm', this.getOffsetOnSphere(paddock, 2.6 + Math.PI, 9));
+    this.markArea('La Bergerie', paddock, 15);
     const panels = 14;
     for (let i = 0; i < panels; i++) {
       const angle = (i / panels) * Math.PI * 2;
@@ -694,6 +746,8 @@ export class Planet {
     const highEnd = spawn.clone().addScaledVector(towardCenter, 16)
       .normalize().multiplyScalar(this.radius);
 
+    this.markArea('Le Bourg', center, 20);
+
     const highStreet = this.lineStations(highStart, highEnd, 7);
     this.layRoad(highStreet, 3.0);
     this.layFrontage(highStreet, { setback: 7.2, gapChance: 0.18 });
@@ -750,6 +804,38 @@ export class Planet {
    * distance to a biome centre — it had no idea where any building actually
    * ended up.
    */
+  /** Register a named region and, usually, the anchor that sits inside it. */
+  private markArea(name: string, center: THREE.Vector3, radius: number): void {
+    this.areas.push({ name, center: center.clone().normalize(), radius });
+  }
+
+  /**
+   * The named region containing a point, or null out in open country.
+   *
+   * Among the regions that contain the point, the one whose centre is nearest
+   * wins. Preferring the smallest region instead looks reasonable and is not:
+   * on a sphere this size the regions overlap heavily, so a small one anywhere
+   * near a big one swallows it — that rule put the shepherd's farm under
+   * Le Vieux Pont and the fisher under La Bergerie. Nearest-centre asks the
+   * question the player is actually asking, which is what am I standing next
+   * to.
+   */
+  public getAreaAt(position: THREE.Vector3): Area | null {
+    const dir = position.clone().normalize();
+    let best: Area | null = null;
+    let bestArc = Infinity;
+
+    for (const area of this.areas) {
+      const dot = THREE.MathUtils.clamp(dir.dot(area.center), -1, 1);
+      const arc = this.radius * Math.acos(dot);
+      if (arc <= area.radius && arc < bestArc) {
+        best = area;
+        bestArc = arc;
+      }
+    }
+    return best;
+  }
+
   private claim(position: THREE.Vector3, radius: number): void {
     this.occupied.push({ pos: position.clone().normalize(), radius });
   }
@@ -1436,11 +1522,20 @@ export class Planet {
     const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, yaw);
     forward.applyQuaternion(yawQuat);
     
-    // Right = forward x up (for right-handed coordinate system)
-    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-    
-    // Recompute forward to ensure orthogonality
-    forward.crossVectors(up, right).normalize();
+    // right = up x forward, NOT forward x up.
+    //
+    // The comment here used to claim forward x up gave a right-handed system.
+    // It gives a left-handed one: with basis (right, up, forward) the
+    // determinant is right . (up x forward) = -|up x forward|^2, which is
+    // negative — a reflection, not a rotation. setFromRotationMatrix has no
+    // defined behaviour on a reflection, so every object placed this way came
+    // out at an arbitrary tilt, some of them fully upside down.
+    //
+    // This is why trees lay on their sides and props floated at angles.
+    const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+
+    // Re-orthogonalise: right x up == (up x forward) x up == forward.
+    forward.crossVectors(right, up).normalize();
     
     // Build rotation matrix from basis vectors: right (X), up (Y), forward (Z)
     const matrix = new THREE.Matrix4();

@@ -6,9 +6,14 @@ export class HUD {
   private container: HTMLElement;
   private compassArrow: HTMLElement;
   private checklistPanel: HTMLElement;
-  
+  private areaLabel!: HTMLElement;
+
   private visible: boolean = false;
   private checklistVisible: boolean = false;
+
+  /** Which named region the player is standing in, so we only announce changes. */
+  private currentArea: string | null = null;
+  private areaHideTimer: number | null = null;
 
   constructor(game: Game) {
     this.game = game;
@@ -195,6 +200,40 @@ export class HUD {
           pointer-events: auto;
         }
         
+        /* Place-name card, bottom left, in the reference's chunky style:
+           heavy letterforms, hard offset shadow, no panel behind it. */
+        #area-name {
+          position: absolute;
+          left: 34px;
+          bottom: 42px;
+          max-width: 42vw;
+          font-family: 'Patrick Hand', cursive;
+          font-size: clamp(1.9rem, 4.4vw, 3.1rem);
+          line-height: 0.98;
+          font-weight: 700;
+          letter-spacing: 0.03em;
+          text-transform: uppercase;
+          color: #fdfaf2;
+          text-shadow:
+            4px 4px 0 #2a2118,
+            -2px -2px 0 #2a2118, 2px -2px 0 #2a2118,
+            -2px 2px 0 #2a2118, 0 5px 10px rgba(42, 33, 24, 0.28);
+          opacity: 0;
+          transform: translateY(14px);
+          transition: opacity 0.45s ease, transform 0.45s ease;
+          pointer-events: none;
+        }
+
+        #area-name.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          #area-name { transition: opacity 0.2s linear; transform: none; }
+          #area-name.visible { transform: none; }
+        }
+
         #audio-toggle {
           position: absolute;
           top: 20px;
@@ -259,6 +298,8 @@ export class HUD {
         <div id="current-task-text">Talk to Postmaster Maple to start your deliveries!</div>
       </div>
       
+      <div id="area-name"></div>
+
       <div id="interaction-hint">Press E to talk</div>
       
       <div id="emote-wheel">
@@ -272,6 +313,7 @@ export class HUD {
     document.body.appendChild(this.container);
     
     this.compassArrow = document.getElementById('compass-arrow')!;
+    this.areaLabel = document.getElementById('area-name')!;
     this.checklistPanel = document.getElementById('checklist-panel')!;
     
     const checklistToggle = document.getElementById('checklist-toggle')!;
@@ -385,16 +427,63 @@ export class HUD {
       taskText.textContent = 'All deliveries complete! Thanks for playing!';
       this.compassArrow.style.opacity = '0.3';
     } else if (delivery.currentDelivery) {
+      // Name the region the target is waiting in. The compass gives a bearing;
+      // the place name is what actually makes them findable.
       if (delivery.hasLetter) {
-        taskText.textContent = `Deliver to: ${delivery.currentDelivery.to}`;
+        const where = this.areaOfNPC(delivery.currentDelivery.to);
+        taskText.textContent = where
+          ? `Deliver to: ${delivery.currentDelivery.to} — ${where}`
+          : `Deliver to: ${delivery.currentDelivery.to}`;
       } else {
-        taskText.textContent = `Pick up from: ${delivery.currentDelivery.from}`;
+        const where = this.areaOfNPC(delivery.currentDelivery.from);
+        taskText.textContent = where
+          ? `Pick up from: ${delivery.currentDelivery.from} — ${where}`
+          : `Pick up from: ${delivery.currentDelivery.from}`;
       }
     }
-    
+
+    this.updateAreaLabel();
     this.updateCompass();
     this.updateChecklist();
     this.updateInteractionHint(hintEl);
+  }
+
+  /** Which named region a villager is standing in. */
+  private areaOfNPC(name: string): string | null {
+    const npc = this.game.npcManager.getNPCByName(name);
+    if (!npc) return null;
+    return this.game.planet.getAreaAt(npc.mesh.position)?.name ?? null;
+  }
+
+  /**
+   * Announce the region the player has just walked into.
+   *
+   * The card shows on entry and fades after a few seconds rather than sitting
+   * there permanently — it is a signpost, not a status bar.
+   */
+  private updateAreaLabel(): void {
+    const area = this.game.planet.getAreaAt(this.game.character.group.position);
+    const name = area?.name ?? null;
+
+    if (name === this.currentArea) return;
+    this.currentArea = name;
+
+    if (this.areaHideTimer !== null) {
+      window.clearTimeout(this.areaHideTimer);
+      this.areaHideTimer = null;
+    }
+
+    if (!name) {
+      this.areaLabel.classList.remove('visible');
+      return;
+    }
+
+    this.areaLabel.textContent = name;
+    this.areaLabel.classList.add('visible');
+    this.areaHideTimer = window.setTimeout(() => {
+      this.areaLabel.classList.remove('visible');
+      this.areaHideTimer = null;
+    }, 4200);
   }
 
   private updateCompass(): void {
