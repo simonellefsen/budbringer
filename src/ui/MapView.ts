@@ -84,7 +84,9 @@ export class MapView {
     this.savedCamQuat.copy(camera.quaternion);
 
     // Fog is tuned for street level and would swallow a planet seen whole.
+    // Ink fade and the camera clip go with it — same look as the title orbit.
     this.game.suspendFog();
+    this.game.applyOrbitLook();
 
     // Start the orbit above the player, so opening the map does not lose them.
     const up = this.game.character.group.position.clone().normalize();
@@ -105,6 +107,7 @@ export class MapView {
     camera.quaternion.copy(this.savedCamQuat);
 
     this.game.restoreFog();
+    this.game.applyStreetLook();
 
     this.markers.visible = false;
     this.game.state = this.returnState;

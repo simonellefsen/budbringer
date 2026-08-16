@@ -81,8 +81,10 @@ export class Game {
     this.setupUI();
     this.setupAudio();
 
-    // The title screen shows the planet whole, so the fog starts parked.
+    // The title screen shows the planet whole, so the fog starts parked
+    // and the ink fade is pushed out to orbital distance.
     this.suspendFog();
+    this.applyOrbitLook();
 
     this.hideLoading();
     this.animate();
@@ -328,9 +330,35 @@ export class Game {
     }
   }
 
+  /**
+   * Ink and the camera clip are tuned for street level: lines fade with the
+   * fog at ~36 units. The title orbit and the map sit ~90 units out, past
+   * that fade, so every outline vanished. Push the fade to the far side of
+   * the globe and pull `near` up so the depth buffer still has precision.
+   */
+  public applyOrbitLook(): void {
+    if (!this.inkEffect) return;
+    this.inkEffect.maxDistance = this.planetRadius * 5.2;
+    this.inkEffect.thickness = 1.55;
+    this.camera.near = 5;
+    this.camera.far = this.planetRadius * 8;
+    this.camera.updateProjectionMatrix();
+  }
+
+  public applyStreetLook(): void {
+    if (!this.inkEffect) return;
+    const fog = (this.scene.fog ?? this.parkedFog) as THREE.Fog | null;
+    this.inkEffect.maxDistance = fog?.far ?? 36;
+    this.inkEffect.thickness = 1.35;
+    this.camera.near = 0.1;
+    this.camera.far = 200;
+    this.camera.updateProjectionMatrix();
+  }
+
   public startGame(): void {
     this.state = GameState.PLAYING;
     this.restoreFog();
+    this.applyStreetLook();
     this.titleScreen.hide();
     this.hud.show();
     this.inputManager.enable();

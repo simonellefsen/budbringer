@@ -6,11 +6,13 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- Title-screen orbit reuses the main composer — confirm the ink lines
-  still read when the camera is a planet away.
+- The lake and river are still a painted sheet — they do not move.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Title and map orbits sat past the ink fade (~36 units) so the globe
+  lost every outline. Orbit views now push the fade to the far side of
+  the planet and tighten the camera near-plane so depth edges still read.
 - Region kinds repeated every lap — the rota is now one of each (avenue,
   walled garden, quarry, bocage, lakeside boathouse, plus the older
   kinds), so the far side is no longer forest–wheat–pasture again.
@@ -73,6 +75,5 @@ don't let it go stale.
 
 ## Possible future work
 
-- Investigate whether `postprocessing`'s ink/outline pass could also apply
-  to the title-screen orbit view for visual consistency (should already
-  work now that title reuses the main scene/composer — verify).
+- Give the river and lake a slow shimmer so the water is not a painted
+  sheet.
