@@ -6,10 +6,12 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- The lake and river are still a painted sheet — they do not move.
+- Waterfalls are still a static kit mesh — they do not read as falling.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- The lake and river were a painted sheet — the gouache tile now drifts
+  and a soft glint travels along it, so the water reads as water.
 - Title and map orbits sat past the ink fade (~36 units) so the globe
   lost every outline. Orbit views now push the fade to the far side of
   the planet and tighten the camera near-plane so depth edges still read.
@@ -75,5 +77,5 @@ don't let it go stale.
 
 ## Possible future work
 
-- Give the river and lake a slow shimmer so the water is not a painted
-  sheet.
+- Animate the waterfall sheets so they read as falling water, not a
+  painted slab.
