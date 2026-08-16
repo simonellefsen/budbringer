@@ -259,6 +259,8 @@ export class CameraController {
       if (character && character.getObjectById(mesh.id)) return;
       if (planet.isCloudMesh(mesh)) return;
       if (mesh.name === 'SkyDome') return;
+      // Spinning sails would shove the camera every frame.
+      if (this.namedAncestor(mesh, 'WindmillSails')) return;
       if (mesh.geometry instanceof THREE.IcosahedronGeometry && mesh.parent === planet.mesh) {
         return;
       }
@@ -281,6 +283,15 @@ export class CameraController {
 
     this.collidersReady = true;
     this.raycaster.firstHitOnly = true;
+  }
+
+  private namedAncestor(obj: THREE.Object3D, name: string): boolean {
+    let node: THREE.Object3D | null = obj;
+    while (node) {
+      if (node.name === name) return true;
+      node = node.parent;
+    }
+    return false;
   }
 
   private groundClearance(point: THREE.Vector3, extra: number): number {
