@@ -343,11 +343,11 @@ export class TitleScreen {
       forward.applyQuaternion(yawQuat);
     }
     
-    // Right = forward x up (for right-handed coordinate system)
-    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+    // Right = up × forward (right-handed coordinate system: X = Y × Z)
+    const right = new THREE.Vector3().crossVectors(up, forward).normalize();
     
-    // Recompute forward to ensure orthogonality
-    forward.crossVectors(up, right).normalize();
+    // Recompute forward to ensure orthogonality: Z = X × Y
+    forward.crossVectors(right, up).normalize();
     
     // Build rotation matrix from basis vectors
     // Matrix columns are: right (X), up (Y), forward (Z)

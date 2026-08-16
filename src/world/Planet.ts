@@ -220,14 +220,14 @@ export class Planet {
   private createRoadSegment(from: THREE.Vector3, to: THREE.Vector3): void {
     // Calculate road length based on arc distance
     const arcLength = from.angleTo(to) * this.radius;
-    const roadWidth = 2.2;
-    const roadThickness = 0.08; // Thicker so it embeds into surface
-    const roadGeo = new THREE.BoxGeometry(roadWidth, roadThickness, Math.max(arcLength * 1.1, 1.5));
+    const roadWidth = 0.8;
+    const roadThickness = 0.03; // Very thin ribbon
+    const roadGeo = new THREE.BoxGeometry(roadWidth, roadThickness, Math.max(arcLength * 1.1, 1.0));
     const roadMat = ToonMaterial.create({ color: 0x404040 });
     const road = new THREE.Mesh(roadGeo, roadMat);
     road.receiveShadow = true;
     
-    // Position at midpoint FLUSH with the surface (half-embedded)
+    // Position at midpoint on the surface
     const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius);
     road.position.copy(mid);
     
@@ -246,10 +246,10 @@ export class Planet {
     this.decorations.add(road);
     
     // Center line dash - on top of road
-    const lineGeo = new THREE.BoxGeometry(0.15, 0.02, Math.max(arcLength * 0.4, 0.5));
+    const lineGeo = new THREE.BoxGeometry(0.04, 0.01, Math.max(arcLength * 0.4, 0.3));
     const lineMat = ToonMaterial.create({ color: 0xeeeeee });
     const line = new THREE.Mesh(lineGeo, lineMat);
-    const lineMid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius + roadThickness / 2 + 0.01);
+    const lineMid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius + roadThickness / 2 + 0.005);
     line.position.copy(lineMid);
     line.quaternion.copy(road.quaternion);
     this.decorations.add(line);
@@ -257,16 +257,20 @@ export class Planet {
 
   private createLocalRoadNetwork(center: THREE.Vector3, _radius: number): void {
     // Create a grid of roads around biome center
+    // Roads should be narrow ribbons lying flat on the surface
     for (let ring = 0; ring < 3; ring++) {
-      const ringRadius = 3 + ring * 4;
+      const ringRadius = 2 + ring * 2.5;
       const segments = 8 + ring * 4;
       
       for (let i = 0; i < segments; i++) {
         const angle = (i / segments) * Math.PI * 2;
         const pos = this.getOffsetOnSphere(center, angle, ringRadius);
         
-        const roadThickness = 0.08;
-        const roadGeo = new THREE.BoxGeometry(2.2, roadThickness, 3);
+        // Thin road ribbon: width across, small height (radial), length along road
+        const roadWidth = 0.8;
+        const roadThickness = 0.03; // Very thin - lies flat on surface
+        const roadLength = 1.5;
+        const roadGeo = new THREE.BoxGeometry(roadWidth, roadThickness, roadLength);
         const roadMat = ToonMaterial.create({ color: 0x484848 });
         const road = new THREE.Mesh(roadGeo, roadMat);
         road.receiveShadow = true;
@@ -276,16 +280,13 @@ export class Planet {
         this.decorations.add(road);
         
         // Center line dashes - on top of road
-        for (let d = 0; d < 2; d++) {
-          const dashGeo = new THREE.BoxGeometry(0.1, 0.02, 0.5);
-          const dashMat = ToonMaterial.create({ color: 0xffffff });
-          const dash = new THREE.Mesh(dashGeo, dashMat);
-          dash.position.copy(road.position);
-          dash.quaternion.copy(road.quaternion);
-          dash.translateY(roadThickness / 2 + 0.01);
-          dash.translateZ(-0.6 + d * 1.2);
-          this.decorations.add(dash);
-        }
+        const dashGeo = new THREE.BoxGeometry(0.04, 0.01, 0.3);
+        const dashMat = ToonMaterial.create({ color: 0xffffff });
+        const dash = new THREE.Mesh(dashGeo, dashMat);
+        dash.position.copy(road.position);
+        dash.quaternion.copy(road.quaternion);
+        dash.translateY(roadThickness / 2 + 0.005);
+        this.decorations.add(dash);
       }
     }
   }
@@ -296,8 +297,9 @@ export class Planet {
       const t = i / steps;
       const pos = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
       
-      const roadThickness = 0.08;
-      const roadGeo = new THREE.BoxGeometry(1.8, roadThickness, 2);
+      // Scaled down road ribbon
+      const roadThickness = 0.03;
+      const roadGeo = new THREE.BoxGeometry(0.8, roadThickness, 1.0);
       const roadMat = ToonMaterial.create({ color: 0x4a4a4a });
       const road = new THREE.Mesh(roadGeo, roadMat);
       
@@ -311,8 +313,9 @@ export class Planet {
         dir.sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
       }
       
-      const right = new THREE.Vector3().crossVectors(dir, up).normalize();
-      const forward = new THREE.Vector3().crossVectors(up, right).normalize();
+      // Fixed cross product order: right = up × dir for right-handed system
+      const right = new THREE.Vector3().crossVectors(up, dir).normalize();
+      const forward = new THREE.Vector3().crossVectors(right, up).normalize();
       
       const matrix = new THREE.Matrix4();
       matrix.makeBasis(right, up, forward);
@@ -512,62 +515,55 @@ export class Planet {
     const wallColor = wallColors[Math.floor(Math.random() * wallColors.length)];
     const roofColor = roofColors[Math.floor(Math.random() * roofColors.length)];
     
-    // Main body
-    const bodyGeo = new THREE.BoxGeometry(3, 2.5, 2.5);
+    // Main body - scaled to be a small building next to kid-sized courier
+    // Kid is ~1.2 units, house should be ~1.5-2 units tall
+    const bodyGeo = new THREE.BoxGeometry(1.2, 1.0, 1.0);
     const bodyMat = ToonMaterial.create({ color: wallColor });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 1.25;
+    body.position.y = 0.5;
     body.castShadow = true;
     body.receiveShadow = true;
     house.add(body);
     house.add(OutlineMaterial.addOutlineToMesh(body, OUTLINE_OPTS));
     
-    // Pitched roof (proper triangle/gable)
+    // Pitched roof (proper triangle/gable) - scaled down
     const roofShape = new THREE.Shape();
-    roofShape.moveTo(-1.9, 0);
-    roofShape.lineTo(0, 1.2);
-    roofShape.lineTo(1.9, 0);
-    roofShape.lineTo(-1.9, 0);
+    roofShape.moveTo(-0.75, 0);
+    roofShape.lineTo(0, 0.5);
+    roofShape.lineTo(0.75, 0);
+    roofShape.lineTo(-0.75, 0);
     
-    const roofExtrudeSettings = { depth: 3.2, bevelEnabled: false };
+    const roofExtrudeSettings = { depth: 1.3, bevelEnabled: false };
     const roofGeo = new THREE.ExtrudeGeometry(roofShape, roofExtrudeSettings);
     const roofMat = ToonMaterial.create({ color: roofColor });
     const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.position.set(0, 2.5, -1.6);
+    roof.position.set(0, 1.0, -0.65);
     roof.castShadow = true;
     house.add(roof);
     house.add(OutlineMaterial.addOutlineToMesh(roof, OUTLINE_OPTS));
     
-    // Door
-    const doorGeo = new THREE.BoxGeometry(0.8, 1.6, 0.1);
+    // Door - scaled down
+    const doorGeo = new THREE.BoxGeometry(0.3, 0.6, 0.05);
     const doorMat = ToonMaterial.create({ color: 0x6b5344 });
     const door = new THREE.Mesh(doorGeo, doorMat);
-    door.position.set(0, 0.8, 1.3);
+    door.position.set(0, 0.3, 0.52);
     house.add(door);
     
-    // Windows with frames
+    // Windows - scaled down
     for (let i = 0; i < 2; i++) {
-      const windowGeo = new THREE.BoxGeometry(0.6, 0.6, 0.1);
+      const windowGeo = new THREE.BoxGeometry(0.2, 0.2, 0.05);
       const windowMat = ToonMaterial.create({ color: 0x87CEEB });
       const windowMesh = new THREE.Mesh(windowGeo, windowMat);
-      windowMesh.position.set(i === 0 ? -0.9 : 0.9, 1.8, 1.3);
+      windowMesh.position.set(i === 0 ? -0.35 : 0.35, 0.7, 0.52);
       house.add(windowMesh);
-      
-      const frameGeo = new THREE.BoxGeometry(0.7, 0.7, 0.05);
-      const frameMat = ToonMaterial.create({ color: 0x3a3a3a });
-      const frame = new THREE.Mesh(frameGeo, frameMat);
-      frame.position.copy(windowMesh.position);
-      frame.position.z += 0.03;
-      house.add(frame);
     }
     
-    // AC unit
-    const acGeo = new THREE.BoxGeometry(0.8, 0.4, 0.3);
+    // AC unit - scaled down
+    const acGeo = new THREE.BoxGeometry(0.25, 0.15, 0.12);
     const acMat = ToonMaterial.create({ color: 0xe8e8e8 });
     const ac = new THREE.Mesh(acGeo, acMat);
-    ac.position.set(1.2, 2.0, -1.3);
+    ac.position.set(0.45, 0.8, -0.52);
     house.add(ac);
-    house.add(OutlineMaterial.addOutlineToMesh(ac, { thickness: 0.02, wobble: 0.004 }));
     
     return house;
   }
@@ -575,27 +571,29 @@ export class Planet {
   private createVendingMachine(color: number = 0x2ecc71): THREE.Group {
     const vm = new THREE.Group();
     
-    const bodyGeo = new THREE.BoxGeometry(0.9, 1.8, 0.7);
+    // Scaled down to be taller than a kid but smaller than a house
+    const bodyGeo = new THREE.BoxGeometry(0.35, 0.7, 0.3);
     const bodyMat = ToonMaterial.create({ color });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.9;
+    body.position.y = 0.35;
     body.castShadow = true;
     vm.add(body);
     
-    const screenGeo = new THREE.BoxGeometry(0.7, 1.0, 0.05);
+    const screenGeo = new THREE.BoxGeometry(0.28, 0.4, 0.02);
     const screenMat = ToonMaterial.create({ color: 0x2c3e50 });
     const screen = new THREE.Mesh(screenGeo, screenMat);
-    screen.position.set(0, 1.1, 0.38);
+    screen.position.set(0, 0.42, 0.16);
     vm.add(screen);
     
-    for (let row = 0; row < 3; row++) {
+    // Smaller cans
+    for (let row = 0; row < 2; row++) {
       for (let col = 0; col < 3; col++) {
-        const canGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.15, 8);
+        const canGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.06, 6);
         const canMat = ToonMaterial.create({ 
           color: [0xe74c3c, 0xf39c12, 0x3498db][Math.floor(Math.random() * 3)]
         });
         const can = new THREE.Mesh(canGeo, canMat);
-        can.position.set(-0.2 + col * 0.2, 0.8 + row * 0.3, 0.35);
+        can.position.set(-0.08 + col * 0.08, 0.32 + row * 0.12, 0.14);
         can.rotation.x = Math.PI / 2;
         vm.add(can);
       }
@@ -607,28 +605,29 @@ export class Planet {
   private createMailbox(): THREE.Group {
     const mb = new THREE.Group();
     
-    const postGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.2, 8);
+    // Scaled down - mailbox should be about waist-height to a kid
+    const postGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6);
     const postMat = ToonMaterial.create({ color: 0xe74c3c });
     const post = new THREE.Mesh(postGeo, postMat);
-    post.position.y = 0.6;
+    post.position.y = 0.25;
     mb.add(post);
     
-    const boxGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.5, 16);
+    const boxGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.2, 12);
     const boxMat = ToonMaterial.create({ color: 0xe74c3c });
     const box = new THREE.Mesh(boxGeo, boxMat);
-    box.position.y = 1.35;
+    box.position.y = 0.55;
     box.castShadow = true;
     mb.add(box);
     
-    const topGeo = new THREE.SphereGeometry(0.25, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const topGeo = new THREE.SphereGeometry(0.1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2);
     const top = new THREE.Mesh(topGeo, boxMat);
-    top.position.y = 1.6;
+    top.position.y = 0.65;
     mb.add(top);
     
-    const slotGeo = new THREE.BoxGeometry(0.2, 0.03, 0.1);
+    const slotGeo = new THREE.BoxGeometry(0.08, 0.015, 0.04);
     const slotMat = ToonMaterial.create({ color: 0x2c3e50 });
     const slot = new THREE.Mesh(slotGeo, slotMat);
-    slot.position.set(0, 1.45, 0.2);
+    slot.position.set(0, 0.58, 0.08);
     mb.add(slot);
     
     return mb;
@@ -637,27 +636,26 @@ export class Planet {
   private createTelephonePole(): THREE.Group {
     const pole = new THREE.Group();
     
-    // Shorter pole to match house scale (~3 units, similar to house height)
-    // On a small curved planet, tall poles appear to diverge/lean
-    const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 3, 8);
+    // Scaled to match new house scale (~1.5 units tall, slightly taller than houses)
+    const poleGeo = new THREE.CylinderGeometry(0.025, 0.035, 1.5, 6);
     const poleMat = ToonMaterial.create({ color: 0x6b5344 });
     const poleM = new THREE.Mesh(poleGeo, poleMat);
-    poleM.position.y = 1.5; // Base at y=0, top at y=3
+    poleM.position.y = 0.75; // Base at y=0, top at y=1.5
     poleM.castShadow = true;
     pole.add(poleM);
     
     // Cross arm near top
-    const armGeo = new THREE.BoxGeometry(1.0, 0.06, 0.06);
+    const armGeo = new THREE.BoxGeometry(0.4, 0.025, 0.025);
     const arm = new THREE.Mesh(armGeo, poleMat);
-    arm.position.y = 2.8;
+    arm.position.y = 1.4;
     pole.add(arm);
     
     // Shorter wires
     for (let i = 0; i < 2; i++) {
-      const wireGeo = new THREE.CylinderGeometry(0.01, 0.01, 1.5, 4);
+      const wireGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.6, 4);
       const wireMat = ToonMaterial.create({ color: 0x2c2c2c });
       const wire = new THREE.Mesh(wireGeo, wireMat);
-      wire.position.set(i === 0 ? -0.35 : 0.35, 2.8, 0);
+      wire.position.set(i === 0 ? -0.14 : 0.14, 1.4, 0);
       wire.rotation.z = Math.PI / 2;
       pole.add(wire);
     }
@@ -668,24 +666,25 @@ export class Planet {
   private createTrafficMirror(): THREE.Group {
     const mirror = new THREE.Group();
     
-    const poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.5, 8);
+    // Scaled down - about kid height
+    const poleGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.0, 6);
     const poleMat = ToonMaterial.create({ color: 0xf39c12 });
     const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.y = 1.25;
+    pole.position.y = 0.5;
     mirror.add(pole);
     
-    const mirrorGeo = new THREE.SphereGeometry(0.35, 16, 16, 0, Math.PI);
+    const mirrorGeo = new THREE.SphereGeometry(0.14, 12, 12, 0, Math.PI);
     const mirrorMat = ToonMaterial.create({ color: 0xbdc3c7 });
     const mirrorM = new THREE.Mesh(mirrorGeo, mirrorMat);
-    mirrorM.position.y = 2.3;
+    mirrorM.position.y = 0.95;
     mirrorM.rotation.y = Math.PI;
     mirrorM.castShadow = true;
     mirror.add(mirrorM);
     
-    const frameGeo = new THREE.TorusGeometry(0.35, 0.04, 8, 16);
+    const frameGeo = new THREE.TorusGeometry(0.14, 0.02, 6, 12);
     const frameMat = ToonMaterial.create({ color: 0xf39c12 });
     const frame = new THREE.Mesh(frameGeo, frameMat);
-    frame.position.y = 2.3;
+    frame.position.y = 0.95;
     frame.rotation.x = Math.PI / 2;
     mirror.add(frame);
     
@@ -739,11 +738,12 @@ export class Planet {
   private createRetainingWall(): THREE.Group {
     const wall = new THREE.Group();
     
-    for (let i = 0; i < 5; i++) {
-      const blockGeo = new THREE.BoxGeometry(2, 1.5, 0.8);
+    // Scaled down wall - about waist-height to kid
+    for (let i = 0; i < 4; i++) {
+      const blockGeo = new THREE.BoxGeometry(0.6, 0.4, 0.25);
       const blockMat = ToonMaterial.create({ color: 0x9a9a8a });
       const block = new THREE.Mesh(blockGeo, blockMat);
-      block.position.set(i * 2 - 4, 0.75, 0);
+      block.position.set(i * 0.6 - 0.9, 0.2, 0);
       block.castShadow = true;
       block.receiveShadow = true;
       wall.add(block);
@@ -836,22 +836,23 @@ export class Planet {
   private createPier(): THREE.Group {
     const pier = new THREE.Group();
     
-    const deckGeo = new THREE.BoxGeometry(2, 0.2, 8);
+    // Scaled down pier - kid can walk on it
+    const deckGeo = new THREE.BoxGeometry(0.8, 0.08, 2.5);
     const deckMat = ToonMaterial.create({ color: 0x8b7355 });
     const deck = new THREE.Mesh(deckGeo, deckMat);
-    deck.position.y = 0.8;
+    deck.position.y = 0.3;
     deck.castShadow = true;
     deck.receiveShadow = true;
     pier.add(deck);
     
-    for (let i = 0; i < 6; i++) {
-      const postGeo = new THREE.CylinderGeometry(0.1, 0.12, 1.5, 6);
+    for (let i = 0; i < 4; i++) {
+      const postGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.6, 5);
       const postMat = ToonMaterial.create({ color: 0x6b5344 });
       const post = new THREE.Mesh(postGeo, postMat);
       post.position.set(
-        (i % 2 === 0 ? -0.7 : 0.7),
-        0.4,
-        -3 + Math.floor(i / 2) * 3
+        (i % 2 === 0 ? -0.3 : 0.3),
+        0.15,
+        -0.8 + Math.floor(i / 2) * 1.6
       );
       post.castShadow = true;
       pier.add(post);
@@ -863,17 +864,18 @@ export class Planet {
   private createFishingBoat(): THREE.Group {
     const boat = new THREE.Group();
     
-    const hullGeo = new THREE.BoxGeometry(1.2, 0.6, 3);
+    // Scaled down boat
+    const hullGeo = new THREE.BoxGeometry(0.5, 0.25, 1.2);
     const hullMat = ToonMaterial.create({ color: 0x2980b9 });
     const hull = new THREE.Mesh(hullGeo, hullMat);
-    hull.position.y = 0.3;
+    hull.position.y = 0.12;
     hull.castShadow = true;
     boat.add(hull);
     
-    const cabinGeo = new THREE.BoxGeometry(0.8, 0.8, 1);
+    const cabinGeo = new THREE.BoxGeometry(0.3, 0.3, 0.4);
     const cabinMat = ToonMaterial.create({ color: 0xecf0f1 });
     const cabin = new THREE.Mesh(cabinGeo, cabinMat);
-    cabin.position.set(0, 0.9, -0.5);
+    cabin.position.set(0, 0.35, -0.2);
     cabin.castShadow = true;
     boat.add(cabin);
     
@@ -883,18 +885,19 @@ export class Planet {
   private createBeachUmbrella(): THREE.Group {
     const umbrella = new THREE.Group();
     
-    const poleGeo = new THREE.CylinderGeometry(0.03, 0.03, 2, 6);
+    // Scaled down - provides shade for a kid
+    const poleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.8, 5);
     const poleMat = ToonMaterial.create({ color: 0x8b7355 });
     const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.y = 1;
+    pole.position.y = 0.4;
     umbrella.add(pole);
     
-    const topGeo = new THREE.ConeGeometry(1, 0.6, 8);
+    const topGeo = new THREE.ConeGeometry(0.4, 0.25, 8);
     const topMat = ToonMaterial.create({ 
       color: [0xe74c3c, 0xf39c12, 0x3498db][Math.floor(Math.random() * 3)]
     });
     const top = new THREE.Mesh(topGeo, topMat);
-    top.position.y = 2.1;
+    top.position.y = 0.85;
     top.rotation.x = Math.PI;
     top.castShadow = true;
     umbrella.add(top);
@@ -905,31 +908,32 @@ export class Planet {
   private createLighthouse(): THREE.Group {
     const lh = new THREE.Group();
     
-    const baseGeo = new THREE.CylinderGeometry(1, 1.3, 4, 8);
+    // Scaled down lighthouse - tallest structure, about 2x house height
+    const baseGeo = new THREE.CylinderGeometry(0.4, 0.5, 1.6, 8);
     const baseMat = ToonMaterial.create({ color: 0xecf0f1 });
     const base = new THREE.Mesh(baseGeo, baseMat);
-    base.position.y = 2;
+    base.position.y = 0.8;
     base.castShadow = true;
     lh.add(base);
     
-    for (let i = 0; i < 3; i++) {
-      const stripeGeo = new THREE.CylinderGeometry(1.05 - i * 0.1, 1.15 - i * 0.1, 0.5, 8);
+    for (let i = 0; i < 2; i++) {
+      const stripeGeo = new THREE.CylinderGeometry(0.42 - i * 0.04, 0.46 - i * 0.04, 0.2, 8);
       const stripeMat = ToonMaterial.create({ color: 0xe74c3c });
       const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-      stripe.position.y = 0.8 + i * 1.3;
+      stripe.position.y = 0.35 + i * 0.55;
       lh.add(stripe);
     }
     
-    const lampGeo = new THREE.CylinderGeometry(0.6, 0.8, 1, 8);
+    const lampGeo = new THREE.CylinderGeometry(0.24, 0.32, 0.4, 8);
     const lampMat = ToonMaterial.create({ color: 0x2c3e50 });
     const lamp = new THREE.Mesh(lampGeo, lampMat);
-    lamp.position.y = 4.5;
+    lamp.position.y = 1.8;
     lh.add(lamp);
     
-    const lightGeo = new THREE.SphereGeometry(0.4, 8, 8);
+    const lightGeo = new THREE.SphereGeometry(0.16, 8, 8);
     const lightMat = ToonMaterial.create({ color: 0xffeaa7, emissive: 0xf39c12, emissiveIntensity: 0.5 });
     const light = new THREE.Mesh(lightGeo, lightMat);
-    light.position.y = 4.5;
+    light.position.y = 1.8;
     lh.add(light);
     
     return lh;
@@ -966,17 +970,18 @@ export class Planet {
   private createTree(): THREE.Group {
     const tree = new THREE.Group();
     
-    const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 2, 8);
+    // Scaled down - tree slightly taller than houses
+    const trunkGeo = new THREE.CylinderGeometry(0.06, 0.1, 0.8, 6);
     const trunkMat = ToonMaterial.create({ color: 0x6b5344 });
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.y = 1;
+    trunk.position.y = 0.4;
     trunk.castShadow = true;
     tree.add(trunk);
     
-    const foliageGeo = new THREE.IcosahedronGeometry(1.3, 1);
+    const foliageGeo = new THREE.IcosahedronGeometry(0.5, 1);
     const foliageMat = ToonMaterial.create({ color: 0x4a8a5b });
     const foliage = new THREE.Mesh(foliageGeo, foliageMat);
-    foliage.position.y = 2.8;
+    foliage.position.y = 1.1;
     foliage.castShadow = true;
     tree.add(foliage);
     
@@ -986,32 +991,33 @@ export class Planet {
   private createLookoutPlatform(): THREE.Group {
     const lookout = new THREE.Group();
     
-    const platformGeo = new THREE.CylinderGeometry(1.8, 1.8, 0.3, 8);
+    // Scaled down lookout
+    const platformGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.12, 8);
     const platformMat = ToonMaterial.create({ color: 0x8b7355 });
     const platform = new THREE.Mesh(platformGeo, platformMat);
-    platform.position.y = 2.5;
+    platform.position.y = 1.0;
     platform.castShadow = true;
     platform.receiveShadow = true;
     lookout.add(platform);
     
     for (let i = 0; i < 4; i++) {
       const angle = (i / 4) * Math.PI * 2;
-      const postGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.5, 6);
+      const postGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6);
       const postMat = ToonMaterial.create({ color: 0x6b5344 });
       const post = new THREE.Mesh(postGeo, postMat);
       post.position.set(
-        Math.cos(angle) * 1.4,
-        1.25,
-        Math.sin(angle) * 1.4
+        Math.cos(angle) * 0.55,
+        0.5,
+        Math.sin(angle) * 0.55
       );
       post.castShadow = true;
       lookout.add(post);
     }
     
-    const railGeo = new THREE.TorusGeometry(1.5, 0.06, 8, 16);
+    const railGeo = new THREE.TorusGeometry(0.6, 0.025, 6, 12);
     const railMat = ToonMaterial.create({ color: 0x8b7355 });
     const rail = new THREE.Mesh(railGeo, railMat);
-    rail.position.y = 2.9;
+    rail.position.y = 1.15;
     rail.rotation.x = Math.PI / 2;
     lookout.add(rail);
     
@@ -1021,24 +1027,25 @@ export class Planet {
   private createBench(): THREE.Group {
     const bench = new THREE.Group();
     
-    const seatGeo = new THREE.BoxGeometry(1.5, 0.1, 0.5);
+    // Scaled down - seat at kid sitting height
+    const seatGeo = new THREE.BoxGeometry(0.5, 0.04, 0.2);
     const seatMat = ToonMaterial.create({ color: 0x8b7355 });
     const seat = new THREE.Mesh(seatGeo, seatMat);
-    seat.position.y = 0.45;
+    seat.position.y = 0.18;
     seat.castShadow = true;
     bench.add(seat);
     
-    const backGeo = new THREE.BoxGeometry(1.5, 0.5, 0.08);
+    const backGeo = new THREE.BoxGeometry(0.5, 0.2, 0.03);
     const back = new THREE.Mesh(backGeo, seatMat);
-    back.position.set(0, 0.7, -0.2);
+    back.position.set(0, 0.28, -0.08);
     back.rotation.x = 0.15;
     bench.add(back);
     
     for (let i = 0; i < 2; i++) {
-      const legGeo = new THREE.BoxGeometry(0.1, 0.4, 0.4);
+      const legGeo = new THREE.BoxGeometry(0.04, 0.16, 0.16);
       const legMat = ToonMaterial.create({ color: 0x4a4a4a });
       const leg = new THREE.Mesh(legGeo, legMat);
-      leg.position.set(i === 0 ? -0.6 : 0.6, 0.2, 0);
+      leg.position.set(i === 0 ? -0.2 : 0.2, 0.08, 0);
       bench.add(leg);
     }
     
@@ -1072,25 +1079,26 @@ export class Planet {
   private createToriiGate(): THREE.Group {
     const gate = new THREE.Group();
     
+    // Scaled down torii - about 1.5x kid height
     const postMat = ToonMaterial.create({ color: 0xc0392b });
     
     for (let i = 0; i < 2; i++) {
-      const postGeo = new THREE.CylinderGeometry(0.2, 0.25, 5, 8);
+      const postGeo = new THREE.CylinderGeometry(0.08, 0.1, 1.8, 6);
       const post = new THREE.Mesh(postGeo, postMat);
-      post.position.set(i === 0 ? -2 : 2, 2.5, 0);
+      post.position.set(i === 0 ? -0.7 : 0.7, 0.9, 0);
       post.castShadow = true;
       gate.add(post);
     }
     
-    const topGeo = new THREE.BoxGeometry(5.5, 0.4, 0.5);
+    const topGeo = new THREE.BoxGeometry(2.0, 0.15, 0.18);
     const top = new THREE.Mesh(topGeo, postMat);
-    top.position.y = 4.8;
+    top.position.y = 1.75;
     top.castShadow = true;
     gate.add(top);
     
-    const beam2Geo = new THREE.BoxGeometry(4.5, 0.3, 0.4);
+    const beam2Geo = new THREE.BoxGeometry(1.6, 0.12, 0.14);
     const beam2 = new THREE.Mesh(beam2Geo, postMat);
-    beam2.position.y = 4;
+    beam2.position.y = 1.45;
     gate.add(beam2);
     
     return gate;
@@ -1099,31 +1107,32 @@ export class Planet {
   private createShrine(): THREE.Group {
     const shrine = new THREE.Group();
     
-    const baseGeo = new THREE.BoxGeometry(5, 0.5, 4);
+    // Scaled down shrine - similar to house scale
+    const baseGeo = new THREE.BoxGeometry(1.8, 0.18, 1.5);
     const baseMat = ToonMaterial.create({ color: 0x8a8a7a });
     const base = new THREE.Mesh(baseGeo, baseMat);
-    base.position.y = 0.25;
+    base.position.y = 0.09;
     base.castShadow = true;
     base.receiveShadow = true;
     shrine.add(base);
     
-    const bodyGeo = new THREE.BoxGeometry(4, 3, 3);
+    const bodyGeo = new THREE.BoxGeometry(1.5, 1.1, 1.1);
     const bodyMat = ToonMaterial.create({ color: 0xc0392b });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 2;
+    body.position.y = 0.73;
     body.castShadow = true;
     shrine.add(body);
     
-    const roofGeo = new THREE.BoxGeometry(5.5, 0.5, 4);
+    const roofGeo = new THREE.BoxGeometry(2.0, 0.18, 1.5);
     const roofMat = ToonMaterial.create({ color: 0x2c3e50 });
     const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.position.y = 3.75;
+    roof.position.y = 1.37;
     roof.castShadow = true;
     shrine.add(roof);
     
-    const roof2Geo = new THREE.BoxGeometry(4.5, 0.4, 3.5);
+    const roof2Geo = new THREE.BoxGeometry(1.7, 0.15, 1.3);
     const roof2 = new THREE.Mesh(roof2Geo, roofMat);
-    roof2.position.y = 4.15;
+    roof2.position.y = 1.52;
     shrine.add(roof2);
     
     return shrine;
@@ -1132,27 +1141,28 @@ export class Planet {
   private createStoneLantern(): THREE.Group {
     const lantern = new THREE.Group();
     
-    const baseGeo = new THREE.CylinderGeometry(0.25, 0.3, 0.3, 6);
+    // Scaled down - about waist height
+    const baseGeo = new THREE.CylinderGeometry(0.1, 0.12, 0.12, 6);
     const stoneMat = ToonMaterial.create({ color: 0x7a7a6a });
     const base = new THREE.Mesh(baseGeo, stoneMat);
-    base.position.y = 0.15;
+    base.position.y = 0.06;
     base.castShadow = true;
     lantern.add(base);
     
-    const stemGeo = new THREE.CylinderGeometry(0.1, 0.1, 1, 6);
+    const stemGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.4, 5);
     const stem = new THREE.Mesh(stemGeo, stoneMat);
-    stem.position.y = 0.8;
+    stem.position.y = 0.32;
     lantern.add(stem);
     
-    const houseGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+    const houseGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
     const houseMat = ToonMaterial.create({ color: 0xffeaa7, emissive: 0xf39c12, emissiveIntensity: 0.3 });
     const house = new THREE.Mesh(houseGeo, houseMat);
-    house.position.y = 1.55;
+    house.position.y = 0.62;
     lantern.add(house);
     
-    const topGeo = new THREE.ConeGeometry(0.35, 0.3, 4);
+    const topGeo = new THREE.ConeGeometry(0.14, 0.12, 4);
     const top = new THREE.Mesh(topGeo, stoneMat);
-    top.position.y = 1.95;
+    top.position.y = 0.78;
     top.rotation.y = Math.PI / 4;
     lantern.add(top);
     
@@ -1162,11 +1172,12 @@ export class Planet {
   private createStoneSteps(): THREE.Group {
     const steps = new THREE.Group();
     
-    for (let i = 0; i < 5; i++) {
-      const stepGeo = new THREE.BoxGeometry(2, 0.2, 0.5);
+    // Scaled down - kid-sized steps
+    for (let i = 0; i < 4; i++) {
+      const stepGeo = new THREE.BoxGeometry(0.7, 0.08, 0.2);
       const stepMat = ToonMaterial.create({ color: 0x7a7a6a });
       const step = new THREE.Mesh(stepGeo, stepMat);
-      step.position.set(0, i * 0.25, -i * 0.5);
+      step.position.set(0, i * 0.1, -i * 0.2);
       step.castShadow = true;
       step.receiveShadow = true;
       steps.add(step);
@@ -1254,11 +1265,11 @@ export class Planet {
     const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, yaw);
     forward.applyQuaternion(yawQuat);
     
-    // Right = forward x up (for right-handed coordinate system)
-    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+    // Right = up × forward (right-handed coordinate system: X = Y × Z)
+    const right = new THREE.Vector3().crossVectors(up, forward).normalize();
     
-    // Recompute forward to ensure orthogonality
-    forward.crossVectors(up, right).normalize();
+    // Recompute forward to ensure orthogonality: Z = X × Y
+    forward.crossVectors(right, up).normalize();
     
     // Build rotation matrix from basis vectors: right (X), up (Y), forward (Z)
     const matrix = new THREE.Matrix4();
