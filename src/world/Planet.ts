@@ -520,7 +520,7 @@ export class Planet {
     const to = this.getOffsetOnSphere(center, bearing + Math.PI, radius * 0.55);
 
     const lane = this.lineStations(from, to, 5);
-    this.layRoad(lane, 2.4);
+    this.layRoad(lane, 1.9);
     this.layFrontage(lane, { setback: 6.4, gapChance: 0.28 });
 
     this.addPiece('Well', this.getOffsetOnSphere(center, bearing + 1.3, 4));
@@ -1245,7 +1245,7 @@ export class Planet {
     // plus radial lanes running out of it. Everything faces a street.
     const ringRadius = 11;
     const ring = this.ringStations(center, ringRadius, 20);
-    this.layRoad(ring, 3.0);
+    this.layRoad(ring, 2.2);
     this.layFrontage(ring, { setback: 7.4, gapChance: 0.24 });
 
     // Radial lanes off the ring. Their outer frontage forms the town edge.
@@ -1256,7 +1256,7 @@ export class Planet {
       const outer = this.getOffsetOnSphere(center, angle, ringRadius + 11);
 
       const lane = this.lineStations(inner, outer, 5);
-      this.layRoad(lane, 2.4);
+      this.layRoad(lane, 1.9);
       this.layFrontage(lane, { setback: 6.6, gapChance: 0.3, stride: 1 });
     }
 
@@ -1272,7 +1272,7 @@ export class Planet {
     this.markArea('Le Bourg', center, 20);
 
     const highStreet = this.lineStations(highStart, highEnd, 7);
-    this.layRoad(highStreet, 3.0);
+    this.layRoad(highStreet, 2.2);
     this.layFrontage(highStreet, { setback: 7.2, gapChance: 0.18 });
     
     // Street furniture. A French village has a post box, garden walls and
@@ -1411,7 +1411,10 @@ export class Planet {
         : 'Tree_Plane';
       if (this.kit.has(pickName)) {
         const tree = this.kit.instance(pickName, this.houseVariant++);
-        if (tree) return tree;
+        if (tree) {
+          this.applyKitScale(tree, pickName);
+          return tree;
+        }
       }
     }
     return this.createPrimitiveTree();
@@ -1459,6 +1462,7 @@ export class Planet {
     if (limit > 0 && this.tooSteep(position, limit)) return null;
     const piece = this.kit.instance(name, variant);
     if (!piece) return null;
+    this.applyKitScale(piece, name);
 
     const lean = name.startsWith('Tree') || name === 'Hedge' ? 0 : 0.12;
     if (faceToward) {
@@ -1477,6 +1481,28 @@ export class Planet {
     this.claim(position, footprint[name] ?? 1.2);
 
     return piece;
+  }
+
+  /**
+   * The courier is a ~1.4 m kid. Kit trees, stock and the mill were modelled
+   * as landmarks and read as giants beside them. Scale is applied here so
+   * the Blender source stays in metres for the houses.
+   */
+  private applyKitScale(object: THREE.Object3D, name: string): void {
+    const scale: Record<string, number> = {
+      Tree_Plane: 0.58,
+      Tree_Forest: 0.5,
+      Tree_Orchard: 0.64,
+      Sheep: 0.68,
+      Goat: 0.66,
+      Haystack: 0.7,
+      Windmill: 0.68,
+      Barn: 0.82,
+      Hedge: 0.8,
+      Church: 0.88
+    };
+    const s = scale[name];
+    if (s && s !== 1) object.scale.multiplyScalar(s);
   }
 
   private registerAnimal(
@@ -1839,7 +1865,7 @@ export class Planet {
     foliage.position.y = 2.8;
     foliage.castShadow = true;
     tree.add(foliage);
-    
+    tree.scale.setScalar(0.65);
     return tree;
   }
 

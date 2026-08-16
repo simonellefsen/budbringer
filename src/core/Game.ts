@@ -121,7 +121,7 @@ export class Game {
 
     const portrait = window.innerHeight > window.innerWidth;
     this.camera = new THREE.PerspectiveCamera(
-      portrait ? 58 : 48,
+      portrait ? 62 : 52,
       window.innerWidth / window.innerHeight,
       0.1,
       200
