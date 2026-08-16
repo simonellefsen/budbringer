@@ -278,6 +278,40 @@ export class HUD {
         .emote-btn:hover {
           background: #f4d03f;
         }
+
+        @media (pointer: coarse), (max-width: 700px) {
+          #hud-stack {
+            top: calc(10px + env(safe-area-inset-top));
+            right: calc(10px + env(safe-area-inset-right));
+            bottom: auto;
+            gap: 8px;
+          }
+          .hud-card { width: 44px; height: 44px; }
+          .hud-card img { width: 32px; height: 32px; }
+          #emote-wheel { flex-direction: row; flex-wrap: wrap; max-width: 100px; }
+          .emote-btn { width: 36px; height: 36px; }
+          #compass {
+            top: calc(12px + env(safe-area-inset-top));
+            left: calc(12px + env(safe-area-inset-left));
+          }
+          #area-name {
+            left: 16px;
+            bottom: calc(22px + env(safe-area-inset-bottom));
+            font-size: clamp(1.4rem, 7vw, 2.2rem);
+            -webkit-text-stroke-width: 4px;
+          }
+          #current-task {
+            bottom: calc(168px + env(safe-area-inset-bottom));
+            max-width: min(360px, calc(100vw - 24px));
+            padding: 8px 12px;
+          }
+          #checklist-panel {
+            top: calc(64px + env(safe-area-inset-top));
+            right: 10px;
+            width: min(300px, calc(100vw - 20px));
+            padding: 14px;
+          }
+        }
       </style>
       
       <div id="compass">

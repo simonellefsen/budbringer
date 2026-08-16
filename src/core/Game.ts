@@ -92,8 +92,9 @@ export class Game {
       alpha: false,
       powerPreference: 'high-performance'
     });
+    const mobile = window.matchMedia('(pointer: coarse)').matches;
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.shadowMap.enabled = true;
@@ -112,8 +113,9 @@ export class Game {
     this.scene.fog = new THREE.Fog(skyColor, 10, 36);
     this.scene.add(createSkyDome());
 
+    const portrait = window.innerHeight > window.innerWidth;
     this.camera = new THREE.PerspectiveCamera(
-      48,
+      portrait ? 58 : 48,
       window.innerWidth / window.innerHeight,
       0.1,
       200
@@ -125,8 +127,9 @@ export class Game {
     this.sunLight = new THREE.DirectionalLight(LIGHT.sun, 2.1);
     this.sunLight.position.set(38, 62, 26);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.width = 2048;
-    this.sunLight.shadow.mapSize.height = 2048;
+    const mapSize = window.matchMedia('(pointer: coarse)').matches ? 1024 : 2048;
+    this.sunLight.shadow.mapSize.width = mapSize;
+    this.sunLight.shadow.mapSize.height = mapSize;
     this.sunLight.shadow.camera.near = 1;
     this.sunLight.shadow.camera.far = 160;
     // Tight frustum around the player rather than the whole planet: the old
@@ -375,8 +378,10 @@ export class Game {
   };
 
   public resize(): void {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const vv = window.visualViewport;
+    const width = Math.round(vv?.width ?? window.innerWidth);
+    const height = Math.round(vv?.height ?? window.innerHeight);
+    this.camera.fov = height > width ? 58 : 48;
     
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();

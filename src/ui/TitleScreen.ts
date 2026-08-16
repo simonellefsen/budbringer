@@ -44,7 +44,7 @@ export class TitleScreen {
           flex-direction: column;
           align-items: center;
           justify-content: flex-end;
-          padding-bottom: 12vh;
+          padding-bottom: calc(12vh + env(safe-area-inset-bottom));
           pointer-events: none;
         }
         
@@ -54,6 +54,7 @@ export class TitleScreen {
           border: 4px solid #1a1a1a;
           border-radius: 6px;
           padding: 16px 60px;
+          min-height: 56px;
           font-size: 1.6rem;
           font-family: 'Patrick Hand', cursive;
           font-weight: bold;
@@ -77,7 +78,7 @@ export class TitleScreen {
         
         #title-text {
           font-family: 'Lilita One', 'Patrick Hand', cursive;
-          font-size: 4.4rem;
+          font-size: clamp(2.3rem, 14vw, 4.4rem);
           font-weight: 400;
           color: #fffdf6;
           text-transform: uppercase;
@@ -109,6 +110,11 @@ export class TitleScreen {
       </div>
       
       <div id="title-controls">wasd walk • space hop • e talk</div>
+      <style>
+        @media (pointer: coarse) {
+          #title-controls { display: none; }
+        }
+      </style>
     `;
     
     document.body.appendChild(this.container);
@@ -116,7 +122,16 @@ export class TitleScreen {
 
     
     const enterButton = document.getElementById('enter-button')!;
-    enterButton.addEventListener('click', () => this.startGame());
+    let starting = false;
+    const go = (e: Event) => {
+      e.preventDefault();
+      if (starting) return;
+      starting = true;
+      this.game.audioManager.unlock();
+      this.startGame();
+    };
+    enterButton.addEventListener('pointerup', go);
+    enterButton.addEventListener('click', go);
     
     this.boundKeyHandler = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.code === 'Enter') {
