@@ -16,7 +16,7 @@ export class TitleScreen {
     this.container.id = 'title-screen';
     this.container.innerHTML = `
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Lilita+One&family=Patrick+Hand&display=swap');
         
         #title-screen {
           position: fixed;
@@ -76,12 +76,15 @@ export class TitleScreen {
         }
         
         #title-text {
-          font-family: 'Patrick Hand', cursive;
-          font-size: 4rem;
-          font-weight: bold;
-          color: #ffffff;
-          text-shadow: 4px 4px 0 #1a1a1a, -2px -2px 0 #1a1a1a, 2px -2px 0 #1a1a1a, -2px 2px 0 #1a1a1a;
-          letter-spacing: 0.1em;
+          font-family: 'Lilita One', 'Patrick Hand', cursive;
+          font-size: 4.4rem;
+          font-weight: 400;
+          color: #fffdf6;
+          text-transform: uppercase;
+          -webkit-text-stroke: 5px #2a2118;
+          paint-order: stroke fill;
+          text-shadow: 5px 5px 0 #2a2118;
+          letter-spacing: 0.04em;
           margin-bottom: 1.5rem;
           pointer-events: none;
         }

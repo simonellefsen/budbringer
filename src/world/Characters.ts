@@ -48,11 +48,12 @@ export interface RiggedFigure {
  */
 export const WARDROBE: Record<string, FigureColours> = {
   Courier: {
-    coat: 0xd9542f,       // orange hoodie
-    coatAlt: 0x3f5878,    // denim
-    hat: 0x2b3340,
-    bag: 0x4a5560,
-    accent: 0xf2e8d8
+    coat: PLAYER.shirt,
+    coatAlt: PLAYER.shorts,
+    bag: PLAYER.bag,
+    hair: PLAYER.hair,
+    skin: PLAYER.skin,
+    accent: PLAYER.sock
   },
   Villager_Postmaster: {
     coat: 0x27476b, coatAlt: 0x5c5348, hat: 0x1f3350, bag: 0x6b6155

@@ -14,13 +14,13 @@
  *     handful of painted Colmar facades. Never on a whole street.
  */
 
-/** Atmosphere. The sky colour is also the fog colour, so they must match. */
+/** Atmosphere. Mint painted sky — the fog colour must stay in the same family. */
 export const SKY = {
-  horizon: 0xc4d8e8,
-  zenith: 0x7fa8cc,
-  fog: 0xb8cfe2,
-  cloud: 0xf7f4ec,
-  cloudShade: 0xd8dce4
+  horizon: 0xb7ddd6,
+  zenith: 0x6eaea8,
+  fog: 0xa8d4ce,
+  cloud: 0xdceee8,
+  cloudShade: 0xb4d0cc
 } as const;
 
 /** Light. Warm afternoon key, cool sky fill — the fill is what tints shadows. */
@@ -33,13 +33,13 @@ export const LIGHT = {
 
 /** Terrain. Pasture green, river gravel, cobbled square, churchyard grass. */
 export const GROUND = {
-  base: 0x7d9455,
-  town: 0x8a9a62,
-  seaside: 0xbfae86,
-  hillside: 0x6f8a4c,
-  shrine: 0x84965e,
-  water: 0x5f8497,
-  waterDeep: 0x4a6b7d
+  base: 0x7d9a62,
+  town: 0x86a068,
+  seaside: 0xc4b48c,
+  hillside: 0x6b8f4e,
+  shrine: 0x7d9a5c,
+  water: 0x5e9aa3,
+  waterDeep: 0x4a7d88
 } as const;
 
 /**
@@ -123,16 +123,16 @@ export const ACCENT = {
   lamp: 0xffe3ae
 } as const;
 
-/** The courier. */
+/** The courier — yellow tee, dark shorts, grey sling, messy bob. */
 export const PLAYER = {
   skin: 0xf0d0b0,
-  hair: 0x3a2a1e,
-  shirt: 0xd9663f,
-  shorts: 0x3d4450,
-  shoe: 0x4a3a2e,
+  hair: 0x2a241c,
+  shirt: 0xf0c44a,
+  shorts: 0x2c3036,
+  shoe: 0x3a322c,
   sock: 0xf4ecd8,
-  bag: 0x8a6b4a,
-  bagStrap: 0x6d5136
+  bag: 0x7a7368,
+  bagStrap: 0x6a6358
 } as const;
 
 /** Villagers. Muted, so the courier stays the brightest thing on screen. */

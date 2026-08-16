@@ -22,7 +22,7 @@ export class HUD {
     this.container.id = 'hud-container';
     this.container.innerHTML = `
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Lilita+One&family=Patrick+Hand&display=swap');
         
         #hud-container {
           position: fixed;
@@ -46,27 +46,44 @@ export class HUD {
         #hud-container.map-open #current-task,
         #hud-container.map-open #interaction-hint,
         #hud-container.map-open #emote-wheel,
+        #hud-container.map-open #hud-stack,
         #hud-container.map-open #area-name {
           opacity: 0;
           transition: opacity 0.25s ease;
         }
         
-        #checklist-toggle {
+        #hud-stack {
           position: absolute;
-          top: 20px;
-          right: 20px;
-          background: #fff;
-          border: 3px solid #1a1a1a;
-          border-radius: 8px;
-          padding: 10px 15px;
-          cursor: pointer;
+          right: 22px;
+          bottom: 28px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
           pointer-events: auto;
-          box-shadow: 3px 3px 0 #1a1a1a;
-          font-family: 'Patrick Hand', cursive;
-          font-size: 1.1rem;
+          z-index: 2;
+        }
+
+        .hud-card {
+          width: 52px;
+          height: 52px;
+          background: #fffdf6;
+          border: 3px solid #2a2118;
+          border-radius: 10px;
+          box-shadow: 3px 3px 0 #2a2118;
+          cursor: pointer;
           display: flex;
           align-items: center;
-          gap: 8px;
+          justify-content: center;
+          padding: 0;
+          font-size: 1.25rem;
+        }
+
+        .hud-card:hover { background: #f4d03f; }
+        .hud-card.open { background: #f4d03f; }
+        .hud-card.muted { background: #e4ded0; color: #8a8378; }
+
+        #checklist-toggle {
+          position: static;
         }
         
         #checklist-toggle:hover {
@@ -198,17 +215,14 @@ export class HUD {
         }
         
         #emote-wheel {
-          position: absolute;
-          bottom: 100px;
-          right: 20px;
-          background: #fff;
-          border: 3px solid #1a1a1a;
-          border-radius: 8px;
-          padding: 8px;
+          position: static;
+          background: transparent;
+          border: none;
+          box-shadow: none;
+          padding: 0;
           display: flex;
+          flex-direction: column;
           gap: 8px;
-          box-shadow: 3px 3px 0 #1a1a1a;
-          pointer-events: auto;
         }
         
         /* Place-name card, bottom left, in the reference's chunky style:
@@ -217,18 +231,19 @@ export class HUD {
           position: absolute;
           left: 34px;
           bottom: 42px;
-          max-width: 42vw;
-          font-family: 'Patrick Hand', cursive;
-          font-size: clamp(1.9rem, 4.4vw, 3.1rem);
-          line-height: 0.98;
-          font-weight: 700;
-          letter-spacing: 0.03em;
+          max-width: 46vw;
+          font-family: 'Lilita One', 'Patrick Hand', cursive;
+          font-size: clamp(2.1rem, 5vw, 3.6rem);
+          line-height: 0.92;
+          font-weight: 400;
+          letter-spacing: 0.02em;
           text-transform: uppercase;
           color: #fdfaf2;
+          -webkit-text-stroke: 5px #2a2118;
+          paint-order: stroke fill;
           text-shadow:
-            4px 4px 0 #2a2118,
-            -2px -2px 0 #2a2118, 2px -2px 0 #2a2118,
-            -2px 2px 0 #2a2118, 0 5px 10px rgba(42, 33, 24, 0.28);
+            5px 5px 0 #2a2118,
+            0 6px 12px rgba(42, 33, 24, 0.28);
           opacity: 0;
           transform: translateY(14px);
           transition: opacity 0.45s ease, transform 0.45s ease;
@@ -245,55 +260,7 @@ export class HUD {
           #area-name.visible { transform: none; }
         }
 
-        #map-toggle {
-          position: absolute;
-          top: 20px;
-          right: 204px;
-          width: 46px;
-          height: 46px;
-          background: #fff;
-          border: 3px solid #1a1a1a;
-          border-radius: 8px;
-          cursor: pointer;
-          pointer-events: auto;
-          box-shadow: 3px 3px 0 #1a1a1a;
-          font-size: 1.2rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0;
-        }
-
-        #map-toggle:hover { background: #f4d03f; }
-        #map-toggle.open { background: #f4d03f; }
-
-        #audio-toggle {
-          position: absolute;
-          top: 20px;
-          right: 150px;
-          width: 46px;
-          height: 46px;
-          background: #fff;
-          border: 3px solid #1a1a1a;
-          border-radius: 8px;
-          cursor: pointer;
-          pointer-events: auto;
-          box-shadow: 3px 3px 0 #1a1a1a;
-          font-size: 1.2rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0;
-        }
-
-        #audio-toggle:hover {
-          background: #f4d03f;
-        }
-
-        #audio-toggle.muted {
-          background: #e4ded0;
-          color: #8a8378;
-        }
+        #map-toggle, #audio-toggle { position: static; }
 
         .emote-btn {
           width: 40px;
@@ -317,14 +284,6 @@ export class HUD {
         <div id="compass-arrow"></div>
       </div>
       
-      <button id="map-toggle" title="World map (M)" aria-label="World map"
-              aria-pressed="false">🌍</button>
-
-      <button id="audio-toggle" title="Sound on/off" aria-label="Sound on/off"
-              aria-pressed="false">🔊</button>
-
-      <button id="checklist-toggle">📋 Checklist</button>
-      
       <div id="checklist-panel">
         <h2>Checklist:</h2>
         <div id="checklist-items"></div>
@@ -337,12 +296,25 @@ export class HUD {
       <div id="area-name"></div>
 
       <div id="interaction-hint">Press E to talk</div>
-      
-      <div id="emote-wheel">
-        <button class="emote-btn" data-emote="wave">👋</button>
-        <button class="emote-btn" data-emote="happy">😊</button>
-        <button class="emote-btn" data-emote="think">🤔</button>
-        <button class="emote-btn" data-emote="heart">❤️</button>
+
+      <div id="hud-stack">
+        <button id="map-toggle" class="hud-card" title="World map (M)" aria-label="World map"
+                aria-pressed="false">
+          <img src="ui/icon-map.svg" width="44" height="44" alt="">
+        </button>
+        <button id="audio-toggle" class="hud-card" title="Sound on/off" aria-label="Sound on/off"
+                aria-pressed="false">
+          <img src="ui/icon-music.svg" width="36" height="36" alt="">
+        </button>
+        <button id="checklist-toggle" class="hud-card" title="Checklist" aria-label="Checklist">
+          <img src="ui/icon-list.svg" width="44" height="44" alt="">
+        </button>
+        <div id="emote-wheel">
+          <button class="emote-btn" data-emote="wave">👋</button>
+          <button class="emote-btn" data-emote="happy">😊</button>
+          <button class="emote-btn" data-emote="think">🤔</button>
+          <button class="emote-btn" data-emote="heart">❤️</button>
+        </div>
       </div>
     `;
     
@@ -395,7 +367,6 @@ export class HUD {
       e.stopPropagation();
       e.preventDefault();
       const muted = this.game.audioManager.toggleMute();
-      audioToggle.textContent = muted ? '🔇' : '🔊';
       audioToggle.classList.toggle('muted', muted);
       audioToggle.setAttribute('aria-pressed', String(muted));
     });

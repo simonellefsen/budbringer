@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ToonMaterial } from '../utils/ToonMaterial';
+import { PaintedTextures } from '../utils/PaintedTextures';
 import { GROUND, BUILDING, ROAD, MATERIAL, ACCENT, SKY, pick } from '../utils/palette';
 import { Kit, SHOP_SIGNS } from './Kit';
 import { distributeRegions, PlacedRegion } from './Regions';
@@ -187,7 +188,7 @@ export class Planet {
   }
 
   private createPlanetSphere(): void {
-    const geometry = new THREE.IcosahedronGeometry(this.radius, 5);
+    const geometry = new THREE.IcosahedronGeometry(this.radius, 6);
 
     const posAttr = geometry.getAttribute('position');
     const colors: number[] = [];
@@ -212,7 +213,9 @@ export class Planet {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     
     const material = ToonMaterial.create({
-      vertexColors: true
+      color: 0xe4ebd4,
+      vertexColors: true,
+      map: PaintedTextures.get('grass', 12)
     });
     
     this.sphere = new THREE.Mesh(geometry, material);
@@ -265,12 +268,23 @@ export class Planet {
 
     // Bare rock on the high ground and silt down in the valley, so relief
     // reads in colour as well as in silhouette.
-    if (height > 3.2) {
+    if (height > 4.4) {
       finalColor.lerp(new THREE.Color(MATERIAL.stoneCool),
-        THREE.MathUtils.smoothstep(height, 3.2, 8.5) * 0.75);
+        THREE.MathUtils.smoothstep(height, 4.4, 12.0) * 0.8);
     } else if (height < -1.2) {
       finalColor.lerp(new THREE.Color(GROUND.seaside),
         THREE.MathUtils.smoothstep(-height, 1.2, 3.2) * 0.7);
+    }
+
+    // Painted patches: extra dabs of lighter and deeper grass so the ground
+    // does not read as a single filled colour.
+    const speckle = Math.abs(Math.sin(
+      normalizedPos.x * 17.4 + normalizedPos.y * 13.1 + normalizedPos.z * 9.7
+    ));
+    if (speckle > 0.74) {
+      finalColor.lerp(new THREE.Color(MATERIAL.foliageLight), 0.3);
+    } else if (speckle < 0.16) {
+      finalColor.lerp(new THREE.Color(MATERIAL.foliageDeep), 0.22);
     }
 
     return finalColor;
@@ -287,46 +301,13 @@ export class Planet {
    * those boxes also started contributing edges, so the ground turned to hatch.
    */
   private createRoads(): void {
-    // Trunk roads between settlements.
+    // Trunk roads between settlements, each a single ribbon.
     for (let i = 0; i < this.biomes.length; i++) {
       for (let j = i + 1; j < this.biomes.length; j++) {
         const from = this.biomes[i].center.clone().multiplyScalar(this.radius);
         const to = this.biomes[j].center.clone().multiplyScalar(this.radius);
-        this.createConnectingRoad(from, to);
+        this.layRoad(this.lineStations(from, to, 24), 1.9);
       }
-    }
-  }
-
-  private createConnectingRoad(from: THREE.Vector3, to: THREE.Vector3): void {
-    const steps = 15;
-    for (let i = 0; i < steps; i++) {
-      const t = i / steps;
-      const pos = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
-      
-      const roadGeo = new THREE.BoxGeometry(1.8, ROAD_THICKNESS, 2);
-      const roadMat = ToonMaterial.create({ color: ROAD.asphalt });
-      const road = new THREE.Mesh(roadGeo, roadMat);
-      
-      // Use proper orientation with makeBasis
-      const up = pos.clone().normalize();
-      const dir = to.clone().sub(from);
-      dir.sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
-      
-      if (dir.lengthSq() < 0.01) {
-        dir.set(1, 0, 0);
-        dir.sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
-      }
-      
-      const right = new THREE.Vector3().crossVectors(dir, up).normalize();
-      const forward = new THREE.Vector3().crossVectors(up, right).normalize();
-      
-      const matrix = new THREE.Matrix4();
-      matrix.makeBasis(right, up, forward);
-      
-      road.position.copy(this.terrain.surfacePoint(pos.clone().normalize()));
-      road.quaternion.setFromRotationMatrix(matrix);
-
-      this.decorations.add(road);
     }
   }
 
@@ -339,6 +320,7 @@ export class Planet {
   private createDecorations(): void {
     // Landmarks first: they are the largest and least movable.
     this.createRiver();
+    this.createWaterfalls();
     this.createChurch();
     this.createSquare();
     this.createFarm();
@@ -369,6 +351,7 @@ export class Planet {
       const dist = radius * Math.sqrt(Math.random());
       const spot = this.getOffsetOnSphere(center, Math.random() * Math.PI * 2, dist);
       if (!this.isFree(spot, clearance)) continue;
+      if (this.tooSteep(spot)) continue;
       this.addPiece(pieces[Math.floor(Math.random() * pieces.length)], spot);
     }
   }
@@ -451,7 +434,7 @@ export class Planet {
           break;
 
         case 'forest':
-          this.scatterInDisc(center, r, 46, ['Tree_Plane', 'Tree_Orchard'], 2.0);
+          this.scatterInDisc(center, r, 46, ['Tree_Forest', 'Tree_Plane', 'Tree_Orchard'], 2.0);
           break;
 
         case 'pasture':
@@ -551,10 +534,12 @@ export class Planet {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.computeVertexNormals();
 
+    this.applyPlanarUVs(geometry, 0.12);
     const water = new THREE.Mesh(geometry, ToonMaterial.create({
       color: GROUND.water,
       transparent: true,
-      opacity: 0.9
+      opacity: 0.88,
+      map: PaintedTextures.get('water', 3)
     }));
     water.receiveShadow = true;
     this.decorations.add(water);
@@ -613,14 +598,65 @@ export class Planet {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.computeVertexNormals();
 
+    this.applyPlanarUVs(geometry, 0.1);
     const lake = new THREE.Mesh(geometry, ToonMaterial.create({
-      color: GROUND.water, transparent: true, opacity: 0.92
+      color: GROUND.water,
+      transparent: true,
+      opacity: 0.9,
+      map: PaintedTextures.get('water', 3)
     }));
     lake.receiveShadow = true;
     this.decorations.add(lake);
 
     this.markArea('Le Lac', centre.clone().multiplyScalar(this.radius), 16);
     this.claim(centre.clone().multiplyScalar(this.radius), 14);
+  }
+
+  /**
+   * Hang a waterfall wherever a high bank drops into the river.
+   *
+   * The reference globe is full of these — a painted sheet of water against
+   * a cliff is the fastest way to make relief read as landscape rather than
+   * as a lumpy ball.
+   */
+  private createWaterfalls(): void {
+    if (!this.kit?.has('Waterfall')) return;
+
+    const town = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
+    let u = new THREE.Vector3().crossVectors(this.riverAxis, town);
+    if (u.lengthSq() < 1e-6) u = new THREE.Vector3().crossVectors(this.riverAxis, new THREE.Vector3(1, 0, 0));
+    u.normalize();
+    const v = new THREE.Vector3().crossVectors(this.riverAxis, u).normalize();
+
+    let placed = 0;
+    for (let i = 0; i < 56 && placed < 5; i++) {
+      const a = (i / 56) * Math.PI * 2;
+      const centre = u.clone().multiplyScalar(Math.cos(a)).addScaledVector(v, Math.sin(a));
+
+      // Sample the bank a little off the water, both sides, keep the steeper.
+      let bestBank: THREE.Vector3 | null = null;
+      let bestDrop = 0;
+      for (const side of [-1, 1]) {
+        const bank = centre.clone().addScaledVector(this.riverAxis, side * 0.24).normalize();
+        const drop = this.terrain.heightAt(bank) - this.terrain.waterLevel;
+        if (drop > bestDrop) {
+          bestDrop = drop;
+          bestBank = bank;
+        }
+      }
+      if (!bestBank || bestDrop < 6.2) continue;
+
+      const pool = centre.clone().multiplyScalar(this.radius);
+      const bankSpot = bestBank.clone().multiplyScalar(this.radius);
+      if (!this.isFree(pool, 6)) continue;
+
+      const fall = this.addPiece('Waterfall', pool, bankSpot);
+      if (!fall) continue;
+
+      this.addPiece('Cliff_Rock', bankSpot, pool);
+      if (placed === 0) this.markArea('Les Chutes', pool, 11);
+      placed++;
+    }
   }
 
   /** The church, set back from the square on its own patch of ground. */
@@ -856,24 +892,62 @@ export class Planet {
     return stations;
   }
 
-  /** Lay road slabs down the centreline of a run of stations. */
+  /**
+   * One cobbled ribbon along a run of stations.
+   *
+   * Separate box tiles read as a dashed hatch once the ink pass outlines
+   * every edge. A single strip keeps the road a continuous surface.
+   */
   private layRoad(stations: StreetStation[], width: number = 2.6): void {
-    for (const station of stations) {
-      const geo = new THREE.BoxGeometry(width, ROAD_THICKNESS, 2.6);
-      const road = new THREE.Mesh(geo, ToonMaterial.create({ color: ROAD.asphalt }));
-      road.receiveShadow = true;
+    if (stations.length < 2) return;
 
-      const groundUp = this.terrain.normalAt(station.pos.clone().normalize());
-      let along = station.tangent.clone();
-      along.sub(groundUp.clone().multiplyScalar(along.dot(groundUp))).normalize();
+    const step = stations[0].pos.distanceTo(stations[1].pos);
+    const gap = stations[0].pos.distanceTo(stations[stations.length - 1].pos);
+    const closed = gap < step * 1.65;
+    const seq = closed ? [...stations, stations[0]] : stations;
 
-      const right = new THREE.Vector3().crossVectors(groundUp, along).normalize();
-      const matrix = new THREE.Matrix4().makeBasis(right, groundUp, along);
-      road.position.copy(this.terrain.surfacePoint(station.pos.clone().normalize()));
-      road.quaternion.setFromRotationMatrix(matrix);
+    const half = width / 2;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    let along = 0;
 
-      this.decorations.add(road);
+    for (let i = 0; i < seq.length; i++) {
+      const station = seq[i];
+      const dir = station.pos.clone().normalize();
+      const ground = this.terrain.surfacePoint(dir);
+      const up = this.terrain.normalAt(dir);
+      let tangent = station.tangent.clone();
+      tangent.sub(up.clone().multiplyScalar(tangent.dot(up)));
+      if (tangent.lengthSq() < 1e-8) tangent.copy(station.tangent);
+      tangent.normalize();
+      const right = new THREE.Vector3().crossVectors(up, tangent).normalize();
+      const lift = up.clone().multiplyScalar(ROAD_THICKNESS);
+
+      const left = ground.clone().addScaledVector(right, -half).add(lift);
+      const rite = ground.clone().addScaledVector(right, half).add(lift);
+      if (i > 0) along += seq[i - 1].pos.distanceTo(station.pos);
+      positions.push(left.x, left.y, left.z, rite.x, rite.y, rite.z);
+      uvs.push(along * 0.35, 0, along * 0.35, 1);
+
+      if (i > 0) {
+        const a = (i - 1) * 2;
+        indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+      }
     }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    const road = new THREE.Mesh(geometry, ToonMaterial.create({
+      color: ROAD.cobble,
+      map: PaintedTextures.get('plaster', 4)
+    }));
+    road.receiveShadow = true;
+    this.decorations.add(road);
   }
 
   /**
@@ -911,6 +985,7 @@ export class Planet {
         if (!this.clearOfSpawn(plot, SPAWN_CLEARANCE * 0.8)) continue;
 
         if (!this.isFree(plot, 3.0)) continue;
+        if (this.tooSteep(plot, 0.82)) continue;
 
         const house = this.createHouse();
         this.placeFacing(house, plot, station.pos);
@@ -946,6 +1021,7 @@ export class Planet {
       ).multiplyScalar(this.radius);
       
       if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.7)) continue;
+      if (this.tooSteep(pos, 0.7)) continue;
       this.plantTree(pos);
     }
     
@@ -1152,6 +1228,35 @@ export class Planet {
     this.occupied.push({ pos: position.clone().normalize(), radius });
   }
 
+  /** True if the slope under `position` is too steep to site a building or tree. */
+  private tooSteep(position: THREE.Vector3, minDot: number = 0.78): boolean {
+    const dir = position.clone().normalize();
+    return this.terrain.normalAt(dir).dot(dir) < minDot;
+  }
+
+  /** Cheap UVs from world position, good enough for a repeating painted tile. */
+  private applyPlanarUVs(geometry: THREE.BufferGeometry, scale: number): void {
+    const pos = geometry.getAttribute('position');
+    const uvs = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+      const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+      if (ay >= ax && ay >= az) {
+        uvs[i * 2] = x * scale;
+        uvs[i * 2 + 1] = z * scale;
+      } else if (ax >= az) {
+        uvs[i * 2] = z * scale;
+        uvs[i * 2 + 1] = y * scale;
+      } else {
+        uvs[i * 2] = x * scale;
+        uvs[i * 2 + 1] = y * scale;
+      }
+    }
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  }
+
   /** True if nothing already claimed ground within `clearance` of here. */
   private isFree(position: THREE.Vector3, clearance: number): boolean {
     const dir = position.clone().normalize();
@@ -1165,9 +1270,14 @@ export class Planet {
 
   /** A tree. Uses the kit's plane tree; falls back to the primitive one. */
   private createTree(): THREE.Object3D {
-    if (this.kit?.isLoaded && this.kit.has('Tree_Plane')) {
-      const tree = this.kit.instance('Tree_Plane', this.houseVariant++);
-      if (tree) return tree;
+    if (this.kit?.isLoaded) {
+      const pickName = this.kit.has('Tree_Forest') && Math.random() < 0.45
+        ? 'Tree_Forest'
+        : 'Tree_Plane';
+      if (this.kit.has(pickName)) {
+        const tree = this.kit.instance(pickName, this.houseVariant++);
+        if (tree) return tree;
+      }
     }
     return this.createPrimitiveTree();
   }
@@ -1209,7 +1319,8 @@ export class Planet {
 
     const footprint: Record<string, number> = {
       Church: 11, Barn: 5, Bridge_Stone: 7, Fountain: 2.4,
-      Well: 1.6, Tree_Plane: 1.6, Wall_Low: 2.6
+      Well: 1.6, Tree_Plane: 1.6, Tree_Forest: 2.0, Wall_Low: 2.6,
+      Waterfall: 5, Cliff_Rock: 3.4
     };
     this.claim(position, footprint[name] ?? 1.2);
 
