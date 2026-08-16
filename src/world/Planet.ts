@@ -225,7 +225,7 @@ export class Planet {
     // does not stand in mid-air on a cliff face.
     const needsLevel = new Set([
       'hamlet', 'graveyard', 'mill', 'chapel', 'ruin', 'pasture',
-      'clos', 'cale', 'allee', 'bocage'
+      'clos', 'cale', 'allee', 'bocage', 'wheat'
     ]);
     for (const region of this.regionLayout) {
       if (!needsLevel.has(region.kind)) continue;
@@ -556,12 +556,32 @@ export class Planet {
 
   /** A boat shed facing the lake. */
   private buildCale(center: THREE.Vector3, radius: number): void {
-    const water = this.lakeCenter.clone().multiplyScalar(this.radius);
-    this.addPiece('Boathouse', center, water);
+    const lake = this.lakeCenter.clone().multiplyScalar(this.radius);
+    this.addPiece('Boathouse', center, lake);
     this.scatterInDisc(center, radius * 0.7, 4, ['Tree_Plane', 'Wall_Low']);
     const bench = this.createBench();
-    this.placeFacing(bench, this.getOffsetOnSphere(center, 2.1, 4.2), water);
+    this.placeFacing(bench, this.getOffsetOnSphere(center, 2.1, 4.2), lake);
     this.decorations.add(bench);
+
+    // Finn walks the shore, not the village hillside that used to share
+    // the "riverbank" name with Les Berges.
+    const lakeDir = this.lakeCenter;
+    const caleDir = center.clone().normalize();
+    const radial = caleDir.clone().addScaledVector(lakeDir, -caleDir.dot(lakeDir));
+    if (radial.lengthSq() < 1e-8) {
+      radial.crossVectors(lakeDir, new THREE.Vector3(0, 1, 0));
+      if (radial.lengthSq() < 1e-8) radial.crossVectors(lakeDir, new THREE.Vector3(1, 0, 0));
+    }
+    radial.normalize();
+    const tangent = new THREE.Vector3().crossVectors(lakeDir, radial).normalize();
+    const shore = (along: number) => lakeDir.clone()
+      .addScaledVector(radial, 14.2 / this.radius)
+      .addScaledVector(tangent, along / this.radius)
+      .normalize()
+      .multiplyScalar(this.radius);
+    this.anchors.set('cale', shore(0));
+    this.anchors.set('cale_up', shore(5.5));
+    this.anchors.set('cale_down', shore(-5.5));
   }
 
   /** A short lane with houses either side — the shape of every hamlet. */
@@ -635,8 +655,7 @@ export class Planet {
 
         case 'ruin':
           this.addPiece('Ruin_Arch', center);
-          this.scatterInDisc(center, r * 0.7, 5, ['Ruin_Arch', 'Wall_Low'], 5.0);
-          this.scatterInDisc(center, r, 12, ['Tree_Plane', 'Hedge']);
+          this.scatterInDisc(center, r, 10, ['Tree_Plane', 'Hedge', 'Wall_Low']);
           break;
 
         case 'mill':
@@ -747,18 +766,49 @@ export class Planet {
       .sub(this.riverAxis.clone().multiplyScalar(townCenter.dot(this.riverAxis)))
       .normalize().multiplyScalar(this.radius);
 
-    const along = new THREE.Vector3().crossVectors(this.riverAxis, nearest).normalize();
-    const bridge = this.addPiece('Bridge_Stone', nearest,
-      nearest.clone().addScaledVector(along, 5));
+    this.placeRiverBridge(nearest);
 
     this.createLake();
     this.markArea('Le Vieux Pont', nearest, 7);
+  }
 
-    if (bridge) {
-      // The kit bridge spans along its own X, so face it across the water.
-      const across = nearest.clone().addScaledVector(this.riverAxis, 5);
-      this.placeFacing(bridge, nearest, across);
-    }
+  /**
+   * Span the river: deck on the banks, arches over the water.
+   *
+   * The kit's span is local +X. `placeFacing` aims local +Z, so aiming
+   * *across* the water lined the arches up along the bank — a timber wall
+   * on the lawn. Aim along the river so X goes across, sit the deck on the
+   * visible banks, and do not settle (that drops a bridge into the riverbed).
+   */
+  private placeRiverBridge(nearest: THREE.Vector3): void {
+    if (!this.kit?.has('Bridge_Stone')) return;
+    const piece = this.kit.instance('Bridge_Stone');
+    if (!piece) return;
+
+    const dir = nearest.clone().normalize();
+    const along = new THREE.Vector3().crossVectors(this.riverAxis, dir).normalize();
+    const waterR = this.radius + this.terrain.waterLevel + 0.55;
+
+    const left = dir.clone().addScaledVector(this.riverAxis, 0.2).normalize();
+    const right = dir.clone().addScaledVector(this.riverAxis, -0.2).normalize();
+    const deckR = 0.5 * (this.meshRadiusAt(left) + this.meshRadiusAt(right));
+
+    const nativeDeck = 3.85;
+    const nativeSpan = 9;
+    const bankSep = this.radius * Math.acos(
+      THREE.MathUtils.clamp(left.dot(right), -1, 1)
+    );
+    const s = THREE.MathUtils.clamp(
+      Math.max((bankSep + 2.4) / nativeSpan, (deckR - waterR + 0.5) / nativeDeck),
+      0.95,
+      1.65
+    );
+    piece.scale.multiplyScalar(s);
+
+    const pos = dir.clone().multiplyScalar(deckR - nativeDeck * s);
+    this.orientUpright(piece, pos, pos.clone().addScaledVector(along, 8));
+    this.decorations.add(piece);
+    this.claim(nearest, 8);
   }
 
   /** The lake surface, a disc at the same level as the river. */
@@ -1100,6 +1150,31 @@ export class Planet {
   // ---------------------------------------------------------------- streets
 
   /**
+   * Stand `object` at `position` with local +Y radial and local +Z at
+   * `faceToward`. Does not snap or settle — the caller chose the point.
+   */
+  private orientUpright(
+    object: THREE.Object3D,
+    position: THREE.Vector3,
+    faceToward: THREE.Vector3
+  ): void {
+    const up = position.clone().normalize();
+    const forward = faceToward.clone().sub(position);
+    forward.sub(up.clone().multiplyScalar(forward.dot(up)));
+
+    if (forward.lengthSq() < 1e-8) {
+      forward.set(0, 1, 0).sub(up.clone().multiplyScalar(up.y));
+      if (forward.lengthSq() < 1e-8) forward.set(1, 0, 0);
+    }
+    forward.normalize();
+
+    const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+    const matrix = new THREE.Matrix4().makeBasis(right, up, forward);
+    object.position.copy(position);
+    object.quaternion.setFromRotationMatrix(matrix);
+  }
+
+  /**
    * Orient an object so its local +Y is the surface normal and its local +Z
    * points at `faceToward`.
    *
@@ -1111,30 +1186,11 @@ export class Planet {
     position: THREE.Vector3,
     faceToward: THREE.Vector3
   ): void {
-    // Sit on the ground, but stand upright. Buildings are built level and cut
-    // into a slope; following the terrain normal tips a whole townhouse over,
-    // which looked far worse than the small mismatch at its downhill corner.
+    // Sit on the grass you see. The analytic crest is above the triangle
+    // on a ridge, which is how benches and mailboxes ended up in the sky.
     const dir = position.clone().normalize();
-    position = this.terrain.surfacePoint(dir);
-    const up = dir.clone();
-
-    const forward = faceToward.clone().sub(position);
-    forward.sub(up.clone().multiplyScalar(forward.dot(up)));
-
-    if (forward.lengthSq() < 1e-8) {
-      // Degenerate: the target is directly overhead. Any tangent will do.
-      forward.set(0, 1, 0).sub(up.clone().multiplyScalar(up.y));
-      if (forward.lengthSq() < 1e-8) forward.set(1, 0, 0);
-    }
-    forward.normalize();
-
-    // right x up = forward, so makeBasis gives a right-handed frame with the
-    // building's face along +Z.
-    const right = new THREE.Vector3().crossVectors(up, forward).normalize();
-    const matrix = new THREE.Matrix4().makeBasis(right, up, forward);
-
-    object.position.copy(position);
-    object.quaternion.setFromRotationMatrix(matrix);
+    const onMesh = dir.multiplyScalar(this.meshRadiusAt(dir));
+    this.orientUpright(object, onMesh, faceToward);
     this.settleOnGround(object);
   }
 
@@ -1264,7 +1320,7 @@ export class Planet {
         if (!this.clearOfSpawn(plot, SPAWN_CLEARANCE * 0.8)) continue;
 
         if (!this.isFree(plot, 3.0)) continue;
-        if (this.tooSteep(plot, 0.82)) continue;
+        if (this.tooSteep(plot, 0.91)) continue;
 
         const house = this.createHouse();
         this.placeFacing(house, plot, station.pos);
@@ -1316,24 +1372,10 @@ export class Planet {
       ).multiplyScalar(this.radius);
       
       if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.6)) continue;
-      if (this.tooSteep(pos, 0.86)) continue;
-
-      // Village furniture only. Traffic cones, traffic mirrors and vending
-      // machines belonged to the Japanese-alley direction and read as litter
-      // in a French village.
-      const kitProp = ['Tree_Plane', 'Wall_Low', 'Tree_Plane', 'Well'][
-        Math.floor(Math.random() * 4)];
-
-      if (this.addPiece(kitProp, pos)) continue;
-
-      const prop = Math.random() < 0.5 ? this.createBench() : this.createMailbox();
-      this.placeOnSphere(prop, pos);
-      this.settleOnGround(prop);
-      this.decorations.add(prop);
+      if (this.tooSteep(pos, 0.93)) continue;
+      const kitProp = Math.random() < 0.65 ? 'Tree_Plane' : 'Hedge';
+      this.addPiece(kitProp, pos);
     }
-    
-    // Add retaining walls along roads
-    this.createGlobalRetainingWalls();
   }
 
   /**
@@ -1350,6 +1392,7 @@ export class Planet {
         // Two hamlets per trunk road, at a third and two thirds along.
         for (const t of [0.34, 0.66]) {
           const mid = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
+          if (this.tooSteep(mid, 0.9)) continue;
           const ahead = from.clone().lerp(to, t + 0.04)
             .normalize().multiplyScalar(this.radius);
 
@@ -1361,25 +1404,6 @@ export class Planet {
 
           this.layFrontage(span, { setback: 6.8, gapChance: 0.35 });
         }
-      }
-    }
-  }
-
-  private createGlobalRetainingWalls(): void {
-    // Add retaining walls at various points around the sphere
-    for (let lat = -0.5; lat <= 0.5; lat += 0.5) {
-      for (let lon = 0; lon < Math.PI * 2; lon += Math.PI / 2) {
-        const y = lat;
-        const ringRadius = Math.sqrt(1 - y * y);
-        const pos = new THREE.Vector3(
-          Math.cos(lon) * ringRadius,
-          y,
-          Math.sin(lon) * ringRadius
-        ).normalize().multiplyScalar(this.radius);
-        
-        const wall = this.createRetainingWall();
-        this.placeOnSphere(wall, pos, lon);
-        this.decorations.add(wall);
       }
     }
   }
@@ -1589,12 +1613,13 @@ export class Planet {
   /** How flat the ground must be for this piece. 0 means always allowed. */
   private slopeLimit(name: string): number {
     if (name === 'Waterfall' || name === 'Cliff_Rock' || name === 'Bridge_Stone') return 0;
+    if (name === 'Haystack' || name === 'Well') return 0.92;
     if (name === 'Sheep' || name === 'Goat') return 0.91;
     if (name.startsWith('Tree') || name === 'Hedge') return 0.88;
-    if (name === 'Fence' || name === 'Wall_Low') return 0.86;
-    if (name === 'Ruin_Arch' || name === 'Chapel' || name === 'Windmill') return 0.85;
-    if (name === 'Barn' || name === 'Church') return 0.84;
-    return 0.86;
+    if (name === 'Fence' || name === 'Wall_Low') return 0.9;
+    if (name === 'Ruin_Arch' || name === 'Chapel' || name === 'Windmill') return 0.9;
+    if (name === 'Barn' || name === 'Church') return 0.88;
+    return 0.9;
   }
 
   /** A kit prop placed flat on the surface, facing a given point. */
@@ -1647,7 +1672,8 @@ export class Planet {
       Hedge: 0.8,
       Church: 0.88,
       Waterfall: 0.52,
-      Cliff_Rock: 0.62
+      Cliff_Rock: 0.62,
+      Ruin_Arch: 0.55
     };
     const s = scale[name];
     if (s && s !== 1) object.scale.multiplyScalar(s);
@@ -1777,146 +1803,16 @@ export class Planet {
     return mb;
   }
 
-  private createRetainingWall(): THREE.Group {
-    const wall = new THREE.Group();
-    
-    for (let i = 0; i < 5; i++) {
-      const blockGeo = new THREE.BoxGeometry(2, 1.5, 0.8);
-      const blockMat = ToonMaterial.create({ color: MATERIAL.stone });
-      const block = new THREE.Mesh(blockGeo, blockMat);
-      block.position.set(i * 2 - 4, 0.75, 0);
-      block.castShadow = true;
-      block.receiveShadow = true;
-      wall.add(block);
-    }
-    
-    return wall;
-  }
-
+  /**
+   * The "seaside" biome is a grass colour, not a coast. Pier, boat, beach
+   * umbrellas and a lighthouse used to land here — on a hillside — which is
+   * the coloured cones and the stone tower in the grass. Water things live
+   * at Le Lac now.
+   */
   private createSeasideArea(): void {
     const biome = this.biomes.find(b => b.type === BiomeType.SEASIDE)!;
     const center = biome.center.clone().multiplyScalar(this.radius);
-    
-    const pier = this.createPier();
-    this.placeOnSphere(pier, this.getOffsetOnSphere(center, 0.5, 3));
-    this.decorations.add(pier);
-    
-    const boat = this.createFishingBoat();
-    this.placeOnSphere(boat, this.getOffsetOnSphere(center, 0.8, 5));
-    this.decorations.add(boat);
-    
-    for (let i = 0; i < 3; i++) {
-      const umbrella = this.createBeachUmbrella();
-      const angle = 1.5 + i * 0.4;
-      this.placeOnSphere(umbrella, this.getOffsetOnSphere(center, angle, 3 + Math.random()));
-      this.decorations.add(umbrella);
-    }
-    
-    const lighthouse = this.createLighthouse();
-    this.placeOnSphere(lighthouse, this.getOffsetOnSphere(center, Math.PI, 6));
-    this.decorations.add(lighthouse);
-  }
-
-  private createPier(): THREE.Group {
-    const pier = new THREE.Group();
-    
-    const deckGeo = new THREE.BoxGeometry(2, 0.2, 8);
-    const deckMat = ToonMaterial.create({ color: MATERIAL.wood });
-    const deck = new THREE.Mesh(deckGeo, deckMat);
-    deck.position.y = 0.8;
-    deck.castShadow = true;
-    deck.receiveShadow = true;
-    pier.add(deck);
-    
-    for (let i = 0; i < 6; i++) {
-      const postGeo = new THREE.CylinderGeometry(0.1, 0.12, 1.5, 6);
-      const postMat = ToonMaterial.create({ color: MATERIAL.woodDark });
-      const post = new THREE.Mesh(postGeo, postMat);
-      post.position.set(
-        (i % 2 === 0 ? -0.7 : 0.7),
-        0.4,
-        -3 + Math.floor(i / 2) * 3
-      );
-      post.castShadow = true;
-      pier.add(post);
-    }
-    
-    return pier;
-  }
-
-  private createFishingBoat(): THREE.Group {
-    const boat = new THREE.Group();
-    
-    const hullGeo = new THREE.BoxGeometry(1.2, 0.6, 3);
-    const hullMat = ToonMaterial.create({ color: ACCENT.teal });
-    const hull = new THREE.Mesh(hullGeo, hullMat);
-    hull.position.y = 0.3;
-    hull.castShadow = true;
-    boat.add(hull);
-    
-    const cabinGeo = new THREE.BoxGeometry(0.8, 0.8, 1);
-    const cabinMat = ToonMaterial.create({ color: BUILDING.trim });
-    const cabin = new THREE.Mesh(cabinGeo, cabinMat);
-    cabin.position.set(0, 0.9, -0.5);
-    cabin.castShadow = true;
-    boat.add(cabin);
-    
-    return boat;
-  }
-
-  private createBeachUmbrella(): THREE.Group {
-    const umbrella = new THREE.Group();
-    
-    const poleGeo = new THREE.CylinderGeometry(0.03, 0.03, 2, 6);
-    const poleMat = ToonMaterial.create({ color: MATERIAL.wood });
-    const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.y = 1;
-    umbrella.add(pole);
-    
-    const topGeo = new THREE.ConeGeometry(1, 0.6, 8);
-    const topMat = ToonMaterial.create({ 
-      color: [ACCENT.ember, ACCENT.lemon, ACCENT.teal][Math.floor(Math.random() * 3)]
-    });
-    const top = new THREE.Mesh(topGeo, topMat);
-    top.position.y = 2.1;
-    top.rotation.x = Math.PI;
-    top.castShadow = true;
-    umbrella.add(top);
-    
-    return umbrella;
-  }
-
-  private createLighthouse(): THREE.Group {
-    const lh = new THREE.Group();
-    
-    const baseGeo = new THREE.CylinderGeometry(1, 1.3, 4, 8);
-    const baseMat = ToonMaterial.create({ color: BUILDING.trim });
-    const base = new THREE.Mesh(baseGeo, baseMat);
-    base.position.y = 2;
-    base.castShadow = true;
-    lh.add(base);
-    
-    for (let i = 0; i < 3; i++) {
-      const stripeGeo = new THREE.CylinderGeometry(1.05 - i * 0.1, 1.15 - i * 0.1, 0.5, 8);
-      const stripeMat = ToonMaterial.create({ color: ACCENT.ember });
-      const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-      stripe.position.y = 0.8 + i * 1.3;
-      lh.add(stripe);
-    }
-    
-    const lampGeo = new THREE.CylinderGeometry(0.6, 0.8, 1, 8);
-    const lampMat = ToonMaterial.create({ color: MATERIAL.metalDark });
-    const lamp = new THREE.Mesh(lampGeo, lampMat);
-    lamp.position.y = 4.5;
-    lh.add(lamp);
-    
-    const lightGeo = new THREE.SphereGeometry(0.4, 8, 8);
-    const lightMat = ToonMaterial.create({ color: ACCENT.lamp, emissive: ACCENT.lemon, emissiveIntensity: 0.5 });
-    const light = new THREE.Mesh(lightGeo, lightMat);
-    light.position.y = 4.5;
-    lh.add(light);
-    
-    return lh;
+    this.scatterInDisc(center, 10, 8, ['Tree_Plane', 'Hedge']);
   }
 
   private createHillsideArea(): void {
@@ -1930,9 +1826,12 @@ export class Planet {
       this.plantTree(offset);
     }
     
-    const lookout = this.createLookoutPlatform();
-    this.placeOnSphere(lookout, this.getOffsetOnSphere(center, 0, 4), undefined, 0);
-    this.decorations.add(lookout);
+    const lookoutSpot = this.getOffsetOnSphere(center, 0, 4);
+    if (!this.tooSteep(lookoutSpot, 0.9)) {
+      const lookout = this.createLookoutPlatform();
+      this.placeOnSphere(lookout, lookoutSpot, undefined, 0);
+      this.decorations.add(lookout);
+    }
     
     for (let i = 0; i < 3; i++) {
       const bench = this.createBench();
@@ -2282,7 +2181,7 @@ export class Planet {
 
   private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3, yawAngle?: number, lean = 0.12): void {
     const groundDir = position.clone().normalize();
-    position = this.terrain.surfacePoint(groundDir);
+    position = groundDir.clone().multiplyScalar(this.meshRadiusAt(groundDir));
     // Use Matrix4.makeBasis for correct orientation
     // This ensures local +Y points outward along the surface normal
     // IMPORTANT: Do NOT use object.rotateY() after this - it rotates around WORLD Y, not local Y!

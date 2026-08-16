@@ -41,7 +41,7 @@ const ROUTES: Record<string, RouteSpec> = {
   'Postmaster Maple': { stops: ['post', 'square'] },
   'Baker Brie': { stops: ['bakery', 'square'] },
   'Keeper Kai': { stops: ['church', 'churchyard', 'church_path'] },
-  'Fisher Finn': { stops: ['riverbank', 'riverbank_up', 'riverbank_down'], pingPong: true, speed: 1.35 },
+  'Fisher Finn': { stops: ['cale', 'cale_up', 'cale_down'], pingPong: true, speed: 1.35 },
   'Hermit Hazel': { stops: ['outskirts', 'outskirts_view'], pingPong: true, speed: 1.4 },
   'Shepherd Sylvie': { stops: ['farm', 'farm_lane'], pingPong: true, speed: 1.55 }
 };
@@ -105,7 +105,7 @@ export class NPCManager {
   }
 
   private createFisherFinn(): void {
-    const position = this.positionAt('riverbank',
+    const position = this.positionAt('cale',
       () => this.getPositionInBiome(BiomeType.SEASIDE, 0.5, 6));
     const built = this.buildVillager('Fisher Finn', {
       bodyColor: NPC_COLOR.finn,

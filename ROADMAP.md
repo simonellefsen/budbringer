@@ -10,6 +10,11 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Fisher Finn stood on a village hillside; the stone bridge sat on the
+  lawn as a two-arch wall; beach umbrellas, a lighthouse and mailboxes
+  were scattered on cliffs. Finn walks the lake shore, the bridge spans
+  the river, the fake seaside beach is gone, and props only sit on
+  reasonably flat grass.
 - The kit waterfall was a timber tower. Settling it by a world bounding
   box launched it up the hillside as a "sky waterfall". Falls are now a
   painted sheet that follows the cliff into the river, and props only
