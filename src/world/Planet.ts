@@ -71,6 +71,9 @@ export class Planet {
   public areas: Area[] = [];
   /** The height field. Everything that touches the ground asks this. */
   public terrain!: Terrain;
+  /** Region layout, decided before the mesh so their ground can be levelled. */
+  private regionLayout: PlacedRegion[] = [];
+  private lakeCenter!: THREE.Vector3;
 
   constructor(radius: number, kit: Kit | null = null) {
     this.kit = kit;
@@ -86,6 +89,13 @@ export class Planet {
     // the terrain is built rather than inside createRiver.
     this.riverAxis = new THREE.Vector3(0.52, 0.74, -0.42).normalize();
     this.terrain = new Terrain({ planetRadius: radius, riverAxis: this.riverAxis });
+
+    // Decide where everything goes, level the ground under it, and only then
+    // build the mesh. Doing this after the mesh existed left every hamlet and
+    // farmstead standing on raw noise, which is what put buildings half in the
+    // air on the hillsides.
+    this.planLayout();
+    this.reserveLakes();
     this.reserveLevelGround();
 
     this.createPlanetSphere();
@@ -104,16 +114,76 @@ export class Planet {
    * and its corners in the air, so settlements get flattened rather than the
    * buildings being made to conform.
    */
+  /**
+   * Fix the region layout up front.
+   *
+   * The set-piece areas are registered here as bare Area entries so the
+   * lattice can avoid them; their contents are built later.
+   */
+  private planLayout(): void {
+    const town = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
+
+    const onRiver = town.clone()
+      .sub(this.riverAxis.clone().multiplyScalar(town.dot(this.riverAxis)))
+      .normalize();
+
+    const seeds: { center: THREE.Vector3; radius: number }[] = [
+      { center: town, radius: 20 },
+      { center: onRiver, radius: 17 },
+      { center: this.getOffsetOnSphere(town.clone().multiplyScalar(this.radius), 2.3, 15)
+          .normalize(), radius: 14 }
+    ];
+
+    this.regionLayout = distributeRegions(16, seeds, this.radius);
+  }
+
+  /**
+   * A lake on the river, opposite the village.
+   *
+   * The river alone is a thin ribbon that barely reads from orbit; a broad
+   * basin gives the globe an unmistakable patch of water.
+   */
+  private reserveLakes(): void {
+    const town = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
+
+    // Follow the river a long way round from the bridge.
+    const onRiver = town.clone()
+      .sub(this.riverAxis.clone().multiplyScalar(town.dot(this.riverAxis)))
+      .normalize();
+    const along = new THREE.Vector3().crossVectors(this.riverAxis, onRiver).normalize();
+
+    this.lakeCenter = onRiver.clone()
+      .addScaledVector(along, 0.72)
+      .normalize();
+    this.terrain.addBasin(this.lakeCenter, 13);
+  }
+
+  /**
+   * Level the ground everywhere people built, before the mesh exists.
+   *
+   * A townhouse on a slope has its floor at the height of its centre and its
+   * corners in the air. Settlements are flattened rather than the buildings
+   * being made to conform — which is how real villages sit on hillsides too.
+   */
   private reserveLevelGround(): void {
     const town = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
-    this.terrain.addFlatSpot(town, 22);
-    this.terrain.addFlatSpot(this.spawnPoint, 12);
+    this.terrain.addFlatSpot(town, 24);
+    this.terrain.addFlatSpot(this.spawnPoint, 13);
 
     // The bridge approach, so the crossing meets the banks squarely.
     const nearest = town.clone()
       .sub(this.riverAxis.clone().multiplyScalar(town.dot(this.riverAxis)))
       .normalize();
-    this.terrain.addFlatSpot(nearest, 9);
+    this.terrain.addFlatSpot(nearest, 10);
+
+    // Everywhere the lattice put a region. Built-up kinds get level ground;
+    // fields and woods keep their relief, since a vineyard on a slope is what
+    // a vineyard looks like.
+    const needsLevel = new Set(['hamlet', 'graveyard', 'mill', 'chapel', 'ruin']);
+    for (const region of this.regionLayout) {
+      if (!needsLevel.has(region.kind)) continue;
+      this.terrain.addFlatSpot(region.center, region.radius * 0.75);
+    }
   }
 
   private createPlanetSphere(): void {
@@ -350,10 +420,7 @@ export class Planet {
    * hemisphere and a bare one.
    */
   private createRegions(): void {
-    const avoid = this.areas.map(a => ({ center: a.center, radius: a.radius }));
-    const regions: PlacedRegion[] = distributeRegions(16, avoid, this.radius);
-
-    for (const region of regions) {
+    for (const region of this.regionLayout) {
       const center = region.center.clone().multiplyScalar(this.radius);
       const r = region.radius;
 
@@ -501,6 +568,7 @@ export class Planet {
     const bridge = this.addPiece('Bridge_Stone', nearest,
       nearest.clone().addScaledVector(along, 5));
 
+    this.createLake();
     this.markArea('Le Vieux Pont', nearest, 7);
 
     if (bridge) {
@@ -508,6 +576,51 @@ export class Planet {
       const across = nearest.clone().addScaledVector(this.riverAxis, 5);
       this.placeFacing(bridge, nearest, across);
     }
+  }
+
+  /** The lake surface, a disc at the same level as the river. */
+  private createLake(): void {
+    const centre = this.lakeCenter;
+    const waterRadius = this.radius + this.terrain.waterLevel + 0.55;
+
+    let tangent = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(centre.dot(tangent)) > 0.9) tangent.set(1, 0, 0);
+    const east = new THREE.Vector3().crossVectors(centre, tangent).normalize();
+    const north = new THREE.Vector3().crossVectors(centre, east).normalize();
+
+    const segments = 40;
+    const lakeRadius = 12.4;
+    const positions: number[] = [];
+
+    const rim = (i: number) => {
+      const a = (i / segments) * Math.PI * 2;
+      // Wobble the shore so it is a lake rather than a coin.
+      const r = lakeRadius * (1 + Math.sin(a * 3) * 0.12 + Math.cos(a * 5) * 0.07);
+      return centre.clone()
+        .addScaledVector(east, (Math.cos(a) * r) / this.radius)
+        .addScaledVector(north, (Math.sin(a) * r) / this.radius)
+        .normalize().multiplyScalar(waterRadius);
+    };
+
+    const middle = centre.clone().multiplyScalar(waterRadius);
+    for (let i = 0; i < segments; i++) {
+      const a = rim(i);
+      const b = rim(i + 1);
+      positions.push(middle.x, middle.y, middle.z, a.x, a.y, a.z, b.x, b.y, b.z);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.computeVertexNormals();
+
+    const lake = new THREE.Mesh(geometry, ToonMaterial.create({
+      color: GROUND.water, transparent: true, opacity: 0.92
+    }));
+    lake.receiveShadow = true;
+    this.decorations.add(lake);
+
+    this.markArea('Le Lac', centre.clone().multiplyScalar(this.radius), 16);
+    this.claim(centre.clone().multiplyScalar(this.radius), 14);
   }
 
   /** The church, set back from the square on its own patch of ground. */
@@ -684,11 +797,12 @@ export class Planet {
     position: THREE.Vector3,
     faceToward: THREE.Vector3
   ): void {
-    // Sit on the ground, and lean with it. Using the radial direction as "up"
-    // on sloping terrain leaves things standing vertically out of a hillside.
+    // Sit on the ground, but stand upright. Buildings are built level and cut
+    // into a slope; following the terrain normal tips a whole townhouse over,
+    // which looked far worse than the small mismatch at its downhill corner.
     const dir = position.clone().normalize();
     position = this.terrain.surfacePoint(dir);
-    const up = this.terrain.normalAt(dir);
+    const up = dir.clone();
 
     const forward = faceToward.clone().sub(position);
     forward.sub(up.clone().multiplyScalar(forward.dot(up)));
@@ -1704,7 +1818,12 @@ export class Planet {
     // Use Matrix4.makeBasis for correct orientation
     // This ensures local +Y points outward along the surface normal
     // IMPORTANT: Do NOT use object.rotateY() after this - it rotates around WORLD Y, not local Y!
-    const up = this.terrain.normalAt(groundDir);
+    //
+    // Props lean with the ground, but only part way: a fence or a tree on a
+    // hillside should tilt, and taking the full terrain normal on a steep
+    // slope lays them over much further than looks right.
+    const slope = this.terrain.normalAt(groundDir);
+    const up = groundDir.clone().lerp(slope, 0.55).normalize();
     
     object.position.copy(position);
     

@@ -31,7 +31,6 @@ export class MapView {
   private savedCamPos = new THREE.Vector3();
   private savedCamUp = new THREE.Vector3();
   private savedCamQuat = new THREE.Quaternion();
-  private savedFog: THREE.Fog | null = null;
 
   constructor(game: Game) {
     this.game = game;
@@ -85,8 +84,7 @@ export class MapView {
     this.savedCamQuat.copy(camera.quaternion);
 
     // Fog is tuned for street level and would swallow a planet seen whole.
-    this.savedFog = this.game.scene.fog as THREE.Fog;
-    this.game.scene.fog = null;
+    this.game.suspendFog();
 
     // Start the orbit above the player, so opening the map does not lose them.
     const up = this.game.character.group.position.clone().normalize();
@@ -106,7 +104,7 @@ export class MapView {
     camera.up.copy(this.savedCamUp);
     camera.quaternion.copy(this.savedCamQuat);
 
-    if (this.savedFog) this.game.scene.fog = this.savedFog;
+    this.game.restoreFog();
 
     this.markers.visible = false;
     this.game.state = this.returnState;
