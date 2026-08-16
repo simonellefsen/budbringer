@@ -39,6 +39,17 @@ export class HUD {
         #hud-container.visible {
           opacity: 1;
         }
+
+        /* With the map open the globe is the subject; the street-level
+           readouts would just sit on top of it. */
+        #hud-container.map-open #compass,
+        #hud-container.map-open #current-task,
+        #hud-container.map-open #interaction-hint,
+        #hud-container.map-open #emote-wheel,
+        #hud-container.map-open #area-name {
+          opacity: 0;
+          transition: opacity 0.25s ease;
+        }
         
         #checklist-toggle {
           position: absolute;
@@ -234,6 +245,28 @@ export class HUD {
           #area-name.visible { transform: none; }
         }
 
+        #map-toggle {
+          position: absolute;
+          top: 20px;
+          right: 204px;
+          width: 46px;
+          height: 46px;
+          background: #fff;
+          border: 3px solid #1a1a1a;
+          border-radius: 8px;
+          cursor: pointer;
+          pointer-events: auto;
+          box-shadow: 3px 3px 0 #1a1a1a;
+          font-size: 1.2rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+        }
+
+        #map-toggle:hover { background: #f4d03f; }
+        #map-toggle.open { background: #f4d03f; }
+
         #audio-toggle {
           position: absolute;
           top: 20px;
@@ -284,6 +317,9 @@ export class HUD {
         <div id="compass-arrow"></div>
       </div>
       
+      <button id="map-toggle" title="World map (M)" aria-label="World map"
+              aria-pressed="false">🌍</button>
+
       <button id="audio-toggle" title="Sound on/off" aria-label="Sound on/off"
               aria-pressed="false">🔊</button>
 
@@ -327,6 +363,31 @@ export class HUD {
       e.stopPropagation();
     });
     
+    // World map. The map is the planet seen from orbit, so this only moves the
+    // camera — see MapView.
+    const mapToggle = document.getElementById('map-toggle')!;
+    const syncMap = () => {
+      const open = this.game.mapView.isOpen;
+      mapToggle.classList.toggle('open', open);
+      mapToggle.setAttribute('aria-pressed', String(open));
+      this.container.classList.toggle('map-open', open);
+    };
+    mapToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.game.mapView.toggle();
+      syncMap();
+    });
+    mapToggle.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    document.addEventListener('keydown', (e) => {
+      if (e.code !== 'KeyM' || e.repeat) return;
+      if (this.game.state === 0) return;   // not on the title screen
+      e.preventDefault();
+      this.game.mapView.toggle();
+      syncMap();
+    });
+
     // Sound on/off. AudioManager.toggleMute already handles stopping and
     // restarting the music loop; this only reflects the state it returns.
     const audioToggle = document.getElementById('audio-toggle')!;

@@ -49,11 +49,13 @@ MAT_GLASS = "GLASS"
 MAT_SHUTTER = "SHUTTER"
 MAT_ACCENT = "ACCENT"
 MAT_FOLIAGE = "FOLIAGE"
+MAT_CROP = "CROP"        # straw, wheat, thatch
+MAT_BLOOM = "BLOOM"      # lavender, blossom
 MAT_SIGN = "SIGN"        # blank board; the game letters it with troika text
 
 SLOTS = [MAT_WALL, MAT_WALL_ALT, MAT_PAINTED, MAT_ROOF, MAT_TIMBER, MAT_TRIM,
          MAT_WOOD, MAT_STONE, MAT_METAL, MAT_GLASS, MAT_SHUTTER, MAT_ACCENT,
-         MAT_FOLIAGE, MAT_SIGN]
+         MAT_FOLIAGE, MAT_CROP, MAT_BLOOM, MAT_SIGN]
 
 # Viewport-only colours so the Blender viewport is legible while working.
 # The game ignores these entirely.
@@ -71,6 +73,8 @@ PREVIEW = {
     MAT_SHUTTER:  (0.48, 0.61, 0.49, 1.0),
     MAT_ACCENT:   (0.77, 0.38, 0.23, 1.0),
     MAT_FOLIAGE:  (0.31, 0.49, 0.25, 1.0),
+    MAT_CROP:     (0.83, 0.71, 0.40, 1.0),
+    MAT_BLOOM:    (0.55, 0.47, 0.71, 1.0),
     MAT_SIGN:     (0.16, 0.13, 0.10, 1.0),
 }
 
@@ -92,11 +96,13 @@ def _place(verts, location, rotation_z):
     return [(x + lx, y + ly, z + lz) for (x, y, z) in verts]
 
 
-def box(size, location, material, rotation_z=0.0):
+def box(size, location, material, rotation_z=0.0, taper=1.0):
+    """A box, optionally narrowing towards the top — headstones, hedges, towers."""
     sx, sy, sz = (s / 2.0 for s in size)
+    tx, ty = sx * taper, sy * taper
     verts = [
         (-sx, -sy, -sz), (+sx, -sy, -sz), (+sx, +sy, -sz), (-sx, +sy, -sz),
-        (-sx, -sy, +sz), (+sx, -sy, +sz), (+sx, +sy, +sz), (-sx, +sy, +sz),
+        (-tx, -ty, +sz), (+tx, -ty, +sz), (+tx, +ty, +sz), (-tx, +ty, +sz),
     ]
     faces = [
         (0, 3, 2, 1), (4, 5, 6, 7),
@@ -140,15 +146,21 @@ def pyramid(width, depth, height, location, material, rotation_z=0.0):
     return Part(_place(verts, location, rotation_z), faces, material)
 
 
-def prism(sides, radius, height, location, material, rotation_z=0.0):
-    """A low-poly cylinder: tree trunks, church apse, bridge piers."""
+def prism(sides, radius, height, location, material, rotation_z=0.0, taper=1.0):
+    """
+    A low-poly cylinder: tree trunks, church apse, bridge piers, mill towers.
+
+    `taper` scales the top ring, which is what turns a cylinder into the
+    battered tower of a windmill or the mound of a lavender row.
+    """
     verts = []
     for i in range(sides):
         a = (i / sides) * math.tau
         verts.append((math.cos(a) * radius, math.sin(a) * radius, 0.0))
     for i in range(sides):
         a = (i / sides) * math.tau
-        verts.append((math.cos(a) * radius, math.sin(a) * radius, height))
+        verts.append((math.cos(a) * radius * taper,
+                      math.sin(a) * radius * taper, height))
 
     faces = [tuple(range(sides - 1, -1, -1)), tuple(range(sides, sides * 2))]
     for i in range(sides):
@@ -594,6 +606,125 @@ def fence(length=4.0):
     return parts
 
 
+
+# ----------------------------------------------------------- countryside
+
+def windmill():
+    """A stone tower mill. Tall enough to be a landmark from the next region."""
+    parts = [
+        prism(10, 2.1, 6.5, (0, 0, 0), MAT_STONE, taper=0.72),
+        prism(10, 1.6, 0.4, (0, 0, 6.5), MAT_WOOD),
+        pyramid(3.0, 3.0, 1.6, (0, 0, 6.9), MAT_ROOF),
+        box((0.9, 0.12, 2.0), (0, -1.6, 3.0), MAT_WOOD),   # door
+    ]
+    # Four sails on a hub, set in the plane facing -Y.
+    parts.append(box((0.5, 0.5, 0.5), (0, -1.9, 6.4), MAT_WOOD))
+    for i in range(4):
+        a = i * (math.pi / 2) + 0.4
+        c, sn = math.cos(a), math.sin(a)
+        length, width = 4.6, 0.75
+        verts = [
+            (-width/2, -0.12, -length/2), (width/2, -0.12, -length/2),
+            (width/2, 0.12, -length/2), (-width/2, 0.12, -length/2),
+            (-width/2, -0.12, length/2), (width/2, -0.12, length/2),
+            (width/2, 0.12, length/2), (-width/2, 0.12, length/2),
+        ]
+        # Rotate in the XZ plane, then push out onto the hub.
+        verts = [(x*c - z*sn, y, x*sn + z*c) for (x, y, z) in verts]
+        verts = [(x, y - 2.1, z + 6.4) for (x, y, z) in verts]
+        faces = [(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
+        parts.append(Part(verts, faces, MAT_WOOD))
+    return parts
+
+
+def chapel():
+    """A wayside chapel: one room, a bellcote, an arched door."""
+    w, d, h = 3.4, 4.6, 3.2
+    return [
+        box((w + 0.2, d + 0.2, 0.35), (0, 0, 0.17), MAT_STONE),
+        box((w, d, h), (0, 0, h / 2), MAT_STONE),
+        gable(w, d, 1.7, (0, 0, h), MAT_ROOF, overhang=0.28),
+        arch_wall(1.5, 0.4, 2.3, 0.95, 1.9, (0, -d / 2, 0), MAT_STONE),
+        box((0.7, 0.3, 1.0), (0, d / 2 - 0.1, h + 1.7), MAT_STONE),
+        box((0.16, 0.16, 0.7), (0, d / 2 - 0.1, h + 2.4), MAT_METAL),
+    ]
+
+
+def gravestone(kind=0):
+    """One of three headstone shapes, so a churchyard isn't a grid of clones."""
+    if kind == 0:
+        return [box((0.62, 0.18, 0.95), (0, 0, 0.48), MAT_STONE),
+                box((0.8, 0.34, 0.12), (0, 0, 0.06), MAT_STONE)]
+    if kind == 1:
+        return [prism(8, 0.34, 1.15, (0, 0, 0), MAT_STONE, taper=0.8),
+                box((0.7, 0.3, 0.12), (0, 0, 0.06), MAT_STONE)]
+    return [box((0.5, 0.2, 1.35), (0, 0, 0.68), MAT_STONE, taper=0.85),
+            box((0.55, 0.24, 0.16), (0, 0, 1.4), MAT_STONE),
+            box((0.16, 0.16, 0.5), (0, 0, 1.65), MAT_STONE)]
+
+
+def haystack():
+    return [prism(9, 1.05, 1.5, (0, 0, 0), MAT_CROP, taper=0.55),
+            prism(9, 0.5, 0.35, (0, 0, 1.5), MAT_CROP, taper=0.4)]
+
+
+def vine_row(length=6.0):
+    """Trained vines: end posts, a wire, and a hedge of leaf along it."""
+    parts = [box((0.11, 0.11, 1.5), (-length / 2, 0, 0.75), MAT_WOOD),
+             box((0.11, 0.11, 1.5), (length / 2, 0, 0.75), MAT_WOOD),
+             box((length, 0.05, 0.05), (0, 0, 1.35), MAT_METAL)]
+    n = int(length / 1.2)
+    for i in range(n):
+        x = -length / 2 + (i + 0.5) * (length / n)
+        parts.append(box((length / n * 0.86, 0.55, 0.95), (x, 0, 0.85), MAT_FOLIAGE))
+        parts.append(box((0.13, 0.13, 0.7), (x, 0, 0.35), MAT_WOOD))
+    return parts
+
+
+def lavender_row(length=5.5):
+    """Low mounded rows — the Provence note, and cheap to repeat."""
+    parts = []
+    n = int(length / 0.85)
+    for i in range(n):
+        x = -length / 2 + (i + 0.5) * (length / n)
+        parts.append(prism(7, 0.34, 0.42, (x, 0, 0), MAT_FOLIAGE, taper=0.8))
+        parts.append(prism(7, 0.3, 0.34, (x, 0, 0.4), MAT_BLOOM, taper=0.45))
+    return parts
+
+
+def orchard_tree():
+    """Smaller and rounder than the plane tree, planted in rows."""
+    parts = [prism(6, 0.16, 1.3, (0, 0, 0), MAT_WOOD)]
+    for r, z in ((1.05, 1.15), (0.78, 2.0)):
+        parts.append(prism(8, r, 0.95, (0, 0, z), MAT_FOLIAGE, taper=0.72))
+    return parts
+
+
+def hedge(length=5.0):
+    return [box((length, 0.85, 1.25), (0, 0, 0.63), MAT_FOLIAGE, taper=0.88)]
+
+
+def ruin_arch():
+    """A fragment of castle wall. Reads as history without needing a whole keep."""
+    return [
+        box((5.2, 1.5, 0.5), (0, 0, 0.25), MAT_STONE),
+        arch_wall(5.0, 1.2, 4.6, 1.9, 3.0, (0, 0, 0.5), MAT_STONE),
+        box((1.5, 1.4, 2.2), (2.9, 0, 1.6), MAT_STONE),
+        box((1.1, 1.3, 1.2), (-3.0, 0, 1.1), MAT_STONE),
+    ]
+
+
+def boathouse():
+    """A jetty and a shed, for the riverside."""
+    parts = [box((3.2, 3.6, 2.4), (0, 0.4, 1.2), MAT_WOOD),
+             gable(3.4, 3.8, 1.2, (0, 0.4, 2.4), MAT_ROOF, overhang=0.25),
+             box((2.4, 4.0, 0.16), (0, -2.6, 0.42), MAT_WOOD)]
+    for i in range(4):
+        parts.append(box((0.16, 0.16, 0.9), (0.9 * (1 if i % 2 else -1),
+                                             -1.4 - (i // 2) * 2.0, 0.0), MAT_WOOD))
+    return parts
+
+
 def reset_scene():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -625,6 +756,18 @@ def build():
     assemble("Sheep", sheep(), (102, 0, 0))
     assemble("Goat", goat(), (105, 0, 0))
     assemble("Fence", fence(), (109, 0, 0))
+    assemble("Windmill", windmill(), (118, 0, 0))
+    assemble("Chapel", chapel(), (128, 0, 0))
+    assemble("Grave_A", gravestone(0), (134, 0, 0))
+    assemble("Grave_B", gravestone(1), (137, 0, 0))
+    assemble("Grave_C", gravestone(2), (140, 0, 0))
+    assemble("Haystack", haystack(), (144, 0, 0))
+    assemble("Vine_Row", vine_row(), (152, 0, 0))
+    assemble("Lavender_Row", lavender_row(), (161, 0, 0))
+    assemble("Tree_Orchard", orchard_tree(), (169, 0, 0))
+    assemble("Hedge", hedge(), (175, 0, 0))
+    assemble("Ruin_Arch", ruin_arch(), (184, 0, 0))
+    assemble("Boathouse", boathouse(), (194, 0, 0))
 
     return {o.name: len(o.data.polygons) for o in bpy.data.objects}
 

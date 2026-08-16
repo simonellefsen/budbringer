@@ -16,6 +16,7 @@ import { EffectComposer, RenderPass, EffectPass, NormalPass } from 'postprocessi
 import { InkEffect } from '../utils/InkEffect';
 import { Kit } from '../world/Kit';
 import { Characters } from '../world/Characters';
+import { MapView } from '../ui/MapView';
 
 export enum GameState {
   TITLE,
@@ -44,6 +45,7 @@ export class Game {
   private sunLight!: THREE.DirectionalLight;
   public kit!: Kit;
   public characters!: Characters;
+  public mapView!: MapView;
   private composer!: EffectComposer;
   private inkEffect!: InkEffect;
 
@@ -68,6 +70,7 @@ export class Game {
     await this.setupWorld();
     
     this.setupPostProcessing();
+    this.mapView = new MapView(this);
     this.setupUI();
     this.setupAudio();
 
@@ -309,6 +312,8 @@ export class Game {
       this.secrets.update(elapsed);
     }
     
+    this.mapView?.update(delta);
+
     this.planet.update(elapsed);
     this.hud.update();
     
