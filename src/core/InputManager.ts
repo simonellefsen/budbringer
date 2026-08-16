@@ -28,10 +28,14 @@ export class InputManager {
   };
   
   private touchStartX: number = 0;
+  private touchStartY: number = 0;
   private touchMoveId: number | null = null;
   private touchLookId: number | null = null;
+  private stickOriginX: number = 0;
+  private stickOriginY: number = 0;
   private virtualJoystick: HTMLElement | null = null;
   private joystickKnob: HTMLElement | null = null;
+  private mobile = false;
   
   private boundKeyDown: (e: KeyboardEvent) => void;
   private boundKeyUp: (e: KeyboardEvent) => void;
@@ -68,10 +72,12 @@ export class InputManager {
     canvas.addEventListener('touchstart', this.boundTouchStart, { passive: false });
     canvas.addEventListener('touchmove', this.boundTouchMove, { passive: false });
     canvas.addEventListener('touchend', this.boundTouchEnd);
+    canvas.addEventListener('touchcancel', this.boundTouchEnd);
   }
 
   private createMobileControls(): void {
-    if (!this.isMobile()) return;
+    this.mobile = InputManager.isCoarse();
+    if (!this.mobile) return;
     
     const controls = document.createElement('div');
     controls.id = 'mobile-controls';
@@ -79,70 +85,69 @@ export class InputManager {
       <style>
         #mobile-controls {
           position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 200px;
+          inset: 0;
           pointer-events: none;
-          z-index: 100;
+          z-index: 80;
           display: none;
         }
-        #mobile-controls.visible {
-          display: block;
-        }
+        #mobile-controls.visible { display: block; }
         .joystick-area {
           position: absolute;
-          left: 20px;
-          bottom: 20px;
-          width: 140px;
-          height: 140px;
-          background: rgba(255,255,255,0.15);
+          left: calc(28px + env(safe-area-inset-left));
+          bottom: calc(28px + env(safe-area-inset-bottom));
+          width: 132px;
+          height: 132px;
+          margin: 0;
+          background: rgba(255,255,255,0.16);
           border-radius: 50%;
-          pointer-events: auto;
-          border: 3px solid rgba(255,255,255,0.3);
+          pointer-events: none;
+          border: 3px solid rgba(255,255,255,0.35);
+          opacity: 0.55;
         }
+        .joystick-area.active { opacity: 1; }
         .joystick-knob {
           position: absolute;
           left: 50%;
           top: 50%;
-          width: 50px;
-          height: 50px;
-          margin: -25px 0 0 -25px;
-          background: rgba(255,255,255,0.5);
+          width: 52px;
+          height: 52px;
+          margin: -26px 0 0 -26px;
+          background: rgba(255,255,255,0.55);
           border-radius: 50%;
-          transition: none;
         }
         .action-buttons {
           position: absolute;
-          right: 20px;
-          bottom: 20px;
+          right: calc(16px + env(safe-area-inset-right));
+          bottom: calc(22px + env(safe-area-inset-bottom));
           display: flex;
-          gap: 15px;
+          flex-direction: column-reverse;
+          gap: 12px;
         }
         .action-btn {
-          width: 70px;
-          height: 70px;
+          width: 68px;
+          height: 68px;
           border-radius: 50%;
-          background: rgba(255,255,255,0.3);
-          border: 3px solid rgba(255,255,255,0.5);
-          color: white;
-          font-size: 14px;
+          background: #fffdf6;
+          border: 3px solid #2a2118;
+          box-shadow: 3px 3px 0 #2a2118;
+          color: #2a2118;
+          font-size: 13px;
+          font-family: 'Patrick Hand', cursive;
           font-weight: bold;
           pointer-events: auto;
           display: flex;
           align-items: center;
           justify-content: center;
+          -webkit-tap-highlight-color: transparent;
         }
-        .action-btn:active {
-          background: rgba(255,255,255,0.5);
-        }
+        .action-btn:active { background: #f4d03f; }
       </style>
       <div class="joystick-area" id="joystick">
         <div class="joystick-knob" id="joystick-knob"></div>
       </div>
       <div class="action-buttons">
-        <button class="action-btn" id="btn-jump">HOP</button>
-        <button class="action-btn" id="btn-interact">TALK</button>
+        <button class="action-btn" id="btn-jump" type="button">HOP</button>
+        <button class="action-btn" id="btn-interact" type="button">TALK</button>
       </div>
     `;
     document.body.appendChild(controls);
@@ -153,25 +158,28 @@ export class InputManager {
     const jumpBtn = document.getElementById('btn-jump');
     const interactBtn = document.getElementById('btn-interact');
     
-    jumpBtn?.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      this.state.jump = true;
-    });
-    jumpBtn?.addEventListener('touchend', () => {
-      this.state.jump = false;
-    });
-    
-    interactBtn?.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      this.state.interact = true;
-    });
-    interactBtn?.addEventListener('touchend', () => {
-      this.state.interact = false;
-    });
+    const hold = (el: HTMLElement | null, on: () => void, off: () => void) => {
+      if (!el) return;
+      const start = (e: Event) => { e.preventDefault(); e.stopPropagation(); on(); };
+      const end = (e: Event) => { e.preventDefault(); e.stopPropagation(); off(); };
+      el.addEventListener('pointerdown', start);
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+      el.addEventListener('touchstart', start, { passive: false });
+      el.addEventListener('touchend', end);
+    };
+    hold(jumpBtn, () => { this.state.jump = true; }, () => { this.state.jump = false; });
+    hold(interactBtn, () => { this.state.interact = true; }, () => { this.state.interact = false; });
+  }
+
+  public static isCoarse(): boolean {
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    const small = Math.min(window.innerWidth, window.innerHeight) <= 920;
+    return coarse || ('ontouchstart' in window && small);
   }
 
   private isMobile(): boolean {
-    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    return this.mobile || InputManager.isCoarse();
   }
 
   public enable(): void {
@@ -268,6 +276,7 @@ export class InputManager {
 
   private onMouseDown(e: MouseEvent): void {
     if (!this.enabled) return;
+    if (this.isMobile()) return;
     
     if (e.button === 0 && !this.pointerLocked) {
       this.game.renderer.domElement.requestPointerLock();
@@ -278,21 +287,37 @@ export class InputManager {
     this.pointerLocked = document.pointerLockElement === this.game.renderer.domElement;
   }
 
+  private uiBlocksStick(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    if (!el || !el.closest) return false;
+    return !!el.closest('.action-btn, .hud-card, #hud-stack, #checklist-panel, #enter-button, button, a');
+  }
+
   private onTouchStart(e: TouchEvent): void {
     if (!this.enabled) return;
     
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
-      const target = touch.target as HTMLElement;
-      
-      if (target.id === 'joystick' || target.id === 'joystick-knob') {
-        e.preventDefault();
+      if (this.uiBlocksStick(touch.target)) continue;
+      e.preventDefault();
+
+      // Left ~60% of the screen is the stick, like the reference: the
+      // ring appears under the thumb instead of only in a corner well.
+      if (this.touchMoveId === null && touch.clientX < window.innerWidth * 0.62) {
         this.touchMoveId = touch.identifier;
-        this.touchStartX = touch.clientX;
-      } else if (touch.clientX > window.innerWidth / 2 && 
-                 !target.classList.contains('action-btn')) {
+        this.stickOriginX = touch.clientX;
+        this.stickOriginY = touch.clientY;
+        if (this.virtualJoystick) {
+          this.virtualJoystick.classList.add('active');
+          this.virtualJoystick.style.left = `${touch.clientX}px`;
+          this.virtualJoystick.style.bottom = 'auto';
+          this.virtualJoystick.style.top = `${touch.clientY}px`;
+          this.virtualJoystick.style.transform = 'translate(-50%, -50%)';
+        }
+      } else if (this.touchLookId === null) {
         this.touchLookId = touch.identifier;
         this.touchStartX = touch.clientX;
+        this.touchStartY = touch.clientY;
       }
     }
   }
@@ -305,38 +330,34 @@ export class InputManager {
       
       if (touch.identifier === this.touchMoveId) {
         e.preventDefault();
-        const rect = this.virtualJoystick!.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        
-        let dx = touch.clientX - centerX;
-        let dy = touch.clientY - centerY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const maxDist = rect.width / 2 - 25;
-        
+        const maxDist = 52;
+        let dx = touch.clientX - this.stickOriginX;
+        let dy = touch.clientY - this.stickOriginY;
+        const dist = Math.hypot(dx, dy);
         if (dist > maxDist) {
           dx = (dx / dist) * maxDist;
           dy = (dy / dist) * maxDist;
         }
-        
         if (this.joystickKnob) {
           this.joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
         }
-        
-        const threshold = 0.3;
-        const normalizedX = dx / maxDist;
-        const normalizedY = dy / maxDist;
-        
-        this.state.forward = normalizedY < -threshold;
-        this.state.backward = normalizedY > threshold;
-        this.state.left = normalizedX < -threshold;
-        this.state.right = normalizedX > threshold;
+        const nx = dx / maxDist;
+        const ny = dy / maxDist;
+        const dead = 0.18;
+        this.state.forward = ny < -dead;
+        this.state.backward = ny > dead;
+        this.state.left = nx < -dead;
+        this.state.right = nx > dead;
       }
       
       if (touch.identifier === this.touchLookId) {
+        e.preventDefault();
         const dx = touch.clientX - this.touchStartX;
-        this.state.lookDeltaX = dx * 0.5;
+        const dy = touch.clientY - this.touchStartY;
+        this.state.lookDeltaX += dx * 2.6;
+        this.state.lookDeltaY += dy * 2.2;
         this.touchStartX = touch.clientX;
+        this.touchStartY = touch.clientY;
       }
     }
   }
@@ -351,16 +372,18 @@ export class InputManager {
         this.state.backward = false;
         this.state.left = false;
         this.state.right = false;
-        
-        if (this.joystickKnob) {
-          this.joystickKnob.style.transform = 'translate(0, 0)';
+        if (this.joystickKnob) this.joystickKnob.style.transform = 'translate(0, 0)';
+        if (this.virtualJoystick) {
+          this.virtualJoystick.classList.remove('active');
+          this.virtualJoystick.style.left = 'calc(28px + env(safe-area-inset-left))';
+          this.virtualJoystick.style.top = 'auto';
+          this.virtualJoystick.style.bottom = 'calc(28px + env(safe-area-inset-bottom))';
+          this.virtualJoystick.style.transform = 'none';
         }
       }
       
       if (touch.identifier === this.touchLookId) {
         this.touchLookId = null;
-        this.state.lookDeltaX = 0;
-        this.state.lookDeltaY = 0;
       }
     }
   }
@@ -391,6 +414,7 @@ export class InputManager {
     canvas.removeEventListener('touchstart', this.boundTouchStart);
     canvas.removeEventListener('touchmove', this.boundTouchMove);
     canvas.removeEventListener('touchend', this.boundTouchEnd);
+    canvas.removeEventListener('touchcancel', this.boundTouchEnd);
     
     if (document.pointerLockElement) {
       document.exitPointerLock();

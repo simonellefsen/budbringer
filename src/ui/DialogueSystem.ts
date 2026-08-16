@@ -29,7 +29,7 @@ export class DialogueSystem {
         
         #dialogue-container {
           position: fixed;
-          bottom: 8%;
+          bottom: calc(8% + env(safe-area-inset-bottom));
           left: 50%;
           transform: translateX(-50%);
           width: 90%;
