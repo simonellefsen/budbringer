@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Game } from '../core/Game';
+import { Game, GameState } from '../core/Game';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { NPC as NPC_COLOR, MATERIAL, ACCENT } from '../utils/palette';
 import { RiggedFigure } from './Characters';
@@ -13,12 +13,49 @@ export interface NPC {
   idleAnimation: (elapsed: number) => void;
   greetings: string[];
   biome: BiomeType;
+  wander?: Wander;
 }
+
+/** A short stroll between named anchors. */
+interface Wander {
+  waypoints: THREE.Vector3[];
+  index: number;
+  step: number;
+  pingPong: boolean;
+  wait: number;
+  speed: number;
+  moving: boolean;
+  walkBlend: number;
+  walkPhase: number;
+  idlePhase: number;
+}
+
+interface RouteSpec {
+  stops: string[];
+  pingPong?: boolean;
+  speed?: number;
+}
+
+/** Home plus a couple of nearby standing spots — never through a building. */
+const ROUTES: Record<string, RouteSpec> = {
+  'Postmaster Maple': { stops: ['post', 'square'] },
+  'Baker Brie': { stops: ['bakery', 'square'] },
+  'Keeper Kai': { stops: ['church', 'churchyard', 'church_path'] },
+  'Fisher Finn': { stops: ['riverbank', 'riverbank_up', 'riverbank_down'], pingPong: true, speed: 1.35 },
+  'Hermit Hazel': { stops: ['outskirts', 'outskirts_view'], pingPong: true, speed: 1.4 },
+  'Shepherd Sylvie': { stops: ['farm', 'farm_lane'], pingPong: true, speed: 1.55 }
+};
 
 export class NPCManager {
   private game: Game;
   public npcs: NPC[] = [];
   private interactionDistance: number = 6;
+
+  private readonly _up = new THREE.Vector3();
+  private readonly _fwd = new THREE.Vector3();
+  private readonly _right = new THREE.Vector3();
+  private readonly _mat = new THREE.Matrix4();
+  private readonly _quat = new THREE.Quaternion();
 
   constructor(game: Game) {
     this.game = game;
@@ -32,6 +69,9 @@ export class NPCManager {
     this.createKeeperKai();
     this.createBakerBrie();
     this.createShepherdSylvie();
+    for (let i = 0; i < this.npcs.length; i++) {
+      this.assignRoute(this.npcs[i], i);
+    }
   }
 
   private createPostmasterMaple(): void {
@@ -418,11 +458,12 @@ export class NPCManager {
    * basis explicitly and point that at the village.
    */
   private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3): void {
-    const up = position.clone().normalize();
-    object.position.copy(position);
+    const grounded = this.game.planet.groundPoint(position);
+    const up = grounded.clone().normalize();
+    object.position.copy(grounded);
 
     const lookAt = this.game.planet.getBiomePosition(BiomeType.TOWN);
-    const forward = lookAt.clone().sub(position);
+    const forward = lookAt.clone().sub(grounded);
     forward.sub(up.clone().multiplyScalar(forward.dot(up)));
 
     if (forward.lengthSq() < 1e-8) {
@@ -437,28 +478,204 @@ export class NPCManager {
   }
 
   /**
-   * Idle motion for the villagers: a slow breathing sway on the whole figure
-   * and a little arm drift, so a stationary NPC does not read as a statue.
+   * Walk the villager between the named anchors for their route.
    *
-   * Driven off the rig's named parts where there is one; the per-NPC
-   * idleAnimation callbacks that poked mesh.children[0] no longer apply, since
-   * a modelled villager's child zero is a torso mesh rather than a body group.
+   * Stops are standing spots the generator already cleared (shopfront, bank,
+   * churchyard), so they do not cut through a nave or a bakery. They pause at
+   * each end, and they stop and face you when you come close enough to talk.
    */
-  public update(_delta: number, elapsed: number): void {
+  private assignRoute(npc: NPC, index: number): void {
+    const spec = ROUTES[npc.name];
+    if (!spec) return;
+
+    const waypoints: THREE.Vector3[] = [];
+    for (let s = 0; s < spec.stops.length; s++) {
+      const at = this.game.planet.anchors.get(spec.stops[s]);
+      if (!at) continue;
+      // Baker and postmaster both visit the square — stand them a step apart.
+      const point = spec.stops[s] === 'square'
+        ? this.game.planet.groundPoint(
+            this.game.planet.offsetOnSphere(at, index * 1.7, 1.5)
+          )
+        : this.game.planet.groundPoint(at);
+      if (this.aboveWater(point)) waypoints.push(point);
+    }
+    if (waypoints.length === 0) return;
+
+    const start = index % waypoints.length;
+    let dest = start;
+    let step = 1;
+    if (waypoints.length >= 2) {
+      if (spec.pingPong && start === waypoints.length - 1) {
+        dest = start - 1;
+        step = -1;
+      } else {
+        dest = (start + 1) % waypoints.length;
+      }
+    }
+
+    npc.wander = {
+      waypoints,
+      index: dest,
+      step,
+      pingPong: !!spec.pingPong,
+      wait: 0.5 + index * 0.9,
+      speed: spec.speed ?? 1.7,
+      moving: false,
+      walkBlend: 0,
+      walkPhase: index * 0.8,
+      idlePhase: index * 1.7
+    };
+    npc.mesh.position.copy(waypoints[start]);
+    npc.position.copy(waypoints[start]);
+    this.faceToward(npc.mesh, waypoints[dest], 1);
+  }
+
+  private aboveWater(point: THREE.Vector3): boolean {
+    const elev = point.length() - this.game.planet.radius;
+    return elev > this.game.planet.terrain.waterLevel + 0.7;
+  }
+
+  private arcBetween(a: THREE.Vector3, b: THREE.Vector3): number {
+    const da = a.clone().normalize();
+    const db = b.clone().normalize();
+    const dot = THREE.MathUtils.clamp(da.dot(db), -1, 1);
+    return this.game.planetRadius * Math.acos(dot);
+  }
+
+  private nearPlayer(npc: NPC): boolean {
+    if (this.game.state !== GameState.PLAYING || !this.game.character) return false;
+    return this.arcBetween(npc.mesh.position, this.game.character.group.position) < 4.2;
+  }
+
+  private faceToward(object: THREE.Object3D, target: THREE.Vector3, delta: number): void {
+    this._up.copy(object.position).normalize();
+    this._fwd.copy(target).sub(object.position);
+    this._fwd.addScaledVector(this._up, -this._fwd.dot(this._up));
+    if (this._fwd.lengthSq() < 1e-6) return;
+    this._fwd.normalize();
+    this._right.crossVectors(this._up, this._fwd).normalize();
+    this._fwd.crossVectors(this._right, this._up).normalize();
+    this._mat.makeBasis(this._right, this._up, this._fwd);
+    this._quat.setFromRotationMatrix(this._mat);
+    if (delta >= 1) {
+      object.quaternion.copy(this._quat);
+      return;
+    }
+    const t = 1 - Math.exp(-8 * delta);
+    object.quaternion.slerp(this._quat, t);
+  }
+
+  private stepToward(npc: NPC, dest: THREE.Vector3, distance: number, delta: number): boolean {
+    const arc = this.arcBetween(npc.mesh.position, dest);
+    if (arc < 0.32) {
+      npc.mesh.position.copy(dest);
+      return true;
+    }
+    const a = npc.mesh.position.clone().normalize();
+    const b = dest.clone().normalize();
+    const t = Math.min(1, distance / arc);
+    const dir = a.lerp(b, t).normalize();
+    npc.mesh.position.copy(this.game.planet.groundPoint(dir));
+    this.faceToward(npc.mesh, dest, delta);
+    return false;
+  }
+
+  private advanceRoute(wander: Wander): void {
+    if (wander.waypoints.length < 2) return;
+    if (wander.pingPong) {
+      const next = wander.index + wander.step;
+      if (next < 0 || next >= wander.waypoints.length) {
+        wander.step *= -1;
+      }
+      wander.index = THREE.MathUtils.clamp(wander.index + wander.step, 0, wander.waypoints.length - 1);
+      return;
+    }
+    wander.index = (wander.index + 1) % wander.waypoints.length;
+  }
+
+  private tickWander(npc: NPC, delta: number, index: number): void {
+    const wander = npc.wander;
+    if (!wander || wander.waypoints.length < 2) {
+      if (wander) wander.moving = false;
+      return;
+    }
+
+    if (this.nearPlayer(npc)) {
+      wander.moving = false;
+      wander.wait = Math.max(wander.wait, 0.7);
+      this.faceToward(npc.mesh, this.game.character.group.position, delta);
+      return;
+    }
+
+    if (wander.wait > 0) {
+      wander.moving = false;
+      wander.wait -= delta;
+      return;
+    }
+
+    const dest = wander.waypoints[wander.index];
+    const arrived = this.stepToward(npc, dest, wander.speed * delta, delta);
+    wander.moving = !arrived;
+    if (arrived) {
+      wander.wait = 2.3 + (index * 1.1) % 3.1;
+      this.advanceRoute(wander);
+    }
+  }
+
+  /**
+   * Blend a stroll into the same limb rig the courier uses, then fall back to
+   * the old breathe-in-place when they are standing.
+   */
+  private animateVillager(npc: NPC, delta: number, index: number): void {
+    const wander = npc.wander;
+    const wantWalk = wander?.moving ? 1 : 0;
+    const walkBlend = wander
+      ? (wander.walkBlend = THREE.MathUtils.damp(wander.walkBlend, wantWalk, 8, delta))
+      : 0;
+    const idlePhase = wander
+      ? (wander.idlePhase += delta * 1.1)
+      : index;
+    if (wander && walkBlend > 0.01) wander.walkPhase += delta * 6.0;
+    const walkPhase = wander ? wander.walkPhase : 0;
+    const swing = Math.sin(walkPhase);
+    const breathe = Math.sin(idlePhase);
+
+    const figure = npc.figure;
+    if (!figure) return;
+
+    const w = walkBlend;
+    const idle = 1 - w;
+    const rootX = 0.05 * w;
+    const rootY = breathe * 0.014 * idle + Math.abs(swing) * 0.03 * w;
+    const headY = breathe * 0.22 * idle + Math.sin(walkPhase * 0.5) * 0.05 * w;
+    const armL = breathe * 0.05 * idle + -swing * 0.42 * w;
+    const armR = -breathe * 0.05 * idle + swing * 0.42 * w;
+    const legL = swing * 0.52 * w;
+    const legR = -swing * 0.52 * w;
+
+    figure.root.rotation.x = THREE.MathUtils.damp(figure.root.rotation.x, rootX, 12, delta);
+    figure.root.position.y = THREE.MathUtils.damp(figure.root.position.y, rootY, 14, delta);
+    if (figure.head) {
+      figure.head.rotation.y = THREE.MathUtils.damp(figure.head.rotation.y, headY, 10, delta);
+    }
+    if (figure.armL) figure.armL.rotation.x = THREE.MathUtils.damp(figure.armL.rotation.x, armL, 14, delta);
+    if (figure.armR) figure.armR.rotation.x = THREE.MathUtils.damp(figure.armR.rotation.x, armR, 14, delta);
+    if (figure.legL) figure.legL.rotation.x = THREE.MathUtils.damp(figure.legL.rotation.x, legL, 14, delta);
+    if (figure.legR) figure.legR.rotation.x = THREE.MathUtils.damp(figure.legR.rotation.x, legR, 14, delta);
+  }
+
+  /**
+   * Idle breathe plus a stroll between anchors, so a villager met on the path
+   * is walking rather than a statue left at their doorway.
+   */
+  public update(delta: number, elapsed: number): void {
     for (let i = 0; i < this.npcs.length; i++) {
       const npc = this.npcs[i];
       npc.idleAnimation(elapsed);
-
-      const figure = npc.figure;
-      if (!figure) continue;
-
-      const phase = elapsed * 1.1 + i * 1.7;
-      figure.root.position.y = Math.sin(phase) * 0.014;
-      if (figure.head) {
-        figure.head.rotation.y = Math.sin(phase * 0.45) * 0.22;
-      }
-      if (figure.armL) figure.armL.rotation.x = Math.sin(phase * 0.6) * 0.05;
-      if (figure.armR) figure.armR.rotation.x = -Math.sin(phase * 0.6) * 0.05;
+      this.tickWander(npc, delta, i);
+      this.animateVillager(npc, delta, i);
+      npc.position.copy(npc.mesh.position);
     }
   }
 

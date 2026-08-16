@@ -6,11 +6,13 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- Villagers only breathe in place — they have no walk of their own when you
-  meet them away from their anchors.
+- Sheep and goats in the paddock are still planted props — they do not wander.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Villagers only breathed in place — they now stroll between named anchors
+  (shopfront, square, churchyard, riverbank, farm lane), blend a walk into
+  the same limb rig as the courier, and stop to face you when you come close.
 - Walk cycle snapped between idle / run / jump — those poses now mix with
   damped joints, footsteps fire on foot-plant, and the iPhone stick is analog
   so a light push is a stroll.
@@ -60,8 +62,8 @@ don't let it go stale.
 
 ## Possible future work
 
-- Villager locomotion (they already idle-breathe; they still don't walk
-  between anchors).
+- Give the paddock flock a wander (sheep and goats are still static kit
+  props).
 - Expand region variety further (currently 18 named areas from a fixed
   rota of ~12 kinds, plus `Les Chutes`).
 - Investigate whether `postprocessing`'s ink/outline pass could also apply

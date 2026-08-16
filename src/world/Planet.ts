@@ -696,8 +696,11 @@ export class Planet {
     const site = this.getOffsetOnSphere(center, 2.3, 15);
     this.addPiece('Church', site, center);
 
-    // The keeper stands at the west door, not inside the nave.
+    // The keeper stands at the west door, not inside the nave, and strolls
+    // the churchyard rather than cutting through the building.
     this.anchors.set('church', this.getOffsetOnSphere(site, 2.3 + Math.PI, 9));
+    this.anchors.set('churchyard', this.getOffsetOnSphere(site, 2.3 + Math.PI + 0.55, 12));
+    this.anchors.set('church_path', this.getOffsetOnSphere(site, 2.3 + Math.PI - 0.55, 12));
     this.markArea('Église Saint-Martin', site, 14);
 
     // Churchyard wall and a couple of trees.
@@ -771,11 +774,14 @@ export class Planet {
 
     this.markArea('Les Berges', onRiver, 17);
 
-    // The fisher sits on the bank, a little upstream of the bridge.
-    this.anchors.set('riverbank', onRiver.clone()
-      .addScaledVector(along, 7)
+    // The fisher paces the bank, a little upstream of the bridge.
+    const bank = (alongDist: number): THREE.Vector3 => onRiver.clone()
+      .addScaledVector(along, alongDist)
       .addScaledVector(this.riverAxis, 4.2)
-      .normalize().multiplyScalar(this.radius));
+      .normalize().multiplyScalar(this.radius);
+    this.anchors.set('riverbank', bank(7));
+    this.anchors.set('riverbank_up', bank(12.5));
+    this.anchors.set('riverbank_down', bank(2.2));
 
     for (let i = -4; i <= 4; i++) {
       if (i === 0) continue; // leave the bridge approach clear
@@ -803,11 +809,13 @@ export class Planet {
     const yard = this.getOffsetOnSphere(center, 1.1, 6);
     this.addPiece('Barn', yard, center);
     this.anchors.set('outskirts', this.getOffsetOnSphere(center, 4.4, 17));
+    this.anchors.set('outskirts_view', this.getOffsetOnSphere(center, 4.4 + 0.55, 21));
     this.markArea('Les Hauteurs', this.getOffsetOnSphere(center, 4.4, 17), 12);
 
     // Paddock fence, a ring of panels each facing the middle.
     const paddock = this.getOffsetOnSphere(yard, 2.6, 10);
     this.anchors.set('farm', this.getOffsetOnSphere(paddock, 2.6 + Math.PI, 9));
+    this.anchors.set('farm_lane', this.getOffsetOnSphere(paddock, 2.6 + Math.PI + 0.45, 12));
     this.markArea('La Bergerie', paddock, 15);
     const panels = 14;
     for (let i = 0; i < panels; i++) {
@@ -2064,6 +2072,17 @@ export class Planet {
   /** Distance from the planet centre to the ground below a direction. */
   public getGroundRadius(direction: THREE.Vector3): number {
     return this.terrain.surfaceRadius(direction);
+  }
+
+  /** Surface point under `position`, sitting on the height field. */
+  public groundPoint(position: THREE.Vector3): THREE.Vector3 {
+    const dir = position.clone().normalize();
+    return dir.multiplyScalar(this.terrain.surfaceRadius(dir));
+  }
+
+  /** A point `distance` units along the surface from `center` at `angle`. */
+  public offsetOnSphere(center: THREE.Vector3, angle: number, distance: number): THREE.Vector3 {
+    return this.getOffsetOnSphere(center, angle, distance);
   }
 
   /**
