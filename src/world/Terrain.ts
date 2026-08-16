@@ -47,6 +47,8 @@ export class Terrain {
   private riverDepth: number;
 
   private flatSpots: FlatSpot[] = [];
+  /** Round basins cut below the water line. */
+  private basins: { center: THREE.Vector3; radius: number }[] = [];
 
   private noiseBase: (x: number, y: number, z: number) => number;
   private noiseHill: (x: number, y: number, z: number) => number;
@@ -56,8 +58,8 @@ export class Terrain {
   constructor(options: TerrainOptions) {
     this.planetRadius = options.planetRadius;
     this.riverAxis = options.riverAxis.clone().normalize();
-    this.valleyWidth = options.riverValleyWidth ?? 7.5;
-    this.riverDepth = options.riverDepth ?? 3.2;
+    this.valleyWidth = options.riverValleyWidth ?? 5.5;
+    this.riverDepth = options.riverDepth ?? 5.4;
     this.waterLevel = -this.riverDepth;
 
     // Four fixed streams so the world is identical on every load. A seeded
@@ -78,6 +80,16 @@ export class Terrain {
    */
   public addFlatSpot(center: THREE.Vector3, radius: number): void {
     this.flatSpots.push({ center: center.clone().normalize(), radius });
+  }
+
+  /**
+   * Cut a round basin, for a lake.
+   *
+   * Shares the river's water level so one water plane can serve both, and so
+   * a lake the river runs into does not step up or down where they meet.
+   */
+  public addBasin(center: THREE.Vector3, radius: number): void {
+    this.basins.push({ center: center.clone().normalize(), radius });
   }
 
   /** Surface distance between two directions, in world units. */
@@ -129,6 +141,14 @@ export class Terrain {
       const cut = 1 - THREE.MathUtils.smoothstep(
         fromRiver, this.valleyWidth * 0.55, this.valleyWidth * 2.6);
       h = THREE.MathUtils.lerp(h, this.waterLevel, cut);
+    }
+
+    // Lake basins, cut to the same level as the river.
+    for (const basin of this.basins) {
+      const dist = this.arc(d, basin.center);
+      if (dist > basin.radius * 1.8) continue;
+      const cut = 1 - THREE.MathUtils.smoothstep(dist, basin.radius * 0.6, basin.radius * 1.8);
+      h = THREE.MathUtils.lerp(h, this.waterLevel - 0.8, cut);
     }
 
     // Level ground for the places people built on.

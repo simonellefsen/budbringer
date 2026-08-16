@@ -48,6 +48,8 @@ export class Game {
   public mapView!: MapView;
   private composer!: EffectComposer;
   private inkEffect!: InkEffect;
+  /** Fog parked while something is looking at the whole planet. */
+  private parkedFog: THREE.Fog | null = null;
 
 
   public state: GameState = GameState.TITLE;
@@ -73,6 +75,9 @@ export class Game {
     this.mapView = new MapView(this);
     this.setupUI();
     this.setupAudio();
+
+    // The title screen shows the planet whole, so the fog starts parked.
+    this.suspendFog();
 
     this.hideLoading();
     this.animate();
@@ -276,8 +281,31 @@ export class Game {
     }
   }
 
+  /**
+   * Park the street-level fog.
+   *
+   * Anything viewing the planet whole — the title screen, the world map —
+   * needs it out of the way, or the globe dissolves at 34 units. Handled by
+   * explicit calls rather than inferred from state changes in the frame loop,
+   * which was fragile and left the fog off after entering the game.
+   */
+  public suspendFog(): void {
+    if (this.scene.fog) {
+      this.parkedFog = this.scene.fog as THREE.Fog;
+      this.scene.fog = null;
+    }
+  }
+
+  public restoreFog(): void {
+    if (this.parkedFog) {
+      this.scene.fog = this.parkedFog;
+      this.parkedFog = null;
+    }
+  }
+
   public startGame(): void {
     this.state = GameState.PLAYING;
+    this.restoreFog();
     this.titleScreen.hide();
     this.hud.show();
     this.inputManager.enable();
@@ -312,16 +340,17 @@ export class Game {
       this.secrets.update(elapsed);
     }
     
+    // The title screen orbits the real planet, so it drives the shared camera.
+    if (this.state === GameState.TITLE) {
+      this.titleScreen?.update(delta);
+    }
+
     this.mapView?.update(delta);
 
     this.planet.update(elapsed);
     this.hud.update();
     
-    // Only render main game scene when not on title screen
-    // Title screen handles its own rendering
-    if (this.state !== GameState.TITLE) {
-      this.composer.render(delta);
-    }
+    this.composer.render(delta);
   };
 
   public resize(): void {
