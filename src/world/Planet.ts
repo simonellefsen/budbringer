@@ -25,6 +25,7 @@ export class Planet {
   public biomes: BiomeData[] = [];
   private decorations: THREE.Group;
   private foliage: THREE.Object3D[] = [];
+  private foliageBaseQuaternions: Map<THREE.Object3D, THREE.Quaternion> = new Map();
   private windTime: number = 0;
   private clouds: THREE.Group;
 
@@ -219,17 +220,15 @@ export class Planet {
   private createRoadSegment(from: THREE.Vector3, to: THREE.Vector3): void {
     // Calculate road length based on arc distance
     const arcLength = from.angleTo(to) * this.radius;
-    const roadWidth = 2.4;
-    const roadThickness = 0.25; // Thick enough to embed into sphere and appear flush
-    const roadGeo = new THREE.BoxGeometry(roadWidth, roadThickness, Math.max(arcLength * 1.15, 1.8));
+    const roadWidth = 2.2;
+    const roadThickness = 0.08; // Thicker so it embeds into surface
+    const roadGeo = new THREE.BoxGeometry(roadWidth, roadThickness, Math.max(arcLength * 1.1, 1.5));
     const roadMat = ToonMaterial.create({ color: 0x404040 });
     const road = new THREE.Mesh(roadGeo, roadMat);
     road.receiveShadow = true;
     
-    // Position EMBEDDED into the sphere so road surface appears flush with grass
-    // Place at radius - half thickness so the top of the road is at surface level
-    const embedDepth = roadThickness * 0.4;
-    const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius - embedDepth);
+    // Position at midpoint FLUSH with the surface (half-embedded)
+    const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius);
     road.position.copy(mid);
     
     // Orient: up is surface normal, forward points along the road
@@ -246,11 +245,11 @@ export class Planet {
     
     this.decorations.add(road);
     
-    // Center line dash - on top of road (at surface level)
-    const lineGeo = new THREE.BoxGeometry(0.15, 0.03, Math.max(arcLength * 0.4, 0.5));
+    // Center line dash - on top of road
+    const lineGeo = new THREE.BoxGeometry(0.15, 0.02, Math.max(arcLength * 0.4, 0.5));
     const lineMat = ToonMaterial.create({ color: 0xeeeeee });
     const line = new THREE.Mesh(lineGeo, lineMat);
-    const lineMid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius + 0.02);
+    const lineMid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius + roadThickness / 2 + 0.01);
     line.position.copy(lineMid);
     line.quaternion.copy(road.quaternion);
     this.decorations.add(line);
@@ -264,27 +263,26 @@ export class Planet {
       
       for (let i = 0; i < segments; i++) {
         const angle = (i / segments) * Math.PI * 2;
-        const surfacePos = this.getOffsetOnSphere(center, angle, ringRadius);
+        const pos = this.getOffsetOnSphere(center, angle, ringRadius);
         
-        const roadThickness = 0.25; // Thicker to embed into surface
-        const roadGeo = new THREE.BoxGeometry(2.4, roadThickness, 3.2);
+        const roadThickness = 0.08;
+        const roadGeo = new THREE.BoxGeometry(2.2, roadThickness, 3);
         const roadMat = ToonMaterial.create({ color: 0x484848 });
         const road = new THREE.Mesh(roadGeo, roadMat);
         road.receiveShadow = true;
         
-        // Embed into sphere so top appears flush with grass
-        const embedDepth = roadThickness * 0.4;
-        const embeddedPos = surfacePos.clone().normalize().multiplyScalar(this.radius - embedDepth);
-        this.placeOnSphereAtPosition(road, embeddedPos, surfacePos.clone().normalize(), angle + Math.PI / 2);
+        // Place flush with surface with specific orientation
+        this.placeOnSphere(road, pos, angle + Math.PI / 2);
         this.decorations.add(road);
         
-        // Center line dashes - on top of road (at surface level)
+        // Center line dashes - on top of road
         for (let d = 0; d < 2; d++) {
-          const dashGeo = new THREE.BoxGeometry(0.1, 0.03, 0.5);
+          const dashGeo = new THREE.BoxGeometry(0.1, 0.02, 0.5);
           const dashMat = ToonMaterial.create({ color: 0xffffff });
           const dash = new THREE.Mesh(dashGeo, dashMat);
-          const dashPos = surfacePos.clone().normalize().multiplyScalar(this.radius + 0.02);
-          this.placeOnSphereAtPosition(dash, dashPos, surfacePos.clone().normalize(), angle + Math.PI / 2);
+          dash.position.copy(road.position);
+          dash.quaternion.copy(road.quaternion);
+          dash.translateY(roadThickness / 2 + 0.01);
           dash.translateZ(-0.6 + d * 1.2);
           this.decorations.add(dash);
         }
@@ -293,18 +291,18 @@ export class Planet {
   }
 
   private createConnectingRoad(from: THREE.Vector3, to: THREE.Vector3): void {
-    const steps = 18; // More segments for smoother curve
+    const steps = 15;
     for (let i = 0; i < steps; i++) {
       const t = i / steps;
-      const surfacePos = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
+      const pos = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
       
-      const roadThickness = 0.25; // Thicker to embed into surface
-      const roadGeo = new THREE.BoxGeometry(2.0, roadThickness, 2.2);
+      const roadThickness = 0.08;
+      const roadGeo = new THREE.BoxGeometry(1.8, roadThickness, 2);
       const roadMat = ToonMaterial.create({ color: 0x4a4a4a });
       const road = new THREE.Mesh(roadGeo, roadMat);
       
       // Use proper orientation with makeBasis
-      const up = surfacePos.clone().normalize();
+      const up = pos.clone().normalize();
       const dir = to.clone().sub(from);
       dir.sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
       
@@ -319,10 +317,7 @@ export class Planet {
       const matrix = new THREE.Matrix4();
       matrix.makeBasis(right, up, forward);
       
-      // Embed into sphere so top appears flush
-      const embedDepth = roadThickness * 0.4;
-      const embeddedPos = surfacePos.clone().normalize().multiplyScalar(this.radius - embedDepth);
-      road.position.copy(embeddedPos);
+      road.position.copy(pos);
       road.quaternion.setFromRotationMatrix(matrix);
       
       this.decorations.add(road);
@@ -388,6 +383,7 @@ export class Planet {
       this.placeOnSphere(tree, pos);
       this.decorations.add(tree);
       this.foliage.push(tree);
+      this.foliageBaseQuaternions.set(tree, tree.quaternion.clone());
     }
     
     // Random props: poles, vending machines, benches, etc.
@@ -516,25 +512,17 @@ export class Planet {
     const wallColor = wallColors[Math.floor(Math.random() * wallColors.length)];
     const roofColor = roofColors[Math.floor(Math.random() * roofColors.length)];
     
-    // Foundation that embeds INTO the sphere to ensure flush contact on curved surface
-    // This prevents corners from floating when the flat base meets the curved ground
-    const foundationGeo = new THREE.BoxGeometry(3.2, 0.6, 2.7);
-    const foundationMat = ToonMaterial.create({ color: 0x8a8a7a });
-    const foundation = new THREE.Mesh(foundationGeo, foundationMat);
-    foundation.position.y = -0.1; // Extends below y=0 to embed into sphere
-    house.add(foundation);
-    
-    // Main body - sits on foundation
+    // Main body
     const bodyGeo = new THREE.BoxGeometry(3, 2.5, 2.5);
     const bodyMat = ToonMaterial.create({ color: wallColor });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 1.45; // Raised slightly to sit on foundation
+    body.position.y = 1.25;
     body.castShadow = true;
     body.receiveShadow = true;
     house.add(body);
     house.add(OutlineMaterial.addOutlineToMesh(body, OUTLINE_OPTS));
     
-    // Pitched roof (proper triangle/gable) - adjusted for raised body
+    // Pitched roof (proper triangle/gable)
     const roofShape = new THREE.Shape();
     roofShape.moveTo(-1.9, 0);
     roofShape.lineTo(0, 1.2);
@@ -545,24 +533,24 @@ export class Planet {
     const roofGeo = new THREE.ExtrudeGeometry(roofShape, roofExtrudeSettings);
     const roofMat = ToonMaterial.create({ color: roofColor });
     const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.position.set(0, 2.7, -1.6); // Raised to match body
+    roof.position.set(0, 2.5, -1.6);
     roof.castShadow = true;
     house.add(roof);
     house.add(OutlineMaterial.addOutlineToMesh(roof, OUTLINE_OPTS));
     
-    // Door - adjusted for foundation
+    // Door
     const doorGeo = new THREE.BoxGeometry(0.8, 1.6, 0.1);
     const doorMat = ToonMaterial.create({ color: 0x6b5344 });
     const door = new THREE.Mesh(doorGeo, doorMat);
-    door.position.set(0, 1.0, 1.3); // Raised
+    door.position.set(0, 0.8, 1.3);
     house.add(door);
     
-    // Windows with frames - adjusted for raised body
+    // Windows with frames
     for (let i = 0; i < 2; i++) {
       const windowGeo = new THREE.BoxGeometry(0.6, 0.6, 0.1);
       const windowMat = ToonMaterial.create({ color: 0x87CEEB });
       const windowMesh = new THREE.Mesh(windowGeo, windowMat);
-      windowMesh.position.set(i === 0 ? -0.9 : 0.9, 2.0, 1.3); // Raised
+      windowMesh.position.set(i === 0 ? -0.9 : 0.9, 1.8, 1.3);
       house.add(windowMesh);
       
       const frameGeo = new THREE.BoxGeometry(0.7, 0.7, 0.05);
@@ -573,11 +561,11 @@ export class Planet {
       house.add(frame);
     }
     
-    // AC unit - adjusted for raised body
+    // AC unit
     const acGeo = new THREE.BoxGeometry(0.8, 0.4, 0.3);
     const acMat = ToonMaterial.create({ color: 0xe8e8e8 });
     const ac = new THREE.Mesh(acGeo, acMat);
-    ac.position.set(1.2, 2.2, -1.3); // Raised
+    ac.position.set(1.2, 2.0, -1.3);
     house.add(ac);
     house.add(OutlineMaterial.addOutlineToMesh(ac, { thickness: 0.02, wobble: 0.004 }));
     
@@ -956,6 +944,7 @@ export class Planet {
       this.placeOnSphere(tree, offset);
       this.decorations.add(tree);
       this.foliage.push(tree);
+      this.foliageBaseQuaternions.set(tree, tree.quaternion.clone());
     }
     
     const lookout = this.createLookoutPlatform();
@@ -1274,34 +1263,6 @@ export class Planet {
     object.quaternion.setFromRotationMatrix(matrix);
   }
 
-  private placeOnSphereAtPosition(object: THREE.Object3D, position: THREE.Vector3, surfaceNormal: THREE.Vector3, yawAngle?: number): void {
-    // Similar to placeOnSphere but allows placing at an embedded position
-    // while using a separate surface normal for orientation
-    const up = surfaceNormal.clone().normalize();
-    
-    object.position.copy(position);
-    
-    // Create an arbitrary tangent vector for local +Z (forward)
-    let forward = new THREE.Vector3(0, 1, 0);
-    if (Math.abs(up.dot(forward)) > 0.99) {
-      forward = new THREE.Vector3(1, 0, 0);
-    }
-    forward.sub(up.clone().multiplyScalar(forward.dot(up))).normalize();
-    
-    // Apply yaw
-    const yaw = yawAngle !== undefined ? yawAngle : Math.random() * Math.PI * 2;
-    const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, yaw);
-    forward.applyQuaternion(yawQuat);
-    
-    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-    forward.crossVectors(up, right).normalize();
-    
-    const matrix = new THREE.Matrix4();
-    matrix.makeBasis(right, up, forward);
-    
-    object.quaternion.setFromRotationMatrix(matrix);
-  }
-
   public getSpawnPosition(): THREE.Vector3 {
     const townBiome = this.biomes.find(b => b.type === BiomeType.TOWN)!;
     // Spawn offset from town center on a road, not in the middle of buildings
@@ -1332,12 +1293,21 @@ export class Planet {
     this.windTime = elapsed;
     
     for (const tree of this.foliage) {
+      const baseQuat = this.foliageBaseQuaternions.get(tree);
+      if (!baseQuat) continue;
+      
       const pos = tree.position;
       const windOffset = Math.sin(this.windTime * 1.5 + pos.x * 0.3) * 0.015;
       const windOffset2 = Math.cos(this.windTime * 1.2 + pos.z * 0.3) * 0.01;
       
-      tree.rotation.x = windOffset;
-      tree.rotation.z = windOffset2;
+      // Apply wind as LOCAL rotation on top of base orientation
+      // Create a small rotation in local space and multiply with base
+      const windQuat = new THREE.Quaternion();
+      const euler = new THREE.Euler(windOffset, 0, windOffset2, 'XYZ');
+      windQuat.setFromEuler(euler);
+      
+      // Result = base * wind (local wind applied to base orientation)
+      tree.quaternion.copy(baseQuat).multiply(windQuat);
     }
     
     this.clouds.children.forEach((cloud, i) => {
