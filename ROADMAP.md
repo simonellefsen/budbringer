@@ -6,10 +6,12 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- Sheep and goats in the paddock are still planted props — they do not wander.
+- Windmill sails are frozen — the mill is a landmark that should turn.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Sheep and goats were planted props — they now graze inside their paddock
+  or pasture disc, with a whole-body waddle (the kit mesh has no leg bones).
 - Villagers only breathed in place — they now stroll between named anchors
   (shopfront, square, churchyard, riverbank, farm lane), blend a walk into
   the same limb rig as the courier, and stop to face you when you come close.
@@ -62,8 +64,7 @@ don't let it go stale.
 
 ## Possible future work
 
-- Give the paddock flock a wander (sheep and goats are still static kit
-  props).
+- Turn the windmill sails (they are still a static kit mesh).
 - Expand region variety further (currently 18 named areas from a fixed
   rota of ~12 kinds, plus `Les Chutes`).
 - Investigate whether `postprocessing`'s ink/outline pass could also apply

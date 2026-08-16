@@ -42,6 +42,14 @@ export interface Area {
   radius: number;
 }
 
+/** A sheep or goat the flock driver will walk around its home disc. */
+export interface GrazingAnimal {
+  mesh: THREE.Object3D;
+  home: THREE.Vector3;
+  roam: number;
+  kind: 'Sheep' | 'Goat';
+}
+
 interface BiomeData {
   type: BiomeType;
   color: THREE.Color;
@@ -70,6 +78,8 @@ export class Planet {
   public anchors: Map<string, THREE.Vector3> = new Map();
   /** Named regions, for the place-name card and for directing deliveries. */
   public areas: Area[] = [];
+  /** Sheep and goats, so the flock can wander them after the world is built. */
+  public animals: GrazingAnimal[] = [];
   /** The height field. Everything that touches the ground asks this. */
   public terrain!: Terrain;
   /** Region layout, decided before the mesh so their ground can be levelled. */
@@ -380,7 +390,11 @@ export class Planet {
       const spot = this.getOffsetOnSphere(center, Math.random() * Math.PI * 2, dist);
       if (!this.isFree(spot, clearance)) continue;
       if (this.tooSteep(spot)) continue;
-      this.addPiece(pieces[Math.floor(Math.random() * pieces.length)], spot);
+      const name = pieces[Math.floor(Math.random() * pieces.length)];
+      const piece = this.addPiece(name, spot);
+      if (piece && (name === 'Sheep' || name === 'Goat')) {
+        this.registerAnimal(piece, name, center, radius * 0.85);
+      }
     }
   }
 
@@ -825,13 +839,15 @@ export class Planet {
       this.addPiece('Fence', post, next);
     }
 
-    // The flock.
+    // The flock. They stay inside the fence (radius 8) and wander later.
     for (let i = 0; i < 9; i++) {
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.random() * 6;
       const spot = this.getOffsetOnSphere(paddock, angle, dist);
       const facing = this.getOffsetOnSphere(paddock, angle + 1.2, dist + 3);
-      this.addPiece(i % 3 === 0 ? 'Goat' : 'Sheep', spot, facing, i);
+      const kind = i % 3 === 0 ? 'Goat' : 'Sheep';
+      const piece = this.addPiece(kind, spot, facing, i);
+      if (piece) this.registerAnimal(piece, kind, paddock, 6.2);
     }
   }
 
@@ -1362,6 +1378,15 @@ export class Planet {
     this.claim(position, footprint[name] ?? 1.2);
 
     return piece;
+  }
+
+  private registerAnimal(
+    mesh: THREE.Object3D,
+    kind: 'Sheep' | 'Goat',
+    home: THREE.Vector3,
+    roam: number
+  ): void {
+    this.animals.push({ mesh, home: home.clone(), roam, kind });
   }
 
   private createPrimitiveHouse(): THREE.Group {
