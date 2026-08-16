@@ -247,34 +247,30 @@ export class TitleScreen {
     // Create a curved road segment that follows the sphere surface at given latitude
     const phi = Math.PI / 2 - latitude; // Convert latitude to phi angle
     
-    // Embed road INTO sphere so top appears flush with grass
-    const embedRadius = radius - 0.08;
-    const roadThickness = 0.25; // Thicker to ensure it embeds properly
-    
     // Create shape for the road cross-section
     const shape = new THREE.Shape();
     shape.moveTo(-width / 2, 0);
     shape.lineTo(width / 2, 0);
-    shape.lineTo(width / 2, roadThickness);
-    shape.lineTo(-width / 2, roadThickness);
+    shape.lineTo(width / 2, 0.15);
+    shape.lineTo(-width / 2, 0.15);
     shape.closePath();
     
-    // Create curve path along the latitude at embedded depth
+    // Create curve path along the latitude
     const curve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta1) * embedRadius,
-        Math.cos(phi) * embedRadius,
-        Math.sin(phi) * Math.sin(theta1) * embedRadius
+        Math.sin(phi) * Math.cos(theta1) * radius,
+        Math.cos(phi) * radius,
+        Math.sin(phi) * Math.sin(theta1) * radius
       ),
       new THREE.Vector3(
-        Math.sin(phi) * Math.cos((theta1 + theta2) / 2) * embedRadius,
-        Math.cos(phi) * embedRadius,
-        Math.sin(phi) * Math.sin((theta1 + theta2) / 2) * embedRadius
+        Math.sin(phi) * Math.cos((theta1 + theta2) / 2) * radius,
+        Math.cos(phi) * radius,
+        Math.sin(phi) * Math.sin((theta1 + theta2) / 2) * radius
       ),
       new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta2) * embedRadius,
-        Math.cos(phi) * embedRadius,
-        Math.sin(phi) * Math.sin(theta2) * embedRadius
+        Math.sin(phi) * Math.cos(theta2) * radius,
+        Math.cos(phi) * radius,
+        Math.sin(phi) * Math.sin(theta2) * radius
       )
     ]);
     
@@ -296,32 +292,28 @@ export class TitleScreen {
     const phi2 = Math.PI / 2 - lat2;
     const phiMid = (phi1 + phi2) / 2;
     
-    // Embed road INTO sphere so top appears flush with grass
-    const embedRadius = radius - 0.08;
-    const roadThickness = 0.22;
-    
     const shape = new THREE.Shape();
     shape.moveTo(-width / 2, 0);
     shape.lineTo(width / 2, 0);
-    shape.lineTo(width / 2, roadThickness);
-    shape.lineTo(-width / 2, roadThickness);
+    shape.lineTo(width / 2, 0.12);
+    shape.lineTo(-width / 2, 0.12);
     shape.closePath();
     
     const curve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(
-        Math.sin(phi1) * Math.cos(theta) * embedRadius,
-        Math.cos(phi1) * embedRadius,
-        Math.sin(phi1) * Math.sin(theta) * embedRadius
+        Math.sin(phi1) * Math.cos(theta) * radius,
+        Math.cos(phi1) * radius,
+        Math.sin(phi1) * Math.sin(theta) * radius
       ),
       new THREE.Vector3(
-        Math.sin(phiMid) * Math.cos(theta) * embedRadius,
-        Math.cos(phiMid) * embedRadius,
-        Math.sin(phiMid) * Math.sin(theta) * embedRadius
+        Math.sin(phiMid) * Math.cos(theta) * radius,
+        Math.cos(phiMid) * radius,
+        Math.sin(phiMid) * Math.sin(theta) * radius
       ),
       new THREE.Vector3(
-        Math.sin(phi2) * Math.cos(theta) * embedRadius,
-        Math.cos(phi2) * embedRadius,
-        Math.sin(phi2) * Math.sin(theta) * embedRadius
+        Math.sin(phi2) * Math.cos(theta) * radius,
+        Math.cos(phi2) * radius,
+        Math.sin(phi2) * Math.sin(theta) * radius
       )
     ]);
     
@@ -439,26 +431,19 @@ export class TitleScreen {
     const bodyH = 1.8 + Math.random() * 1.0;
     const bodyD = 1.2 + Math.random() * 0.6;
     
-    // Foundation that embeds INTO sphere to ensure flush contact on curved surface
-    const foundationGeo = new THREE.BoxGeometry(bodyW * 1.1, 0.4, bodyD * 1.1);
-    const foundationMat = ToonMaterial.create({ color: 0x7a7a6a });
-    const foundation = new THREE.Mesh(foundationGeo, foundationMat);
-    foundation.position.y = -0.1; // Extends below y=0 to embed into sphere
-    house.add(foundation);
-    
     const bodyGeo = new THREE.BoxGeometry(bodyW, bodyH, bodyD);
     const bodyMat = ToonMaterial.create({ color: wallColors[variant] });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = bodyH / 2 + 0.1; // Raised slightly to sit on foundation
+    body.position.y = bodyH / 2;
     house.add(body);
     house.add(OutlineMaterial.addOutlineToMesh(body, outlineOpts));
     
-    // CLEAR pitched roof with real volume - adjusted for raised body
+    // CLEAR pitched roof with real volume
     const roofH = 0.8 + Math.random() * 0.4;
     const roofGeo = new THREE.ConeGeometry(Math.max(bodyW, bodyD) * 0.75, roofH, 4);
     const roofMat = ToonMaterial.create({ color: roofColors[variant] });
     const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.position.y = bodyH + roofH / 2 + 0.1; // Adjusted for foundation offset
+    roof.position.y = bodyH + roofH / 2;
     roof.rotation.y = Math.PI / 4;
     house.add(roof);
     house.add(OutlineMaterial.addOutlineToMesh(roof, outlineOpts));
@@ -468,7 +453,7 @@ export class TitleScreen {
       const chimGeo = new THREE.BoxGeometry(0.25, 0.6, 0.25);
       const chimMat = ToonMaterial.create({ color: 0x8a7a6a });
       const chim = new THREE.Mesh(chimGeo, chimMat);
-      chim.position.set(bodyW * 0.25, bodyH + roofH * 0.3 + 0.1, 0); // Adjusted
+      chim.position.set(bodyW * 0.25, bodyH + roofH * 0.3, 0);
       house.add(chim);
     }
     
