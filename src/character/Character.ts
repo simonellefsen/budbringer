@@ -39,9 +39,11 @@ export class Character {
     
     this.createCourier();
     
-    const surfaceHeight = this.game.planetRadius + 0.5;
-    const safeSpawn = spawnPosition.clone().normalize().multiplyScalar(surfaceHeight);
-    this.group.position.copy(safeSpawn);
+    // getSpawnPosition already accounts for terrain height; re-deriving it from
+    // planetRadius here put the courier a couple of metres underground.
+    const spawnDir = spawnPosition.clone().normalize();
+    const surfaceHeight = this.game.planet.getGroundRadius(spawnDir) + 0.5;
+    this.group.position.copy(spawnDir.multiplyScalar(surfaceHeight));
     this.alignToSurface();
     this.isGrounded = true;
   }
@@ -339,14 +341,18 @@ export class Character {
   private move(delta: number): void {
     const movement = this.velocity.clone().multiplyScalar(delta);
     this.group.position.add(movement);
-    
+
     const distFromCenter = this.group.position.length();
-    const surfaceHeight = this.game.planetRadius + 0.5;
-    const maxHeight = this.game.planetRadius + 20;
+
+    // Ground height varies with direction now, so it has to be sampled under
+    // the courier every frame rather than assumed constant.
+    const groundDir = this.group.position.clone().normalize();
+    const surfaceHeight = this.game.planet.getGroundRadius(groundDir) + 0.5;
+    const maxHeight = surfaceHeight + 20;
     const groundTolerance = 0.1;
     
     if (distFromCenter < 1) {
-      this.group.position.set(0, surfaceHeight, 0);
+      this.group.position.set(0, this.game.planetRadius + 0.5, 0);
       this.velocity.set(0, 0, 0);
       this.isGrounded = true;
       return;
@@ -386,16 +392,17 @@ export class Character {
   }
 
   private updateShadow(): void {
-    const surfaceHeight = this.game.planetRadius + 0.01;
     const up = this.group.position.clone().normalize();
-    
-    this.groundShadow.position.copy(up.multiplyScalar(surfaceHeight));
+    const surfaceHeight = this.game.planet.getGroundRadius(up) + 0.02;
+
+    this.groundShadow.position.copy(up.clone().multiplyScalar(surfaceHeight));
     
     const defaultUp = new THREE.Vector3(0, 1, 0);
     const shadowQuat = new THREE.Quaternion().setFromUnitVectors(defaultUp, up.normalize());
     this.groundShadow.quaternion.copy(shadowQuat);
     
-    const heightAboveSurface = this.group.position.length() - this.game.planetRadius - 0.5;
+    const heightAboveSurface = this.group.position.length()
+      - this.game.planet.getGroundRadius(this.group.position.clone().normalize()) - 0.5;
     const shadowScale = Math.max(0.25, 1 - heightAboveSurface * 0.08);
     const shadowOpacity = Math.max(0.08, 0.2 - heightAboveSurface * 0.02);
     this.groundShadow.scale.setScalar(shadowScale);

@@ -59,8 +59,8 @@ export class CameraController {
   private snapToCharacter(): void {
     const charPos = this.game.character.group.position;
     const planetRadius = this.game.planetRadius;
-    const minCamHeight = planetRadius + 3.0;
-    
+    const minCamHeight = this.game.planet.getGroundRadius(charPos.clone().normalize()) + 3.0;
+
     if (charPos.length() < 1) {
       this.camera.position.set(0, planetRadius + this.height + this.distance, 0);
       this.camera.lookAt(0, planetRadius, 0);
@@ -202,8 +202,10 @@ export class CameraController {
     
     // Double-check: ensure camera never goes below surface after lerp
     const currentCamDist = this.camera.position.length();
-    if (currentCamDist < minCamHeight) {
-      this.camera.position.normalize().multiplyScalar(minCamHeight);
+    const groundHere =
+      this.game.planet.getGroundRadius(this.camera.position.clone().normalize()) + 3.0;
+    if (currentCamDist < groundHere) {
+      this.camera.position.normalize().multiplyScalar(groundHere);
     }
     
     // Clamp lookAt to never be below the character
@@ -214,8 +216,10 @@ export class CameraController {
     
     // Ensure lookAt is above surface
     const lookAtDist = currentLookAt.length();
-    if (lookAtDist < planetRadius + 0.5) {
-      currentLookAt.normalize().multiplyScalar(planetRadius + 0.5);
+    const lookGround =
+      this.game.planet.getGroundRadius(currentLookAt.clone().normalize()) + 0.5;
+    if (lookAtDist < lookGround) {
+      currentLookAt.normalize().multiplyScalar(lookGround);
     }
     
     this.camera.lookAt(currentLookAt);
