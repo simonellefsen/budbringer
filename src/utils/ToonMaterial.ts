@@ -1,108 +1,81 @@
 import * as THREE from 'three';
 
+/**
+ * Toon materials for the whole game.
+ *
+ * This used to be a raw ShaderMaterial that computed its own three-band ramp
+ * from a hand-set light direction. It never sampled a shadow map, never read a
+ * light and never applied fog, so every light in the scene was inert and the
+ * 2048^2 shadow map was rendered into the void — the reason the world read as
+ * unlit cardboard.
+ *
+ * It is now MeshToonMaterial, which bands the diffuse term through a gradient
+ * map while keeping three's real lighting path: shadow maps, fog, and every
+ * light in the scene. Shadows come out tinted because the fill is a
+ * HemisphereLight rather than flat white ambient (see Game.setupLighting).
+ *
+ * Materials are cached by their visual properties. The old code called
+ * create() once per mesh and ended up with 3,530 distinct materials to draw
+ * 85,120 triangles; identical requests now return the same instance, which is
+ * also what makes the renderer able to batch them.
+ */
+
 interface ToonMaterialOptions {
   color?: number;
   emissive?: number;
   emissiveIntensity?: number;
   vertexColors?: boolean;
-  flatShading?: boolean;
   side?: THREE.Side;
-  outline?: boolean;
   transparent?: boolean;
   opacity?: number;
+  /** Opt out of the cache when the caller intends to mutate the material. */
+  unique?: boolean;
 }
 
-const toonVertexShader = `
-varying vec3 vNormal;
-varying vec3 vViewPosition;
-varying vec3 vWorldPosition;
-varying vec3 vWorldNormal;
+/** Number of bands in the toon ramp. Two reads closest to the reference art. */
+const BANDS = 3;
 
-#ifdef USE_VERTEX_COLORS
-  varying vec3 vColor;
-  attribute vec3 color;
-#endif
-
-void main() {
-  vNormal = normalize(normalMatrix * normal);
-  vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
-  
-  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-  vViewPosition = -mvPosition.xyz;
-  vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
-  
-  #ifdef USE_VERTEX_COLORS
-    vColor = color;
-  #endif
-  
-  gl_Position = projectionMatrix * mvPosition;
-}
-`;
-
-const toonFragmentShader = `
-uniform vec3 uColor;
-uniform vec3 uEmissive;
-uniform float uEmissiveIntensity;
-uniform vec3 uLightDirection;
-uniform vec3 uLightColor;
-uniform vec3 uAmbientColor;
-uniform float uOpacity;
-
-varying vec3 vNormal;
-varying vec3 vViewPosition;
-varying vec3 vWorldPosition;
-varying vec3 vWorldNormal;
-
-#ifdef USE_VERTEX_COLORS
-  varying vec3 vColor;
-#endif
-
-void main() {
-  vec3 normal = normalize(vNormal);
-  vec3 lightDir = normalize(uLightDirection);
-  
-  float NdotL = dot(normal, lightDir);
-  
-  // Posterized toon shading - 3 bands only, very flat
-  float toonShading;
-  if (NdotL > 0.3) {
-    toonShading = 1.0;
-  } else if (NdotL > -0.2) {
-    toonShading = 0.75;
-  } else {
-    toonShading = 0.55;
-  }
-  
-  #ifdef USE_VERTEX_COLORS
-    vec3 baseColor = vColor;
-  #else
-    vec3 baseColor = uColor;
-  #endif
-  
-  // Flat color fill with minimal shading variation
-  vec3 diffuse = baseColor * toonShading;
-  vec3 ambient = baseColor * uAmbientColor * 0.3;
-  vec3 emissive = uEmissive * uEmissiveIntensity;
-  
-  vec3 finalColor = diffuse + ambient + emissive;
-  
-  // Slight dithering effect for that hand-drawn feel
-  float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-  finalColor += (dither - 0.5) * 0.02;
-  
-  gl_FragColor = vec4(finalColor, uOpacity);
-}
-`;
+/**
+ * How bright each band is. The floor is deliberately well above zero: unlit
+ * faces should stay coloured and let the cool hemisphere fill tint them, not
+ * crush to black the way a 0.0 first stop does.
+ */
+const BAND_STOPS = [0.46, 0.74, 1.0];
 
 export class ToonMaterial {
-  private static lightDirection: THREE.Vector3 = new THREE.Vector3(50, 80, 30).normalize();
-  private static lightColor: THREE.Color = new THREE.Color(0xfff8f0);
-  private static ambientColor: THREE.Color = new THREE.Color(0.5, 0.55, 0.6);
+  private static gradientMap: THREE.DataTexture | null = null;
+  private static cache: Map<string, THREE.MeshToonMaterial> = new Map();
 
   public static init(): void {
+    this.buildGradientMap();
   }
 
-  public static create(options: ToonMaterialOptions = {}): THREE.ShaderMaterial {
+  /**
+   * A tiny 1-D texture read by MeshToonMaterial to quantise the diffuse term.
+   * NearestFilter is what makes the steps hard instead of a smooth ramp.
+   */
+  private static buildGradientMap(): void {
+    if (this.gradientMap) return;
+
+    const data = new Uint8Array(BANDS * 4);
+    for (let i = 0; i < BANDS; i++) {
+      const v = Math.round(BAND_STOPS[i] * 255);
+      data[i * 4 + 0] = v;
+      data[i * 4 + 1] = v;
+      data[i * 4 + 2] = v;
+      data[i * 4 + 3] = 255;
+    }
+
+    const texture = new THREE.DataTexture(data, BANDS, 1, THREE.RGBAFormat);
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false;
+    texture.needsUpdate = true;
+
+    this.gradientMap = texture;
+  }
+
+  public static create(options: ToonMaterialOptions = {}): THREE.MeshToonMaterial {
     const {
       color = 0xffffff,
       emissive = 0x000000,
@@ -110,38 +83,54 @@ export class ToonMaterial {
       vertexColors = false,
       side = THREE.FrontSide,
       transparent = false,
-      opacity = 1.0
+      opacity = 1.0,
+      unique = false
     } = options;
 
-    const defines: Record<string, boolean> = {};
-    if (vertexColors) {
-      defines['USE_VERTEX_COLORS'] = true;
+    this.buildGradientMap();
+
+    const key = [
+      color, emissive, emissiveIntensity,
+      vertexColors ? 1 : 0,
+      side, transparent ? 1 : 0, opacity
+    ].join('|');
+
+    if (!unique) {
+      const cached = this.cache.get(key);
+      if (cached) return cached;
     }
 
-    const material = new THREE.ShaderMaterial({
-      defines,
-      uniforms: {
-        uColor: { value: new THREE.Color(color) },
-        uEmissive: { value: new THREE.Color(emissive) },
-        uEmissiveIntensity: { value: emissiveIntensity },
-        uLightDirection: { value: this.lightDirection },
-        uLightColor: { value: this.lightColor },
-        uAmbientColor: { value: this.ambientColor },
-        uOpacity: { value: opacity }
-      },
-      vertexShader: toonVertexShader,
-      fragmentShader: toonFragmentShader,
+    const material = new THREE.MeshToonMaterial({
+      color,
+      emissive,
+      emissiveIntensity,
+      gradientMap: this.gradientMap,
+      vertexColors,
       side,
       transparent,
-      depthWrite: !transparent
+      opacity,
+      depthWrite: !transparent,
+      fog: true
     });
+
+    if (!unique) {
+      this.cache.set(key, material);
+    }
 
     return material;
   }
 
-  public static updateLighting(direction: THREE.Vector3, color: THREE.Color, ambient: THREE.Color): void {
-    this.lightDirection.copy(direction).normalize();
-    this.lightColor.copy(color);
-    this.ambientColor.copy(ambient);
+  /** How many distinct materials the scene is actually carrying. */
+  public static get cacheSize(): number {
+    return this.cache.size;
+  }
+
+  public static dispose(): void {
+    for (const material of this.cache.values()) {
+      material.dispose();
+    }
+    this.cache.clear();
+    this.gradientMap?.dispose();
+    this.gradientMap = null;
   }
 }

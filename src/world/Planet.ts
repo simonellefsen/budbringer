@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ToonMaterial } from '../utils/ToonMaterial';
-import { OutlineMaterial } from '../utils/OutlineMaterial';
+import { GROUND, BUILDING, ROAD, MATERIAL, ACCENT, SKY, pick } from '../utils/palette';
 
 export enum BiomeType {
   TOWN,
@@ -9,7 +9,12 @@ export enum BiomeType {
   SHRINE
 }
 
-const OUTLINE_OPTS = { thickness: 0.04, wobble: 0.008 };
+
+/** How far the road slabs stand proud of the sphere surface. */
+const ROAD_THICKNESS = 0.08;
+
+/** Radius of clear ground kept around the player's start, in world units. */
+const SPAWN_CLEARANCE = 9;
 
 interface BiomeData {
   type: BiomeType;
@@ -28,6 +33,7 @@ export class Planet {
   private foliageBaseQuaternions: Map<THREE.Object3D, THREE.Quaternion> = new Map();
   private windTime: number = 0;
   private clouds: THREE.Group;
+  private spawnPoint!: THREE.Vector3;
 
   constructor(radius: number) {
     this.radius = radius;
@@ -37,6 +43,7 @@ export class Planet {
     
     this.createPlanetSphere();
     this.defineBiomes();
+    this.spawnPoint = this.computeSpawnPoint();
     this.createRoads();
     this.createDecorations();
     this.createClouds();
@@ -64,8 +71,7 @@ export class Planet {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     
     const material = ToonMaterial.create({
-      vertexColors: true,
-      flatShading: false
+      vertexColors: true
     });
     
     this.sphere = new THREE.Mesh(geometry, material);
@@ -77,25 +83,25 @@ export class Planet {
     this.biomes = [
       {
         type: BiomeType.TOWN,
-        color: new THREE.Color(0x8a9a7b),
+        color: new THREE.Color(GROUND.town),
         center: new THREE.Vector3(0, 1, 0).normalize(),
         radius: 0.45
       },
       {
         type: BiomeType.SEASIDE,
-        color: new THREE.Color(0xc4b99a),
+        color: new THREE.Color(GROUND.seaside),
         center: new THREE.Vector3(0.7, 0.3, 0.5).normalize(),
         radius: 0.35
       },
       {
         type: BiomeType.HILLSIDE,
-        color: new THREE.Color(0x7a9a6b),
+        color: new THREE.Color(GROUND.hillside),
         center: new THREE.Vector3(-0.5, 0.5, 0.7).normalize(),
         radius: 0.45
       },
       {
         type: BiomeType.SHRINE,
-        color: new THREE.Color(0x6a8a7b),
+        color: new THREE.Color(GROUND.shrine),
         center: new THREE.Vector3(-0.6, -0.2, -0.7).normalize(),
         radius: 0.35
       }
@@ -105,7 +111,7 @@ export class Planet {
   private getBiomeColorAtPosition(pos: THREE.Vector3): THREE.Color {
     const normalizedPos = pos.clone().normalize();
     
-    const baseGreen = new THREE.Color(0x6a7a5b);
+    const baseGreen = new THREE.Color(GROUND.base);
     let finalColor = baseGreen.clone();
     
     for (const biome of this.biomes) {
@@ -120,41 +126,18 @@ export class Planet {
     return finalColor;
   }
 
+  /**
+   * Roads only where a road would actually be: between the places you walk to,
+   * and one loop through each settlement.
+   *
+   * This used to lay eleven latitude rings, twelve longitude lines, eight
+   * diagonals and three concentric rings per biome — around 2,000 separate box
+   * meshes, which made asphalt the dominant surface of the planet and speckled
+   * every shot with centre-line dashes. Once the ink pass went in, every one of
+   * those boxes also started contributing edges, so the ground turned to hatch.
+   */
   private createRoads(): void {
-    // Create a dense road network wrapping the ENTIRE sphere
-    // Dense latitude roads covering ENTIRE sphere
-    for (let lat = -0.9; lat <= 0.9; lat += 0.18) {
-      this.createLatitudeRoad(lat);
-    }
-    
-    // Dense longitude roads for better coverage
-    for (let lon = 0; lon < Math.PI * 2; lon += Math.PI / 6) {
-      this.createLongitudeRoad(lon);
-    }
-    
-    // Extra diagonal roads to fill gaps
-    for (let i = 0; i < 8; i++) {
-      const startTheta = (i / 8) * Math.PI * 2;
-      const startPhi = 0.3;
-      const endTheta = startTheta + Math.PI / 4;
-      const endPhi = Math.PI - 0.3;
-      
-      const from = new THREE.Vector3(
-        Math.sin(startPhi) * Math.cos(startTheta),
-        Math.cos(startPhi),
-        Math.sin(startPhi) * Math.sin(startTheta)
-      ).multiplyScalar(this.radius);
-      
-      const to = new THREE.Vector3(
-        Math.sin(endPhi) * Math.cos(endTheta),
-        Math.cos(endPhi),
-        Math.sin(endPhi) * Math.sin(endTheta)
-      ).multiplyScalar(this.radius);
-      
-      this.createConnectingRoad(from, to);
-    }
-    
-    // Connect all biomes with roads
+    // Trunk roads between settlements.
     for (let i = 0; i < this.biomes.length; i++) {
       for (let j = i + 1; j < this.biomes.length; j++) {
         const from = this.biomes[i].center.clone().multiplyScalar(this.radius);
@@ -162,131 +145,27 @@ export class Planet {
         this.createConnectingRoad(from, to);
       }
     }
-    
-    // Local road networks within each biome
+
+    // A single loop through each settlement, not three concentric ones.
     for (const biome of this.biomes) {
       this.createLocalRoadNetwork(biome.center.clone().multiplyScalar(this.radius), 15);
     }
   }
 
-  private createLatitudeRoad(latitude: number): void {
-    const y = latitude;
-    const ringRadius = Math.sqrt(1 - y * y);
-    const segments = 32;
-    
-    for (let i = 0; i < segments; i++) {
-      const angle1 = (i / segments) * Math.PI * 2;
-      const angle2 = ((i + 1) / segments) * Math.PI * 2;
-      
-      const p1 = new THREE.Vector3(
-        Math.cos(angle1) * ringRadius,
-        y,
-        Math.sin(angle1) * ringRadius
-      ).normalize().multiplyScalar(this.radius);
-      
-      const p2 = new THREE.Vector3(
-        Math.cos(angle2) * ringRadius,
-        y,
-        Math.sin(angle2) * ringRadius
-      ).normalize().multiplyScalar(this.radius);
-      
-      this.createRoadSegment(p1, p2);
-    }
-  }
-
-  private createLongitudeRoad(longitude: number): void {
-    const segments = 24;
-    
-    for (let i = 0; i < segments; i++) {
-      const lat1 = (i / segments) * Math.PI - Math.PI / 2;
-      const lat2 = ((i + 1) / segments) * Math.PI - Math.PI / 2;
-      
-      const p1 = new THREE.Vector3(
-        Math.cos(lat1) * Math.cos(longitude),
-        Math.sin(lat1),
-        Math.cos(lat1) * Math.sin(longitude)
-      ).normalize().multiplyScalar(this.radius);
-      
-      const p2 = new THREE.Vector3(
-        Math.cos(lat2) * Math.cos(longitude),
-        Math.sin(lat2),
-        Math.cos(lat2) * Math.sin(longitude)
-      ).normalize().multiplyScalar(this.radius);
-      
-      this.createRoadSegment(p1, p2);
-    }
-  }
-
-  private createRoadSegment(from: THREE.Vector3, to: THREE.Vector3): void {
-    // Calculate road length based on arc distance
-    const arcLength = from.angleTo(to) * this.radius;
-    const roadWidth = 2.2;
-    const roadThickness = 0.08; // Thicker so it embeds into surface
-    const roadGeo = new THREE.BoxGeometry(roadWidth, roadThickness, Math.max(arcLength * 1.1, 1.5));
-    const roadMat = ToonMaterial.create({ color: 0x404040 });
-    const road = new THREE.Mesh(roadGeo, roadMat);
-    road.receiveShadow = true;
-    
-    // Position at midpoint FLUSH with the surface (half-embedded)
-    const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius);
-    road.position.copy(mid);
-    
-    // Orient: up is surface normal, forward points along the road
-    const up = mid.clone().normalize();
-    const dir = to.clone().sub(from);
-    dir.sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
-    
-    const right = new THREE.Vector3().crossVectors(up, dir).normalize();
-    const correctedDir = new THREE.Vector3().crossVectors(right, up).normalize();
-    
-    const matrix = new THREE.Matrix4();
-    matrix.makeBasis(right, up, correctedDir);
-    road.quaternion.setFromRotationMatrix(matrix);
-    
-    this.decorations.add(road);
-    
-    // Center line dash - on top of road
-    const lineGeo = new THREE.BoxGeometry(0.15, 0.02, Math.max(arcLength * 0.4, 0.5));
-    const lineMat = ToonMaterial.create({ color: 0xeeeeee });
-    const line = new THREE.Mesh(lineGeo, lineMat);
-    const lineMid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius + roadThickness / 2 + 0.01);
-    line.position.copy(lineMid);
-    line.quaternion.copy(road.quaternion);
-    this.decorations.add(line);
-  }
-
   private createLocalRoadNetwork(center: THREE.Vector3, _radius: number): void {
-    // Create a grid of roads around biome center
-    for (let ring = 0; ring < 3; ring++) {
-      const ringRadius = 3 + ring * 4;
-      const segments = 8 + ring * 4;
-      
-      for (let i = 0; i < segments; i++) {
-        const angle = (i / segments) * Math.PI * 2;
-        const pos = this.getOffsetOnSphere(center, angle, ringRadius);
-        
-        const roadThickness = 0.08;
-        const roadGeo = new THREE.BoxGeometry(2.2, roadThickness, 3);
-        const roadMat = ToonMaterial.create({ color: 0x484848 });
-        const road = new THREE.Mesh(roadGeo, roadMat);
-        road.receiveShadow = true;
-        
-        // Place flush with surface with specific orientation
-        this.placeOnSphere(road, pos, angle + Math.PI / 2);
-        this.decorations.add(road);
-        
-        // Center line dashes - on top of road
-        for (let d = 0; d < 2; d++) {
-          const dashGeo = new THREE.BoxGeometry(0.1, 0.02, 0.5);
-          const dashMat = ToonMaterial.create({ color: 0xffffff });
-          const dash = new THREE.Mesh(dashGeo, dashMat);
-          dash.position.copy(road.position);
-          dash.quaternion.copy(road.quaternion);
-          dash.translateY(roadThickness / 2 + 0.01);
-          dash.translateZ(-0.6 + d * 1.2);
-          this.decorations.add(dash);
-        }
-      }
+    const ringRadius = 7;
+    const segments = 22;
+
+    for (let i = 0; i < segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const pos = this.getOffsetOnSphere(center, angle, ringRadius);
+
+      const roadGeo = new THREE.BoxGeometry(2.6, ROAD_THICKNESS, 2.4);
+      const road = new THREE.Mesh(roadGeo, ToonMaterial.create({ color: ROAD.asphalt }));
+      road.receiveShadow = true;
+
+      this.placeOnSphere(road, pos, angle + Math.PI / 2);
+      this.decorations.add(road);
     }
   }
 
@@ -296,9 +175,8 @@ export class Planet {
       const t = i / steps;
       const pos = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
       
-      const roadThickness = 0.08;
-      const roadGeo = new THREE.BoxGeometry(1.8, roadThickness, 2);
-      const roadMat = ToonMaterial.create({ color: 0x4a4a4a });
+      const roadGeo = new THREE.BoxGeometry(1.8, ROAD_THICKNESS, 2);
+      const roadMat = ToonMaterial.create({ color: ROAD.asphalt });
       const road = new THREE.Mesh(roadGeo, roadMat);
       
       // Use proper orientation with makeBasis
@@ -363,7 +241,8 @@ export class Planet {
         }
       }
       if (tooClose) continue;
-      
+      if (!this.clearOfSpawn(pos)) continue;
+
       const house = this.createJapaneseHouse();
       this.placeOnSphere(house, pos);
       this.decorations.add(house);
@@ -379,6 +258,8 @@ export class Planet {
         Math.sin(phi) * Math.sin(theta)
       ).multiplyScalar(this.radius);
       
+      if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.7)) continue;
+
       const tree = this.createTree();
       this.placeOnSphere(tree, pos);
       this.decorations.add(tree);
@@ -396,6 +277,8 @@ export class Planet {
         Math.sin(phi) * Math.sin(theta)
       ).multiplyScalar(this.radius);
       
+      if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.6)) continue;
+
       const propType = Math.floor(Math.random() * 5);
       let prop: THREE.Group;
       
@@ -404,7 +287,7 @@ export class Planet {
           prop = this.createTelephonePole();
           break;
         case 1:
-          prop = this.createVendingMachine([0x2ecc71, 0x3498db, 0xe74c3c][Math.floor(Math.random() * 3)]);
+          prop = this.createVendingMachine([ACCENT.teal, ACCENT.lemon, ACCENT.ember][Math.floor(Math.random() * 3)]);
           break;
         case 2:
           prop = this.createBench();
@@ -459,6 +342,8 @@ export class Planet {
         const dist = baseDist + Math.random() * 3;
         const offset = this.getOffsetOnSphere(center, angle, dist);
         
+        if (!this.clearOfSpawn(offset)) continue;
+
         const house = this.createJapaneseHouse();
         this.placeOnSphere(house, offset, angle + Math.PI + (Math.random() - 0.5) * 0.2);
         this.decorations.add(house);
@@ -467,9 +352,12 @@ export class Planet {
     
     // Multiple vending machines
     for (let i = 0; i < 5; i++) {
-      const vm = this.createVendingMachine([0x2ecc71, 0x3498db, 0xe74c3c][i % 3]);
       const angle = 0.5 + i * 1.2;
-      this.placeOnSphere(vm, this.getOffsetOnSphere(center, angle, 3 + i * 2));
+      const vmPos = this.getOffsetOnSphere(center, angle, 3 + i * 2);
+      if (!this.clearOfSpawn(vmPos, SPAWN_CLEARANCE * 0.55)) continue;
+
+      const vm = this.createVendingMachine([ACCENT.teal, ACCENT.lemon, ACCENT.ember][i % 3]);
+      this.placeOnSphere(vm, vmPos);
       this.decorations.add(vm);
     }
     
@@ -507,10 +395,8 @@ export class Planet {
     const house = new THREE.Group();
     
     // Random house colors for variety
-    const wallColors = [0xd4cbb8, 0xe0d6c8, 0xc8c0b0, 0xdcd4c4, 0xf0e8d8];
-    const roofColors = [0x4a4a4a, 0x3a3a3a, 0x5a4a3a, 0x4a3a3a];
-    const wallColor = wallColors[Math.floor(Math.random() * wallColors.length)];
-    const roofColor = roofColors[Math.floor(Math.random() * roofColors.length)];
+    const wallColor = pick(BUILDING.walls);
+    const roofColor = pick(BUILDING.roofs);
     
     // Main body
     const bodyGeo = new THREE.BoxGeometry(3, 2.5, 2.5);
@@ -520,7 +406,6 @@ export class Planet {
     body.castShadow = true;
     body.receiveShadow = true;
     house.add(body);
-    house.add(OutlineMaterial.addOutlineToMesh(body, OUTLINE_OPTS));
     
     // Pitched roof (proper triangle/gable)
     const roofShape = new THREE.Shape();
@@ -536,11 +421,10 @@ export class Planet {
     roof.position.set(0, 2.5, -1.6);
     roof.castShadow = true;
     house.add(roof);
-    house.add(OutlineMaterial.addOutlineToMesh(roof, OUTLINE_OPTS));
     
     // Door
     const doorGeo = new THREE.BoxGeometry(0.8, 1.6, 0.1);
-    const doorMat = ToonMaterial.create({ color: 0x6b5344 });
+    const doorMat = ToonMaterial.create({ color: BUILDING.door });
     const door = new THREE.Mesh(doorGeo, doorMat);
     door.position.set(0, 0.8, 1.3);
     house.add(door);
@@ -548,13 +432,13 @@ export class Planet {
     // Windows with frames
     for (let i = 0; i < 2; i++) {
       const windowGeo = new THREE.BoxGeometry(0.6, 0.6, 0.1);
-      const windowMat = ToonMaterial.create({ color: 0x87CEEB });
+      const windowMat = ToonMaterial.create({ color: BUILDING.window });
       const windowMesh = new THREE.Mesh(windowGeo, windowMat);
       windowMesh.position.set(i === 0 ? -0.9 : 0.9, 1.8, 1.3);
       house.add(windowMesh);
       
       const frameGeo = new THREE.BoxGeometry(0.7, 0.7, 0.05);
-      const frameMat = ToonMaterial.create({ color: 0x3a3a3a });
+      const frameMat = ToonMaterial.create({ color: BUILDING.windowFrame });
       const frame = new THREE.Mesh(frameGeo, frameMat);
       frame.position.copy(windowMesh.position);
       frame.position.z += 0.03;
@@ -563,16 +447,15 @@ export class Planet {
     
     // AC unit
     const acGeo = new THREE.BoxGeometry(0.8, 0.4, 0.3);
-    const acMat = ToonMaterial.create({ color: 0xe8e8e8 });
+    const acMat = ToonMaterial.create({ color: BUILDING.ac });
     const ac = new THREE.Mesh(acGeo, acMat);
     ac.position.set(1.2, 2.0, -1.3);
     house.add(ac);
-    house.add(OutlineMaterial.addOutlineToMesh(ac, { thickness: 0.02, wobble: 0.004 }));
     
     return house;
   }
 
-  private createVendingMachine(color: number = 0x2ecc71): THREE.Group {
+  private createVendingMachine(color: number = ACCENT.teal): THREE.Group {
     const vm = new THREE.Group();
     
     const bodyGeo = new THREE.BoxGeometry(0.9, 1.8, 0.7);
@@ -583,7 +466,7 @@ export class Planet {
     vm.add(body);
     
     const screenGeo = new THREE.BoxGeometry(0.7, 1.0, 0.05);
-    const screenMat = ToonMaterial.create({ color: 0x2c3e50 });
+    const screenMat = ToonMaterial.create({ color: MATERIAL.metalDark });
     const screen = new THREE.Mesh(screenGeo, screenMat);
     screen.position.set(0, 1.1, 0.38);
     vm.add(screen);
@@ -592,7 +475,7 @@ export class Planet {
       for (let col = 0; col < 3; col++) {
         const canGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.15, 8);
         const canMat = ToonMaterial.create({ 
-          color: [0xe74c3c, 0xf39c12, 0x3498db][Math.floor(Math.random() * 3)]
+          color: [ACCENT.ember, ACCENT.lemon, ACCENT.teal][Math.floor(Math.random() * 3)]
         });
         const can = new THREE.Mesh(canGeo, canMat);
         can.position.set(-0.2 + col * 0.2, 0.8 + row * 0.3, 0.35);
@@ -608,13 +491,13 @@ export class Planet {
     const mb = new THREE.Group();
     
     const postGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.2, 8);
-    const postMat = ToonMaterial.create({ color: 0xe74c3c });
+    const postMat = ToonMaterial.create({ color: ACCENT.ember });
     const post = new THREE.Mesh(postGeo, postMat);
     post.position.y = 0.6;
     mb.add(post);
     
     const boxGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.5, 16);
-    const boxMat = ToonMaterial.create({ color: 0xe74c3c });
+    const boxMat = ToonMaterial.create({ color: ACCENT.ember });
     const box = new THREE.Mesh(boxGeo, boxMat);
     box.position.y = 1.35;
     box.castShadow = true;
@@ -626,7 +509,7 @@ export class Planet {
     mb.add(top);
     
     const slotGeo = new THREE.BoxGeometry(0.2, 0.03, 0.1);
-    const slotMat = ToonMaterial.create({ color: 0x2c3e50 });
+    const slotMat = ToonMaterial.create({ color: MATERIAL.metalDark });
     const slot = new THREE.Mesh(slotGeo, slotMat);
     slot.position.set(0, 1.45, 0.2);
     mb.add(slot);
@@ -640,7 +523,7 @@ export class Planet {
     // Shorter pole to match house scale (~3 units, similar to house height)
     // On a small curved planet, tall poles appear to diverge/lean
     const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 3, 8);
-    const poleMat = ToonMaterial.create({ color: 0x6b5344 });
+    const poleMat = ToonMaterial.create({ color: MATERIAL.woodDark });
     const poleM = new THREE.Mesh(poleGeo, poleMat);
     poleM.position.y = 1.5; // Base at y=0, top at y=3
     poleM.castShadow = true;
@@ -655,7 +538,7 @@ export class Planet {
     // Shorter wires
     for (let i = 0; i < 2; i++) {
       const wireGeo = new THREE.CylinderGeometry(0.01, 0.01, 1.5, 4);
-      const wireMat = ToonMaterial.create({ color: 0x2c2c2c });
+      const wireMat = ToonMaterial.create({ color: MATERIAL.metalDark });
       const wire = new THREE.Mesh(wireGeo, wireMat);
       wire.position.set(i === 0 ? -0.35 : 0.35, 2.8, 0);
       wire.rotation.z = Math.PI / 2;
@@ -669,13 +552,13 @@ export class Planet {
     const mirror = new THREE.Group();
     
     const poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.5, 8);
-    const poleMat = ToonMaterial.create({ color: 0xf39c12 });
+    const poleMat = ToonMaterial.create({ color: ACCENT.lemon });
     const pole = new THREE.Mesh(poleGeo, poleMat);
     pole.position.y = 1.25;
     mirror.add(pole);
     
     const mirrorGeo = new THREE.SphereGeometry(0.35, 16, 16, 0, Math.PI);
-    const mirrorMat = ToonMaterial.create({ color: 0xbdc3c7 });
+    const mirrorMat = ToonMaterial.create({ color: MATERIAL.metal });
     const mirrorM = new THREE.Mesh(mirrorGeo, mirrorMat);
     mirrorM.position.y = 2.3;
     mirrorM.rotation.y = Math.PI;
@@ -683,7 +566,7 @@ export class Planet {
     mirror.add(mirrorM);
     
     const frameGeo = new THREE.TorusGeometry(0.35, 0.04, 8, 16);
-    const frameMat = ToonMaterial.create({ color: 0xf39c12 });
+    const frameMat = ToonMaterial.create({ color: ACCENT.lemon });
     const frame = new THREE.Mesh(frameGeo, frameMat);
     frame.position.y = 2.3;
     frame.rotation.x = Math.PI / 2;
@@ -696,20 +579,20 @@ export class Planet {
     const cone = new THREE.Group();
     
     const coneGeo = new THREE.ConeGeometry(0.15, 0.5, 8);
-    const coneMat = ToonMaterial.create({ color: 0xf39c12 });
+    const coneMat = ToonMaterial.create({ color: ACCENT.ember });
     const coneM = new THREE.Mesh(coneGeo, coneMat);
     coneM.position.y = 0.25;
     coneM.castShadow = true;
     cone.add(coneM);
     
     const stripeGeo = new THREE.CylinderGeometry(0.08, 0.12, 0.1, 8);
-    const stripeMat = ToonMaterial.create({ color: 0xffffff });
+    const stripeMat = ToonMaterial.create({ color: BUILDING.trim });
     const stripe = new THREE.Mesh(stripeGeo, stripeMat);
     stripe.position.y = 0.25;
     cone.add(stripe);
     
     const baseGeo = new THREE.BoxGeometry(0.35, 0.05, 0.35);
-    const baseMat = ToonMaterial.create({ color: 0xf39c12 });
+    const baseMat = ToonMaterial.create({ color: ACCENT.ember });
     const base = new THREE.Mesh(baseGeo, baseMat);
     base.position.y = 0.025;
     cone.add(base);
@@ -721,14 +604,14 @@ export class Planet {
     const bin = new THREE.Group();
     
     const binGeo = new THREE.CylinderGeometry(0.25, 0.2, 0.6, 8);
-    const binMat = ToonMaterial.create({ color: 0x3498db });
+    const binMat = ToonMaterial.create({ color: ACCENT.teal });
     const binM = new THREE.Mesh(binGeo, binMat);
     binM.position.y = 0.3;
     binM.castShadow = true;
     bin.add(binM);
     
     const lidGeo = new THREE.CylinderGeometry(0.27, 0.27, 0.08, 8);
-    const lidMat = ToonMaterial.create({ color: 0x2980b9 });
+    const lidMat = ToonMaterial.create({ color: MATERIAL.metalDark });
     const lid = new THREE.Mesh(lidGeo, lidMat);
     lid.position.y = 0.64;
     bin.add(lid);
@@ -741,7 +624,7 @@ export class Planet {
     
     for (let i = 0; i < 5; i++) {
       const blockGeo = new THREE.BoxGeometry(2, 1.5, 0.8);
-      const blockMat = ToonMaterial.create({ color: 0x9a9a8a });
+      const blockMat = ToonMaterial.create({ color: MATERIAL.stone });
       const block = new THREE.Mesh(blockGeo, blockMat);
       block.position.set(i * 2 - 4, 0.75, 0);
       block.castShadow = true;
@@ -782,7 +665,7 @@ export class Planet {
     const waterGroup = new THREE.Group();
     
     const waterMat = ToonMaterial.create({ 
-      color: 0x4a90a4,
+      color: GROUND.water,
       transparent: true,
       opacity: 0.85
     });
@@ -837,7 +720,7 @@ export class Planet {
     const pier = new THREE.Group();
     
     const deckGeo = new THREE.BoxGeometry(2, 0.2, 8);
-    const deckMat = ToonMaterial.create({ color: 0x8b7355 });
+    const deckMat = ToonMaterial.create({ color: MATERIAL.wood });
     const deck = new THREE.Mesh(deckGeo, deckMat);
     deck.position.y = 0.8;
     deck.castShadow = true;
@@ -846,7 +729,7 @@ export class Planet {
     
     for (let i = 0; i < 6; i++) {
       const postGeo = new THREE.CylinderGeometry(0.1, 0.12, 1.5, 6);
-      const postMat = ToonMaterial.create({ color: 0x6b5344 });
+      const postMat = ToonMaterial.create({ color: MATERIAL.woodDark });
       const post = new THREE.Mesh(postGeo, postMat);
       post.position.set(
         (i % 2 === 0 ? -0.7 : 0.7),
@@ -864,14 +747,14 @@ export class Planet {
     const boat = new THREE.Group();
     
     const hullGeo = new THREE.BoxGeometry(1.2, 0.6, 3);
-    const hullMat = ToonMaterial.create({ color: 0x2980b9 });
+    const hullMat = ToonMaterial.create({ color: ACCENT.teal });
     const hull = new THREE.Mesh(hullGeo, hullMat);
     hull.position.y = 0.3;
     hull.castShadow = true;
     boat.add(hull);
     
     const cabinGeo = new THREE.BoxGeometry(0.8, 0.8, 1);
-    const cabinMat = ToonMaterial.create({ color: 0xecf0f1 });
+    const cabinMat = ToonMaterial.create({ color: BUILDING.trim });
     const cabin = new THREE.Mesh(cabinGeo, cabinMat);
     cabin.position.set(0, 0.9, -0.5);
     cabin.castShadow = true;
@@ -884,14 +767,14 @@ export class Planet {
     const umbrella = new THREE.Group();
     
     const poleGeo = new THREE.CylinderGeometry(0.03, 0.03, 2, 6);
-    const poleMat = ToonMaterial.create({ color: 0x8b7355 });
+    const poleMat = ToonMaterial.create({ color: MATERIAL.wood });
     const pole = new THREE.Mesh(poleGeo, poleMat);
     pole.position.y = 1;
     umbrella.add(pole);
     
     const topGeo = new THREE.ConeGeometry(1, 0.6, 8);
     const topMat = ToonMaterial.create({ 
-      color: [0xe74c3c, 0xf39c12, 0x3498db][Math.floor(Math.random() * 3)]
+      color: [ACCENT.ember, ACCENT.lemon, ACCENT.teal][Math.floor(Math.random() * 3)]
     });
     const top = new THREE.Mesh(topGeo, topMat);
     top.position.y = 2.1;
@@ -906,7 +789,7 @@ export class Planet {
     const lh = new THREE.Group();
     
     const baseGeo = new THREE.CylinderGeometry(1, 1.3, 4, 8);
-    const baseMat = ToonMaterial.create({ color: 0xecf0f1 });
+    const baseMat = ToonMaterial.create({ color: BUILDING.trim });
     const base = new THREE.Mesh(baseGeo, baseMat);
     base.position.y = 2;
     base.castShadow = true;
@@ -914,20 +797,20 @@ export class Planet {
     
     for (let i = 0; i < 3; i++) {
       const stripeGeo = new THREE.CylinderGeometry(1.05 - i * 0.1, 1.15 - i * 0.1, 0.5, 8);
-      const stripeMat = ToonMaterial.create({ color: 0xe74c3c });
+      const stripeMat = ToonMaterial.create({ color: ACCENT.ember });
       const stripe = new THREE.Mesh(stripeGeo, stripeMat);
       stripe.position.y = 0.8 + i * 1.3;
       lh.add(stripe);
     }
     
     const lampGeo = new THREE.CylinderGeometry(0.6, 0.8, 1, 8);
-    const lampMat = ToonMaterial.create({ color: 0x2c3e50 });
+    const lampMat = ToonMaterial.create({ color: MATERIAL.metalDark });
     const lamp = new THREE.Mesh(lampGeo, lampMat);
     lamp.position.y = 4.5;
     lh.add(lamp);
     
     const lightGeo = new THREE.SphereGeometry(0.4, 8, 8);
-    const lightMat = ToonMaterial.create({ color: 0xffeaa7, emissive: 0xf39c12, emissiveIntensity: 0.5 });
+    const lightMat = ToonMaterial.create({ color: ACCENT.lamp, emissive: ACCENT.lemon, emissiveIntensity: 0.5 });
     const light = new THREE.Mesh(lightGeo, lightMat);
     light.position.y = 4.5;
     lh.add(light);
@@ -967,14 +850,14 @@ export class Planet {
     const tree = new THREE.Group();
     
     const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 2, 8);
-    const trunkMat = ToonMaterial.create({ color: 0x6b5344 });
+    const trunkMat = ToonMaterial.create({ color: MATERIAL.trunk });
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.y = 1;
     trunk.castShadow = true;
     tree.add(trunk);
     
     const foliageGeo = new THREE.IcosahedronGeometry(1.3, 1);
-    const foliageMat = ToonMaterial.create({ color: 0x4a8a5b });
+    const foliageMat = ToonMaterial.create({ color: MATERIAL.foliage });
     const foliage = new THREE.Mesh(foliageGeo, foliageMat);
     foliage.position.y = 2.8;
     foliage.castShadow = true;
@@ -987,7 +870,7 @@ export class Planet {
     const lookout = new THREE.Group();
     
     const platformGeo = new THREE.CylinderGeometry(1.8, 1.8, 0.3, 8);
-    const platformMat = ToonMaterial.create({ color: 0x8b7355 });
+    const platformMat = ToonMaterial.create({ color: MATERIAL.wood });
     const platform = new THREE.Mesh(platformGeo, platformMat);
     platform.position.y = 2.5;
     platform.castShadow = true;
@@ -997,7 +880,7 @@ export class Planet {
     for (let i = 0; i < 4; i++) {
       const angle = (i / 4) * Math.PI * 2;
       const postGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.5, 6);
-      const postMat = ToonMaterial.create({ color: 0x6b5344 });
+      const postMat = ToonMaterial.create({ color: MATERIAL.woodDark });
       const post = new THREE.Mesh(postGeo, postMat);
       post.position.set(
         Math.cos(angle) * 1.4,
@@ -1009,7 +892,7 @@ export class Planet {
     }
     
     const railGeo = new THREE.TorusGeometry(1.5, 0.06, 8, 16);
-    const railMat = ToonMaterial.create({ color: 0x8b7355 });
+    const railMat = ToonMaterial.create({ color: MATERIAL.wood });
     const rail = new THREE.Mesh(railGeo, railMat);
     rail.position.y = 2.9;
     rail.rotation.x = Math.PI / 2;
@@ -1022,7 +905,7 @@ export class Planet {
     const bench = new THREE.Group();
     
     const seatGeo = new THREE.BoxGeometry(1.5, 0.1, 0.5);
-    const seatMat = ToonMaterial.create({ color: 0x8b7355 });
+    const seatMat = ToonMaterial.create({ color: MATERIAL.wood });
     const seat = new THREE.Mesh(seatGeo, seatMat);
     seat.position.y = 0.45;
     seat.castShadow = true;
@@ -1036,7 +919,7 @@ export class Planet {
     
     for (let i = 0; i < 2; i++) {
       const legGeo = new THREE.BoxGeometry(0.1, 0.4, 0.4);
-      const legMat = ToonMaterial.create({ color: 0x4a4a4a });
+      const legMat = ToonMaterial.create({ color: MATERIAL.metalDark });
       const leg = new THREE.Mesh(legGeo, legMat);
       leg.position.set(i === 0 ? -0.6 : 0.6, 0.2, 0);
       bench.add(leg);
@@ -1072,7 +955,7 @@ export class Planet {
   private createToriiGate(): THREE.Group {
     const gate = new THREE.Group();
     
-    const postMat = ToonMaterial.create({ color: 0xc0392b });
+    const postMat = ToonMaterial.create({ color: ACCENT.emberDeep });
     
     for (let i = 0; i < 2; i++) {
       const postGeo = new THREE.CylinderGeometry(0.2, 0.25, 5, 8);
@@ -1100,7 +983,7 @@ export class Planet {
     const shrine = new THREE.Group();
     
     const baseGeo = new THREE.BoxGeometry(5, 0.5, 4);
-    const baseMat = ToonMaterial.create({ color: 0x8a8a7a });
+    const baseMat = ToonMaterial.create({ color: MATERIAL.stone });
     const base = new THREE.Mesh(baseGeo, baseMat);
     base.position.y = 0.25;
     base.castShadow = true;
@@ -1108,14 +991,14 @@ export class Planet {
     shrine.add(base);
     
     const bodyGeo = new THREE.BoxGeometry(4, 3, 3);
-    const bodyMat = ToonMaterial.create({ color: 0xc0392b });
+    const bodyMat = ToonMaterial.create({ color: ACCENT.emberDeep });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.y = 2;
     body.castShadow = true;
     shrine.add(body);
     
     const roofGeo = new THREE.BoxGeometry(5.5, 0.5, 4);
-    const roofMat = ToonMaterial.create({ color: 0x2c3e50 });
+    const roofMat = ToonMaterial.create({ color: MATERIAL.metalDark });
     const roof = new THREE.Mesh(roofGeo, roofMat);
     roof.position.y = 3.75;
     roof.castShadow = true;
@@ -1133,7 +1016,7 @@ export class Planet {
     const lantern = new THREE.Group();
     
     const baseGeo = new THREE.CylinderGeometry(0.25, 0.3, 0.3, 6);
-    const stoneMat = ToonMaterial.create({ color: 0x7a7a6a });
+    const stoneMat = ToonMaterial.create({ color: MATERIAL.stoneDark });
     const base = new THREE.Mesh(baseGeo, stoneMat);
     base.position.y = 0.15;
     base.castShadow = true;
@@ -1145,7 +1028,7 @@ export class Planet {
     lantern.add(stem);
     
     const houseGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const houseMat = ToonMaterial.create({ color: 0xffeaa7, emissive: 0xf39c12, emissiveIntensity: 0.3 });
+    const houseMat = ToonMaterial.create({ color: ACCENT.lamp, emissive: ACCENT.lemon, emissiveIntensity: 0.3 });
     const house = new THREE.Mesh(houseGeo, houseMat);
     house.position.y = 1.55;
     lantern.add(house);
@@ -1164,7 +1047,7 @@ export class Planet {
     
     for (let i = 0; i < 5; i++) {
       const stepGeo = new THREE.BoxGeometry(2, 0.2, 0.5);
-      const stepMat = ToonMaterial.create({ color: 0x7a7a6a });
+      const stepMat = ToonMaterial.create({ color: MATERIAL.stoneDark });
       const step = new THREE.Mesh(stepGeo, stepMat);
       step.position.set(0, i * 0.25, -i * 0.5);
       step.castShadow = true;
@@ -1196,7 +1079,7 @@ export class Planet {
   private createCloud(): THREE.Group {
     const cloud = new THREE.Group();
     
-    const cloudMat = ToonMaterial.create({ color: 0x9fd5d1 });
+    const cloudMat = ToonMaterial.create({ color: SKY.cloud });
     
     for (let i = 0; i < 5; i++) {
       const blobGeo = new THREE.SphereGeometry(1 + Math.random() * 0.5, 8, 8);
@@ -1267,21 +1150,43 @@ export class Planet {
     object.quaternion.setFromRotationMatrix(matrix);
   }
 
-  public getSpawnPosition(): THREE.Vector3 {
+  private computeSpawnPoint(): THREE.Vector3 {
     const townBiome = this.biomes.find(b => b.type === BiomeType.TOWN)!;
-    // Spawn offset from town center on a road, not in the middle of buildings
     const townCenter = townBiome.center.clone();
-    
-    // Get a tangent direction to offset spawn point
+
     let tangent = new THREE.Vector3(0, 1, 0);
     if (Math.abs(townCenter.dot(tangent)) > 0.9) {
       tangent.set(1, 0, 0);
     }
     const offset = new THREE.Vector3().crossVectors(townCenter, tangent).normalize();
-    
-    // Spawn slightly offset from center on the road
+
     const spawnDir = townCenter.clone().add(offset.multiplyScalar(0.15)).normalize();
-    return spawnDir.multiplyScalar(this.radius + 0.5);
+    return spawnDir.multiplyScalar(this.radius);
+  }
+
+  public getSpawnPosition(): THREE.Vector3 {
+    return this.spawnPoint.clone().normalize().multiplyScalar(this.radius + 0.5);
+  }
+
+  /**
+   * Surface distance from the spawn, in world units along the sphere.
+   */
+  private arcFromSpawn(pos: THREE.Vector3): number {
+    const a = this.spawnPoint.clone().normalize();
+    const b = pos.clone().normalize();
+    return this.radius * Math.acos(THREE.MathUtils.clamp(a.dot(b), -1, 1));
+  }
+
+  /**
+   * Keep a clear plaza around the start.
+   *
+   * The camera trails the player by 4.5 units, so a building anywhere inside
+   * that radius ends up between the camera and the courier — filling the frame
+   * with a roof. Placement was uniform random and only avoided the biome
+   * centres, so the opening shot of the game was routinely a wall.
+   */
+  private clearOfSpawn(pos: THREE.Vector3, margin: number = SPAWN_CLEARANCE): boolean {
+    return this.arcFromSpawn(pos) > margin;
   }
 
   public getBiomePosition(biome: BiomeType): THREE.Vector3 {
@@ -1291,6 +1196,16 @@ export class Planet {
 
   public getSurfacePosition(direction: THREE.Vector3): THREE.Vector3 {
     return direction.clone().normalize().multiplyScalar(this.radius);
+  }
+
+  /** True if the mesh belongs to the cloud layer. */
+  public isCloudMesh(mesh: THREE.Object3D): boolean {
+    let node: THREE.Object3D | null = mesh;
+    while (node) {
+      if (node === this.clouds) return true;
+      node = node.parent;
+    }
+    return false;
   }
 
   public update(elapsed: number): void {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Game } from '../core/Game';
 import { ToonMaterial } from '../utils/ToonMaterial';
+import { NPC as NPC_COLOR, MATERIAL, ACCENT } from '../utils/palette';
 import { BiomeType } from './Planet';
 
 export interface NPC {
@@ -33,8 +34,8 @@ export class NPCManager {
   private createPostmasterMaple(): void {
     const position = this.getPositionInBiome(BiomeType.TOWN, 0, 5);
     const mesh = this.createNPCMesh({
-      bodyColor: 0x3498db,
-      hatColor: 0x2c3e50,
+      bodyColor: NPC_COLOR.maple,
+      hatColor: MATERIAL.metalDark,
       hatStyle: 'cap',
       hasApron: false,
       hasBag: true
@@ -62,8 +63,8 @@ export class NPCManager {
   private createFisherFinn(): void {
     const position = this.getPositionInBiome(BiomeType.SEASIDE, 0.5, 6);
     const mesh = this.createNPCMesh({
-      bodyColor: 0xf39c12,
-      hatColor: 0x7f8c8d,
+      bodyColor: NPC_COLOR.finn,
+      hatColor: MATERIAL.stone,
       hatStyle: 'wide',
       hasApron: false,
       hasBag: false
@@ -99,8 +100,8 @@ export class NPCManager {
     const position = midpoint.normalize().multiplyScalar(this.game.planetRadius);
     
     const mesh = this.createNPCMesh({
-      bodyColor: 0x9b59b6,
-      hatColor: 0x8e44ad,
+      bodyColor: NPC_COLOR.hazel,
+      hatColor: NPC_COLOR.hazel,
       hatStyle: 'hood',
       hasApron: false,
       hasBag: false
@@ -129,8 +130,8 @@ export class NPCManager {
   private createKeeperKai(): void {
     const position = this.getPositionInBiome(BiomeType.SHRINE, Math.PI, 4);
     const mesh = this.createNPCMesh({
-      bodyColor: 0xe74c3c,
-      hatColor: 0xffeaa7,
+      bodyColor: NPC_COLOR.kai,
+      hatColor: ACCENT.lamp,
       hatStyle: 'tall',
       hasApron: true,
       hasBag: false
@@ -159,8 +160,8 @@ export class NPCManager {
   private createBakerBrie(): void {
     const position = this.getPositionInBiome(BiomeType.TOWN, Math.PI * 0.7, 6);
     const mesh = this.createNPCMesh({
-      bodyColor: 0xecf0f1,
-      hatColor: 0xffeaa7,
+      bodyColor: NPC_COLOR.brie,
+      hatColor: ACCENT.lamp,
       hatStyle: 'chef',
       hasApron: true,
       hasBag: false
@@ -202,7 +203,7 @@ export class NPCManager {
     npc.add(body);
     
     const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
-    const skinMat = ToonMaterial.create({ color: 0xfad7a0 });
+    const skinMat = ToonMaterial.create({ color: NPC_COLOR.skin });
     const head = new THREE.Mesh(headGeo, skinMat);
     head.position.y = 1.85;
     head.castShadow = true;
@@ -258,7 +259,7 @@ export class NPCManager {
     
     for (let i = 0; i < 2; i++) {
       const eyeGeo = new THREE.SphereGeometry(0.06, 8, 8);
-      const eyeMat = ToonMaterial.create({ color: 0x2c3e50 });
+      const eyeMat = ToonMaterial.create({ color: NPC_COLOR.eye });
       const eye = new THREE.Mesh(eyeGeo, eyeMat);
       eye.position.set(i === 0 ? -0.12 : 0.12, 1.9, 0.28);
       npc.add(eye);
@@ -266,7 +267,7 @@ export class NPCManager {
     
     if (options.hasApron) {
       const apronGeo = new THREE.BoxGeometry(0.6, 0.5, 0.1);
-      const apronMat = ToonMaterial.create({ color: 0xecf0f1 });
+      const apronMat = ToonMaterial.create({ color: NPC_COLOR.apron });
       const apron = new THREE.Mesh(apronGeo, apronMat);
       apron.position.set(0, 0.7, 0.35);
       npc.add(apron);
@@ -274,7 +275,7 @@ export class NPCManager {
     
     if (options.hasBag) {
       const bagGeo = new THREE.BoxGeometry(0.35, 0.4, 0.15);
-      const bagMat = ToonMaterial.create({ color: 0x8b4513 });
+      const bagMat = ToonMaterial.create({ color: MATERIAL.woodDark });
       const bag = new THREE.Mesh(bagGeo, bagMat);
       bag.position.set(-0.4, 0.8, 0);
       bag.rotation.z = 0.3;
@@ -289,7 +290,7 @@ export class NPCManager {
     const rod = new THREE.Group();
     
     const poleGeo = new THREE.CylinderGeometry(0.02, 0.03, 2.5, 6);
-    const poleMat = ToonMaterial.create({ color: 0x8b4513 });
+    const poleMat = ToonMaterial.create({ color: MATERIAL.wood });
     const pole = new THREE.Mesh(poleGeo, poleMat);
     pole.position.set(0.5, 1.2, 0.3);
     pole.rotation.z = -0.5;
