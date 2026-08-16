@@ -1,117 +1,156 @@
 /**
  * The single source of truth for colour in the game.
  *
- * The old palette was the Flat UI CSS set (0x2ecc71, 0x3498db, 0xe74c3c...) used
- * unmodified at full saturation next to pure-black roofs and roads. The target
- * look works the other way round: chalky, desaturated creams and green-greys
- * carry almost the whole frame, and saturation is rationed to a single warm
- * orange and a single teal, spent only on things that should draw the eye.
+ * The village is French: Gerberoy's brick and roses, Lacoste's golden limestone
+ * alleys, Colmar's painted half-timber along the water, Estaing's grey stone
+ * stacked above a river. That means warm ochre and cream walls under terracotta
+ * and slate, dark timber framing, and painted shutters as the saturated notes —
+ * not the cool greys and teals of the earlier Japanese-alley direction.
  *
  * Rules of thumb when adding to this file:
- *   - Nothing is pure black or pure white. Ink is #1e2624, paper is #f3eee2.
- *   - Neutrals carry a green bias so they sit inside the teal atmosphere.
- *   - If a new colour is saturated, it belongs in ACCENT and needs a reason.
+ *   - Nothing is pure black or pure white. Ink is #2a2118, lime render #f4ecd8.
+ *   - Wall neutrals carry a warm (yellow-red) bias; stone carries a grey-green one.
+ *   - Saturated colour belongs on joinery — shutters, doors, signs — and on the
+ *     handful of painted Colmar facades. Never on a whole street.
  */
 
 /** Atmosphere. The sky colour is also the fog colour, so they must match. */
 export const SKY = {
-  horizon: 0x8fd2c9,
-  zenith: 0x5fb8ae,
-  fog: 0x7ecabf,
-  cloud: 0xd8ece6,
-  cloudShade: 0xb6d9d1
+  horizon: 0xc4d8e8,
+  zenith: 0x7fa8cc,
+  fog: 0xb8cfe2,
+  cloud: 0xf7f4ec,
+  cloudShade: 0xd8dce4
 } as const;
 
-/** Light. Warm key, cool fill — the fill is what tints the shadows. */
+/** Light. Warm afternoon key, cool sky fill — the fill is what tints shadows. */
 export const LIGHT = {
-  sun: 0xfff1dc,
-  skyFill: 0x9fd3e8,
-  groundBounce: 0xd9cfae,
-  ambient: 0xcfe0e2
+  sun: 0xfff0d8,
+  skyFill: 0x9dc0e0,
+  groundBounce: 0xcbb994,
+  ambient: 0xd8dfe4
 } as const;
 
-/** Terrain, blended across the sphere by biome. */
+/** Terrain. Pasture green, river gravel, cobbled square, churchyard grass. */
 export const GROUND = {
-  base: 0x77856a,
-  town: 0x8b9878,
-  seaside: 0xcfc3a4,
-  hillside: 0x7d9068,
-  shrine: 0x76897e,
-  water: 0x5b9aa6,
-  waterDeep: 0x47808d
+  base: 0x7d9455,
+  town: 0x8a9a62,
+  seaside: 0xbfae86,
+  hillside: 0x6f8a4c,
+  shrine: 0x84965e,
+  water: 0x5f8497,
+  waterDeep: 0x4a6b7d
 } as const;
 
-/** Buildings. Walls are picked at random per house; roofs likewise. */
+/**
+ * Buildings.
+ *
+ * `walls` are the everyday village renders: limestone, lime plaster, warm
+ * cream. `painted` is the Colmar note — used on a minority of houses only.
+ */
 export const BUILDING = {
-  walls: [0xefe9db, 0xe4dccb, 0xd9d0bd, 0xcdc4b0, 0xf3eee2, 0xe8dfc9] as number[],
-  roofs: [0x4a4f52, 0x3f4447, 0x57504a, 0x464040, 0x525558] as number[],
-  door: 0x8a6f52,
-  window: 0xa8ccd0,
-  windowFrame: 0x4a4f52,
-  trim: 0xdcd4c2,
-  ac: 0xdedbd2
+  walls: [
+    0xe9d9b2, // Lacoste golden limestone
+    0xf0e6cf, // pale lime render
+    0xdcc9a0, // weathered ochre
+    0xe8d3b8, // Gerberoy peach plaster
+    0xd6c4a2,
+    0xf2ead6
+  ] as number[],
+  painted: [
+    0xcf7a63, // Colmar terracotta red
+    0xe0b455, // mustard yellow
+    0x8fa8bf, // powder blue
+    0xdca0a4, // dusty rose
+    0xa8bd96  // sage green
+  ] as number[],
+  roofs: [
+    0xa85f45, // terracotta pantile
+    0xb56b4d,
+    0x96543d,
+    0x6b7280, // slate
+    0x5d6672
+  ] as number[],
+  timber: 0x5f4433,     // half-timber framing
+  timberDark: 0x4a3527,
+  door: 0x5a6f4e,
+  doorAlt: 0x4a6580,
+  window: 0xbcd2dc,
+  shutters: [0x7a9b7e, 0x6b8caa, 0xa85a42, 0x8a7f9b] as number[],
+  windowFrame: 0xf2ead6,
+  trim: 0xeae0c8,
+  sill: 0xd0c4a8,
+  chimney: 0xa8705a
 } as const;
 
-/** Streets. Asphalt is a light green-grey, not the near-black it was. */
+/** Streets. Cobble and gravel, never asphalt. */
 export const ROAD = {
-  asphalt: 0x6b6f6a,
-  line: 0xece7da,
-  kerb: 0xc6c2b4
+  asphalt: 0x9c917c,  // cobbled lane (name kept: many call sites)
+  cobble: 0x94897a,
+  gravel: 0xb5a98e,
+  line: 0xc4bba4,
+  kerb: 0xa89d88
 } as const;
 
-/** Natural materials. */
+/** Natural and structural materials. */
 export const MATERIAL = {
-  wood: 0x9a7f60,
-  woodDark: 0x6f5a44,
-  woodPale: 0xbda684,
-  stone: 0xa6a89b,
-  stoneDark: 0x8b8d81,
-  concrete: 0xb9b8ae,
-  metal: 0x9aa3a2,
-  metalDark: 0x5c6462,
-  foliage: 0x5f8a5f,
-  foliageDeep: 0x4c7350,
-  trunk: 0x7a6249
+  wood: 0x9a7a52,
+  woodDark: 0x6b5136,
+  woodPale: 0xc0a478,
+  stone: 0xb0a894,        // dressed limestone
+  stoneDark: 0x8d8676,    // church and bridge masonry
+  stoneCool: 0x9aa096,    // Estaing grey
+  concrete: 0xbdb49c,
+  metal: 0x8c9490,
+  metalDark: 0x4f5a56,
+  foliage: 0x4f7d40,
+  foliageDeep: 0x3d6634,
+  foliageLight: 0x6b9552,
+  trunk: 0x6d5540,
+  ivy: 0x44702f,
+  hedge: 0x4a6b35
 } as const;
 
-/** Rationed saturation. Use these sparingly and deliberately. */
+/** Rationed saturation: flowers, signage, awnings, the odd painted shutter. */
 export const ACCENT = {
-  ember: 0xdd5f2a,
-  emberDeep: 0xb8471c,
-  teal: 0x4aa79c,
-  lemon: 0xe8c15c,
-  rose: 0xd88b7a,
-  lamp: 0xffe6b0
+  ember: 0xc4603a,
+  emberDeep: 0xa04728,
+  teal: 0x5b8a94,
+  lemon: 0xdcb551,
+  rose: 0xd4788a,      // climbing roses, Gerberoy
+  geranium: 0xc4485a,  // window-box red
+  lavender: 0x8f8ab8,
+  lamp: 0xffe3ae
 } as const;
 
 /** The courier. */
 export const PLAYER = {
   skin: 0xf0d0b0,
-  hair: 0x24282a,
-  shirt: 0xe8952f,
-  shorts: 0x2f3335,
-  shoe: 0x2a2e30,
-  sock: 0xf3eee2,
-  bag: 0x7d7468,
-  bagStrap: 0x6a6259
+  hair: 0x3a2a1e,
+  shirt: 0xd9663f,
+  shorts: 0x3d4450,
+  shoe: 0x4a3a2e,
+  sock: 0xf4ecd8,
+  bag: 0x8a6b4a,
+  bagStrap: 0x6d5136
 } as const;
 
-/** Villagers. Muted bodies so the courier's orange stays the brightest thing. */
+/** Villagers. Muted, so the courier stays the brightest thing on screen. */
 export const NPC = {
-  maple: 0x5b8ba8,
-  finn: 0xd8a15a,
-  hazel: 0x8f7ba6,
-  kai: 0xc2705a,
-  brie: 0xe6e0d2,
+  maple: 0x5c7f9c,
+  finn: 0xc49a5e,
+  hazel: 0x8f7f9e,
+  kai: 0xb0654c,
+  brie: 0xeae0c8,
   skin: 0xf0d3ae,
-  apron: 0xefe9db,
-  eye: 0x2c3230
+  apron: 0xf2ead6,
+  eye: 0x33291f
 } as const;
 
-/** Ink, used by the outline pass and any UI drawn in 3D. */
-export const INK = 0x1e2624;
+/** Ink, used by the outline pass. Warm near-black, not neutral. */
+export const INK = 0x2a2118;
 
-/** Pick a deterministic-ish random entry from one of the array palettes. */
-export function pick(list: readonly number[]): number {
+/** Pick a random entry from any of the list constants above. */
+export function pick<T>(list: readonly T[]): T {
   return list[Math.floor(Math.random() * list.length)];
 }

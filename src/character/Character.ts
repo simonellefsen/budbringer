@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Game, GameState } from '../core/Game';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { PLAYER } from '../utils/palette';
+import { RiggedFigure } from '../world/Characters';
 
 export class Character {
   private game: Game;
@@ -29,13 +30,14 @@ export class Character {
   private leftArm!: THREE.Group;
   private rightArm!: THREE.Group;
   private bag!: THREE.Group;
+  private figure: RiggedFigure | null = null;
   private groundShadow!: THREE.Mesh;
 
   constructor(game: Game, spawnPosition: THREE.Vector3) {
     this.game = game;
     this.group = new THREE.Group();
     
-    this.createKidCourier();
+    this.createCourier();
     
     const surfaceHeight = this.game.planetRadius + 0.5;
     const safeSpawn = spawnPosition.clone().normalize().multiplyScalar(surfaceHeight);
@@ -44,7 +46,41 @@ export class Character {
     this.isGrounded = true;
   }
 
-  private createKidCourier(): void {
+  /**
+   * The courier. Uses the modelled figure from characters.glb when it loaded,
+   * and falls back to the old primitive assembly otherwise so a missing GLB
+   * still gives you someone to walk around with.
+   */
+  private createCourier(): void {
+    const rigged = this.game.characters?.isLoaded
+      ? this.game.characters.instance('Courier')
+      : null;
+
+    if (rigged) {
+      this.figure = rigged;
+      // The kit models face +Z, but alignToSurface builds the group's basis
+      // with Matrix4.lookAt, which points -Z along the direction of travel.
+      // Without this the courier walks backwards.
+      rigged.root.rotation.y = Math.PI;
+      this.group.add(rigged.root);
+      this.createGroundShadow();
+      return;
+    }
+
+    this.createPrimitiveCourier();
+  }
+
+  private createGroundShadow(): void {
+    const shadowGeo = new THREE.CircleGeometry(0.4, 16);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false
+    });
+    this.groundShadow = new THREE.Mesh(shadowGeo, shadowMat);
+    this.groundShadow.rotation.x = -Math.PI / 2;
+    this.game.scene.add(this.groundShadow);
+  }
+
+  private createPrimitiveCourier(): void {
     // Colors matching Messenger-style kid
     const skinColor = PLAYER.skin;
     const hairColor = PLAYER.hair;
@@ -396,6 +432,58 @@ export class Character {
   }
 
   private animate(delta: number): void {
+    if (this.figure) {
+      this.animateFigure(delta);
+      return;
+    }
+    this.animatePrimitive(delta);
+  }
+
+  /**
+   * Walk cycle for the modelled courier.
+   *
+   * The Blender figure exports its limbs as separate nodes with pivots already
+   * at the shoulders and hips, so a gait is just four rotations — no skinning
+   * and no animation clips.
+   */
+  private animateFigure(delta: number): void {
+    const { root, head, armL, armR, legL, legR } = this.figure!;
+
+    if (this.isWalking && this.isGrounded) {
+      this.animationTime += delta * 9;
+
+      const swing = Math.sin(this.animationTime);
+      if (legL) legL.rotation.x = swing * 0.62;
+      if (legR) legR.rotation.x = -swing * 0.62;
+      if (armL) armL.rotation.x = -swing * 0.48;
+      if (armR) armR.rotation.x = swing * 0.48;
+
+      // A slight forward lean and a bob on every other step.
+      root.rotation.x = 0.09;
+      root.position.y = Math.abs(Math.sin(this.animationTime)) * 0.045;
+      if (head) head.rotation.z = Math.sin(this.animationTime * 0.5) * 0.05;
+
+      this.game.audioManager.playFootstep();
+    } else if (this.isJumping) {
+      if (legL) legL.rotation.x = -0.42;
+      if (legR) legR.rotation.x = 0.2;
+      if (armL) armL.rotation.x = 0.7;
+      if (armR) armR.rotation.x = 0.7;
+      root.rotation.x = -0.08;
+    } else {
+      this.animationTime += delta * 1.7;
+
+      // Ease the limbs back to rest rather than snapping.
+      for (const limb of [armL, armR, legL, legR]) {
+        if (limb) limb.rotation.x *= 0.86;
+      }
+      root.rotation.x *= 0.86;
+      root.position.y = Math.sin(this.animationTime) * 0.012;
+      if (head) head.rotation.z *= 0.9;
+    }
+  }
+
+  private animatePrimitive(delta: number): void {
     if (this.isWalking && this.isGrounded) {
       this.animationTime += delta * 16; // Faster animation cycle
       

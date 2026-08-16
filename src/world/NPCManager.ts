@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import { Game } from '../core/Game';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { NPC as NPC_COLOR, MATERIAL, ACCENT } from '../utils/palette';
+import { RiggedFigure } from './Characters';
 import { BiomeType } from './Planet';
 
 export interface NPC {
   name: string;
+  figure?: RiggedFigure | null;
   position: THREE.Vector3;
   mesh: THREE.Group;
   idleAnimation: (elapsed: number) => void;
@@ -33,13 +35,14 @@ export class NPCManager {
 
   private createPostmasterMaple(): void {
     const position = this.getPositionInBiome(BiomeType.TOWN, 0, 5);
-    const mesh = this.createNPCMesh({
+    const built = this.buildVillager('Postmaster Maple', {
       bodyColor: NPC_COLOR.maple,
       hatColor: MATERIAL.metalDark,
       hatStyle: 'cap',
       hasApron: false,
       hasBag: true
     });
+    const mesh = built.mesh;
     
     this.placeOnSphere(mesh, position);
     this.game.scene.add(mesh);
@@ -48,9 +51,8 @@ export class NPCManager {
       name: 'Postmaster Maple',
       position,
       mesh,
-      idleAnimation: (elapsed) => {
-        mesh.children[0].rotation.y = Math.sin(elapsed * 0.5) * 0.1;
-      },
+      figure: built.figure,
+      idleAnimation: () => {},
       greetings: [
         "Welcome, young courier! Ready to deliver some letters?",
         "The mail must flow! Got a fresh batch for you.",
@@ -62,13 +64,14 @@ export class NPCManager {
 
   private createFisherFinn(): void {
     const position = this.getPositionInBiome(BiomeType.SEASIDE, 0.5, 6);
-    const mesh = this.createNPCMesh({
+    const built = this.buildVillager('Fisher Finn', {
       bodyColor: NPC_COLOR.finn,
       hatColor: MATERIAL.stone,
       hatStyle: 'wide',
       hasApron: false,
       hasBag: false
     });
+    const mesh = built.mesh;
     
     const rod = this.createFishingRod();
     mesh.add(rod);
@@ -80,10 +83,8 @@ export class NPCManager {
       name: 'Fisher Finn',
       position,
       mesh,
-      idleAnimation: (elapsed) => {
-        const rod = mesh.children[mesh.children.length - 1];
-        rod.rotation.z = Math.sin(elapsed * 1.5) * 0.15;
-      },
+      figure: built.figure,
+      idleAnimation: () => {},
       greetings: [
         "Quiet today. Fish aren't biting, but letters are welcome.",
         "Ho there! Come to help an old fisher?",
@@ -99,13 +100,14 @@ export class NPCManager {
     const midpoint = hillsBiome.clone().add(beachBiome).multiplyScalar(0.5);
     const position = midpoint.normalize().multiplyScalar(this.game.planetRadius);
     
-    const mesh = this.createNPCMesh({
+    const built = this.buildVillager('Hermit Hazel', {
       bodyColor: NPC_COLOR.hazel,
       hatColor: NPC_COLOR.hazel,
       hatStyle: 'hood',
       hasApron: false,
       hasBag: false
     });
+    const mesh = built.mesh;
     
     this.placeOnSphere(mesh, position);
     this.game.scene.add(mesh);
@@ -114,10 +116,8 @@ export class NPCManager {
       name: 'Hermit Hazel',
       position,
       mesh,
-      idleAnimation: (elapsed) => {
-        const body = mesh.children[0];
-        body.rotation.x = Math.sin(elapsed * 0.8) * 0.03;
-      },
+      figure: built.figure,
+      idleAnimation: () => {},
       greetings: [
         "A visitor? How... unusual. What news from the world?",
         "The stars told me you'd come. They're rarely wrong.",
@@ -129,13 +129,14 @@ export class NPCManager {
 
   private createKeeperKai(): void {
     const position = this.getPositionInBiome(BiomeType.SHRINE, Math.PI, 4);
-    const mesh = this.createNPCMesh({
+    const built = this.buildVillager('Keeper Kai', {
       bodyColor: NPC_COLOR.kai,
       hatColor: ACCENT.lamp,
       hatStyle: 'tall',
       hasApron: true,
       hasBag: false
     });
+    const mesh = built.mesh;
     
     this.placeOnSphere(mesh, position);
     this.game.scene.add(mesh);
@@ -144,10 +145,8 @@ export class NPCManager {
       name: 'Keeper Kai',
       position,
       mesh,
-      idleAnimation: (elapsed) => {
-        const body = mesh.children[0];
-        body.rotation.y = Math.sin(elapsed * 0.3) * 0.05;
-      },
+      figure: built.figure,
+      idleAnimation: () => {},
       greetings: [
         "Blessings upon you, little courier.",
         "The ancestors smile on those who bring good tidings.",
@@ -159,13 +158,14 @@ export class NPCManager {
 
   private createBakerBrie(): void {
     const position = this.getPositionInBiome(BiomeType.TOWN, Math.PI * 0.7, 6);
-    const mesh = this.createNPCMesh({
+    const built = this.buildVillager('Baker Brie', {
       bodyColor: NPC_COLOR.brie,
       hatColor: ACCENT.lamp,
       hatStyle: 'chef',
       hasApron: true,
       hasBag: false
     });
+    const mesh = built.mesh;
     
     this.placeOnSphere(mesh, position);
     this.game.scene.add(mesh);
@@ -174,9 +174,8 @@ export class NPCManager {
       name: 'Baker Brie',
       position,
       mesh,
-      idleAnimation: (elapsed) => {
-        mesh.children[0].position.y = 0.9 + Math.sin(elapsed * 2) * 0.02;
-      },
+      figure: built.figure,
+      idleAnimation: () => {},
       greetings: [
         "Fresh bread, warm heart! What brings you by?",
         "Careful, the rolls are still hot! Oh, a letter?",
@@ -184,6 +183,45 @@ export class NPCManager {
       ],
       biome: BiomeType.TOWN
     });
+  }
+
+  /**
+   * Which modelled villager stands in for each named character. Dialogue stays
+   * in English; only the shop signage around them is French.
+   */
+  private static readonly FIGURE_FOR: Record<string, string> = {
+    'Postmaster Maple': 'Villager_Postmaster',
+    'Baker Brie': 'Villager_Baker',
+    'Fisher Finn': 'Villager_Fisher',
+    'Hermit Hazel': 'Villager_Artist',
+    'Keeper Kai': 'Villager_Keeper',
+    'Shepherd Sylvie': 'Villager_Shepherd'
+  };
+
+  /**
+   * A villager. Uses the Blender figure when characters.glb loaded, and falls
+   * back to the old capsule-and-hat assembly otherwise.
+   */
+  private buildVillager(name: string, options: {
+    bodyColor: number;
+    hatColor: number;
+    hatStyle: string;
+    hasApron: boolean;
+    hasBag: boolean;
+  }): { mesh: THREE.Group; figure: RiggedFigure | null } {
+    const figureName = NPCManager.FIGURE_FOR[name];
+    const characters = this.game.characters;
+
+    if (figureName && characters?.isLoaded && characters.has(figureName)) {
+      const rigged = characters.instance(figureName);
+      if (rigged) {
+        const holder = new THREE.Group();
+        holder.add(rigged.root);
+        return { mesh: holder, figure: rigged };
+      }
+    }
+
+    return { mesh: this.createNPCMesh(options), figure: null };
   }
 
   private createNPCMesh(options: {
@@ -329,9 +367,29 @@ export class NPCManager {
     object.quaternion.copy(quaternion);
   }
 
+  /**
+   * Idle motion for the villagers: a slow breathing sway on the whole figure
+   * and a little arm drift, so a stationary NPC does not read as a statue.
+   *
+   * Driven off the rig's named parts where there is one; the per-NPC
+   * idleAnimation callbacks that poked mesh.children[0] no longer apply, since
+   * a modelled villager's child zero is a torso mesh rather than a body group.
+   */
   public update(_delta: number, elapsed: number): void {
-    for (const npc of this.npcs) {
+    for (let i = 0; i < this.npcs.length; i++) {
+      const npc = this.npcs[i];
       npc.idleAnimation(elapsed);
+
+      const figure = npc.figure;
+      if (!figure) continue;
+
+      const phase = elapsed * 1.1 + i * 1.7;
+      figure.root.position.y = Math.sin(phase) * 0.014;
+      if (figure.head) {
+        figure.head.rotation.y = Math.sin(phase * 0.45) * 0.22;
+      }
+      if (figure.armL) figure.armL.rotation.x = Math.sin(phase * 0.6) * 0.05;
+      if (figure.armR) figure.armR.rotation.x = -Math.sin(phase * 0.6) * 0.05;
     }
   }
 

@@ -15,6 +15,7 @@ import { SKY, LIGHT } from '../utils/palette';
 import { EffectComposer, RenderPass, EffectPass, NormalPass } from 'postprocessing';
 import { InkEffect } from '../utils/InkEffect';
 import { Kit } from '../world/Kit';
+import { Characters } from '../world/Characters';
 
 export enum GameState {
   TITLE,
@@ -42,6 +43,7 @@ export class Game {
   public secrets!: Secrets;
   private sunLight!: THREE.DirectionalLight;
   public kit!: Kit;
+  public characters!: Characters;
   private composer!: EffectComposer;
   private inkEffect!: InkEffect;
 
@@ -172,10 +174,11 @@ export class Game {
     // Load the Blender kit before the world is built; Planet falls back to the
     // old primitive houses if it fails, so a bad export never blocks the game.
     this.kit = new Kit();
+    this.characters = new Characters();
     try {
-      await this.kit.load();
+      await Promise.all([this.kit.load(), this.characters.load()]);
     } catch (err) {
-      console.warn('Building kit failed to load, using primitive houses:', err);
+      console.warn('Art assets failed to load, falling back to primitives:', err);
     }
 
     this.planet = new Planet(this.planetRadius, this.kit);

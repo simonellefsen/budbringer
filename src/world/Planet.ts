@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { GROUND, BUILDING, ROAD, MATERIAL, ACCENT, SKY, pick } from '../utils/palette';
-import { Kit, KitPiece } from './Kit';
+import { Kit, SHOP_SIGNS } from './Kit';
 
 export enum BiomeType {
   TOWN,
@@ -15,7 +15,7 @@ export enum BiomeType {
 const ROAD_THICKNESS = 0.08;
 
 /** Radius of clear ground kept around the player's start, in world units. */
-const SPAWN_CLEARANCE = 9;
+const SPAWN_CLEARANCE = 11;
 
 /** A point along a street: where it is, which way it runs, which way is up. */
 interface StreetStation {
@@ -44,6 +44,8 @@ export class Planet {
   private spawnPoint!: THREE.Vector3;
   private kit: Kit | null = null;
   private houseVariant = 0;
+  private shopsPlaced = 0;
+  private riverAxis!: THREE.Vector3;
 
   constructor(radius: number, kit: Kit | null = null) {
     this.kit = kit;
@@ -200,6 +202,191 @@ export class Planet {
 
     // Fill gaps between biomes with additional houses and props
     this.fillGlobalDecorations();
+
+    // The set pieces that make it a French village rather than a generic one.
+    this.createRiver();
+    this.createChurch();
+    this.createSquare();
+    this.createPark();
+    this.createFarm();
+  }
+
+  // ------------------------------------------------------------ set pieces
+
+  /**
+   * A river running the whole way round the sphere on a great circle, with a
+   * stone bridge where the village's main road crosses it.
+   *
+   * A great circle rather than a meandering path: on a closed surface the
+   * water has to either loop or end abruptly, and a loop is the only one of
+   * those that doesn't look like a bug.
+   */
+  private createRiver(): void {
+    const townCenter = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
+
+    // Tilt the river's plane so it passes near, but not through, the village.
+    this.riverAxis = new THREE.Vector3(0.82, 0.24, -0.52).normalize();
+
+    let u = new THREE.Vector3().crossVectors(this.riverAxis, townCenter);
+    if (u.lengthSq() < 1e-6) u = new THREE.Vector3().crossVectors(this.riverAxis, new THREE.Vector3(1, 0, 0));
+    u.normalize();
+    const v = new THREE.Vector3().crossVectors(this.riverAxis, u).normalize();
+
+    const segments = 96;
+    const halfWidth = 3.4;
+    const positions: number[] = [];
+
+    for (let i = 0; i < segments; i++) {
+      const a0 = (i / segments) * Math.PI * 2;
+      const a1 = ((i + 1) / segments) * Math.PI * 2;
+
+      const centre0 = u.clone().multiplyScalar(Math.cos(a0)).addScaledVector(v, Math.sin(a0));
+      const centre1 = u.clone().multiplyScalar(Math.cos(a1)).addScaledVector(v, Math.sin(a1));
+
+      // Widen and narrow gently so it reads as a river, not a canal.
+      const w0 = halfWidth * (1 + Math.sin(a0 * 3) * 0.22);
+      const w1 = halfWidth * (1 + Math.sin(a1 * 3) * 0.22);
+
+      const edge = (centre: THREE.Vector3, w: number, side: number) =>
+        centre.clone().addScaledVector(this.riverAxis, (side * w) / this.radius)
+          .normalize().multiplyScalar(this.radius - 0.28);
+
+      const a = edge(centre0, w0, 1);
+      const b = edge(centre1, w1, 1);
+      const c = edge(centre1, w1, -1);
+      const d = edge(centre0, w0, -1);
+
+      positions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+      positions.push(a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.computeVertexNormals();
+
+    const water = new THREE.Mesh(geometry, ToonMaterial.create({
+      color: GROUND.water,
+      transparent: true,
+      opacity: 0.9
+    }));
+    water.receiveShadow = true;
+    this.decorations.add(water);
+
+    // Bridge at the point on the river nearest the village.
+    const nearest = townCenter.clone()
+      .sub(this.riverAxis.clone().multiplyScalar(townCenter.dot(this.riverAxis)))
+      .normalize().multiplyScalar(this.radius);
+
+    const along = new THREE.Vector3().crossVectors(this.riverAxis, nearest).normalize();
+    const bridge = this.addPiece('Bridge_Stone', nearest,
+      nearest.clone().addScaledVector(along, 5));
+
+    if (bridge) {
+      // The kit bridge spans along its own X, so face it across the water.
+      const across = nearest.clone().addScaledVector(this.riverAxis, 5);
+      this.placeFacing(bridge, nearest, across);
+    }
+  }
+
+  /** The church, set back from the square on its own patch of ground. */
+  private createChurch(): void {
+    const center = this.biomes.find(b => b.type === BiomeType.TOWN)!
+      .center.clone().multiplyScalar(this.radius);
+
+    const site = this.getOffsetOnSphere(center, 2.3, 15);
+    this.addPiece('Church', site, center);
+
+    // Churchyard wall and a couple of trees.
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const spot = this.getOffsetOnSphere(site, angle, 9);
+      this.addPiece('Wall_Low', spot, site);
+    }
+    for (const angle of [0.8, 3.9]) {
+      this.addPiece('Tree_Plane', this.getOffsetOnSphere(site, angle, 7));
+    }
+  }
+
+  /** The village square: fountain, plane trees, benches, a well. */
+  private createSquare(): void {
+    const center = this.biomes.find(b => b.type === BiomeType.TOWN)!
+      .center.clone().multiplyScalar(this.radius);
+
+    const square = this.getOffsetOnSphere(center, 4.6, 13);
+
+    this.addPiece('Fountain', square);
+    this.addPiece('Well', this.getOffsetOnSphere(square, 1.2, 5));
+
+    // Plane trees ringing the square, as in every French village.
+    for (let i = 0; i < 7; i++) {
+      const angle = (i / 7) * Math.PI * 2 + 0.2;
+      this.addPiece('Tree_Plane', this.getOffsetOnSphere(square, angle, 6.5));
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + 0.7;
+      const bench = this.createBench();
+      this.placeFacing(bench, this.getOffsetOnSphere(square, angle, 3.4), square);
+      this.decorations.add(bench);
+    }
+  }
+
+  /** A park along the river bank: trees, benches, low walls. */
+  private createPark(): void {
+    if (!this.riverAxis) return;
+
+    const townCenter = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
+    const onRiver = townCenter.clone()
+      .sub(this.riverAxis.clone().multiplyScalar(townCenter.dot(this.riverAxis)))
+      .normalize().multiplyScalar(this.radius);
+
+    const along = new THREE.Vector3().crossVectors(this.riverAxis, onRiver).normalize();
+
+    for (let i = -4; i <= 4; i++) {
+      if (i === 0) continue; // leave the bridge approach clear
+      const base = onRiver.clone().addScaledVector(along, i * 4.5)
+        .normalize().multiplyScalar(this.radius);
+
+      // Bank side away from the water.
+      const spot = base.clone().addScaledVector(this.riverAxis, 6.2)
+        .normalize().multiplyScalar(this.radius);
+
+      if (i % 2 === 0) {
+        this.addPiece('Tree_Plane', spot);
+      } else {
+        const bench = this.createBench();
+        this.placeFacing(bench, spot, base);
+        this.decorations.add(bench);
+      }
+    }
+  }
+
+  /** A smallholding outside the village: barn, fenced paddock, sheep and goats. */
+  private createFarm(): void {
+    const center = this.biomes.find(b => b.type === BiomeType.HILLSIDE)!
+      .center.clone().multiplyScalar(this.radius);
+
+    const yard = this.getOffsetOnSphere(center, 1.1, 6);
+    this.addPiece('Barn', yard, center);
+
+    // Paddock fence, a ring of panels each facing the middle.
+    const paddock = this.getOffsetOnSphere(yard, 2.6, 10);
+    const panels = 14;
+    for (let i = 0; i < panels; i++) {
+      const angle = (i / panels) * Math.PI * 2;
+      const post = this.getOffsetOnSphere(paddock, angle, 8);
+      const next = this.getOffsetOnSphere(paddock, angle + Math.PI * 2 / panels, 8);
+      this.addPiece('Fence', post, next);
+    }
+
+    // The flock.
+    for (let i = 0; i < 9; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * 6;
+      const spot = this.getOffsetOnSphere(paddock, angle, dist);
+      const facing = this.getOffsetOnSphere(paddock, angle + 1.2, dist + 3);
+      this.addPiece(i % 3 === 0 ? 'Goat' : 'Sheep', spot, facing, i);
+    }
   }
 
   // ---------------------------------------------------------------- streets
@@ -298,7 +485,7 @@ export class Planet {
     options: { setback?: number; gapChance?: number; sides?: number[]; stride?: number } = {}
   ): void {
     const {
-      setback = 4.6,
+      setback = 7.0,
       gapChance = 0.22,
       sides = [1, -1],
       stride = 1
@@ -369,27 +556,15 @@ export class Planet {
       
       if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.6)) continue;
 
-      const propType = Math.floor(Math.random() * 5);
-      let prop: THREE.Group;
-      
-      switch (propType) {
-        case 0:
-          prop = this.createTelephonePole();
-          break;
-        case 1:
-          prop = this.createVendingMachine([ACCENT.teal, ACCENT.lemon, ACCENT.ember][Math.floor(Math.random() * 3)]);
-          break;
-        case 2:
-          prop = this.createBench();
-          break;
-        case 3:
-          prop = this.createTrafficCone();
-          break;
-        default:
-          prop = this.createMailbox();
-          break;
-      }
-      
+      // Village furniture only. Traffic cones, traffic mirrors and vending
+      // machines belonged to the Japanese-alley direction and read as litter
+      // in a French village.
+      const kitProp = ['Tree_Plane', 'Wall_Low', 'Tree_Plane', 'Well'][
+        Math.floor(Math.random() * 4)];
+
+      if (this.addPiece(kitProp, pos)) continue;
+
+      const prop = Math.random() < 0.5 ? this.createBench() : this.createMailbox();
       this.placeOnSphere(prop, pos);
       this.decorations.add(prop);
     }
@@ -421,7 +596,7 @@ export class Planet {
             3
           );
 
-          this.layFrontage(span, { setback: 4.6, gapChance: 0.35 });
+          this.layFrontage(span, { setback: 6.8, gapChance: 0.35 });
         }
       }
     }
@@ -455,7 +630,7 @@ export class Planet {
     const ringRadius = 11;
     const ring = this.ringStations(center, ringRadius, 20);
     this.layRoad(ring, 3.0);
-    this.layFrontage(ring, { setback: 5.0, gapChance: 0.24 });
+    this.layFrontage(ring, { setback: 7.4, gapChance: 0.24 });
 
     // Radial lanes off the ring. Their outer frontage forms the town edge.
     const laneCount = 4;
@@ -466,7 +641,7 @@ export class Planet {
 
       const lane = this.lineStations(inner, outer, 5);
       this.layRoad(lane, 2.4);
-      this.layFrontage(lane, { setback: 4.4, gapChance: 0.3, stride: 1 });
+      this.layFrontage(lane, { setback: 6.6, gapChance: 0.3, stride: 1 });
     }
 
     // A short high street running past the start, so the opening shot looks
@@ -480,66 +655,70 @@ export class Planet {
 
     const highStreet = this.lineStations(highStart, highEnd, 7);
     this.layRoad(highStreet, 3.0);
-    this.layFrontage(highStreet, { setback: 5.2, gapChance: 0.18 });
+    this.layFrontage(highStreet, { setback: 7.2, gapChance: 0.18 });
     
-    // Multiple vending machines
-    for (let i = 0; i < 5; i++) {
-      const angle = 0.5 + i * 1.2;
-      const vmPos = this.getOffsetOnSphere(center, angle, 3 + i * 2);
-      if (!this.clearOfSpawn(vmPos, SPAWN_CLEARANCE * 0.55)) continue;
-
-      const vm = this.createVendingMachine([ACCENT.teal, ACCENT.lemon, ACCENT.ember][i % 3]);
-      this.placeOnSphere(vm, vmPos);
-      this.decorations.add(vm);
-    }
-    
+    // Street furniture. A French village has a post box, garden walls and
+    // plane trees — not vending machines, traffic mirrors and cones, which
+    // were props for the Japanese-alley direction this started as.
     const mailbox = this.createMailbox();
-    this.placeOnSphere(mailbox, this.getOffsetOnSphere(center, 1.5, 4));
+    this.placeOnSphere(mailbox, this.getOffsetOnSphere(center, 1.5, 5));
     this.decorations.add(mailbox);
-    
-    for (let i = 0; i < 4; i++) {
-      const pole = this.createTelephonePole();
-      const angle = (i / 4) * Math.PI * 2 + 0.3;
-      this.placeOnSphere(pole, this.getOffsetOnSphere(center, angle, 6 + Math.random() * 2));
-      this.decorations.add(pole);
-    }
-    
-    const mirror = this.createTrafficMirror();
-    this.placeOnSphere(mirror, this.getOffsetOnSphere(center, 2.2, 5));
-    this.decorations.add(mirror);
-    
-    for (let i = 0; i < 3; i++) {
-      const cone = this.createTrafficCone();
-      this.placeOnSphere(cone, this.getOffsetOnSphere(center, 1.8 + i * 0.15, 4 + i * 0.5));
-      this.decorations.add(cone);
-    }
-    
-    const bin = this.createTrashBin();
-    this.placeOnSphere(bin, this.getOffsetOnSphere(center, 0.3, 3.5));
-    this.decorations.add(bin);
-    
-    const wall = this.createRetainingWall();
-    this.placeOnSphere(wall, this.getOffsetOnSphere(center, Math.PI, 7));
-    this.decorations.add(wall);
-  }
 
-  private static readonly HOUSE_PIECES: KitPiece[] = [
-    'House_TallA', 'House_MidB', 'House_NarrowC'
-  ];
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2 + 0.3;
+      const spot = this.getOffsetOnSphere(center, angle, 7 + Math.random() * 2);
+      if (!this.clearOfSpawn(spot, SPAWN_CLEARANCE * 0.7)) continue;
+      this.addPiece('Tree_Plane', spot);
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + 1.1;
+      const spot = this.getOffsetOnSphere(center, angle, 9);
+      this.addPiece('Wall_Low', spot, center);
+    }
+  }
 
   /**
    * A street-front building. Comes from the Blender kit when it has loaded,
    * and falls back to the old primitive assembly so a missing GLB degrades
    * to a playable world rather than an empty one.
+   *
+   * Roughly one plot in four is a shop, which is what puts French signage
+   * along the street without turning the village into a high street.
    */
-  private createHouse(): THREE.Object3D {
+  private createHouse(allowShop: boolean = true): THREE.Object3D {
     if (this.kit && this.kit.isLoaded) {
-      const piece = Planet.HOUSE_PIECES[this.houseVariant % Planet.HOUSE_PIECES.length];
-      const built = this.kit.instance(piece, this.houseVariant);
-      this.houseVariant++;
+      const variant = this.houseVariant++;
+      const wantShop = allowShop && this.shopsPlaced < SHOP_SIGNS.length
+        && Math.random() < 0.28;
+
+      const built = wantShop
+        ? this.kit.shop(variant, SHOP_SIGNS[this.shopsPlaced++])
+        : this.kit.house(variant);
+
       if (built) return built;
     }
     return this.createPrimitiveHouse();
+  }
+
+  /** A kit prop placed flat on the surface, facing a given point. */
+  private addPiece(
+    name: string,
+    position: THREE.Vector3,
+    faceToward?: THREE.Vector3,
+    variant: number = 0
+  ): THREE.Object3D | null {
+    if (!this.kit || !this.kit.isLoaded || !this.kit.has(name)) return null;
+    const piece = this.kit.instance(name, variant);
+    if (!piece) return null;
+
+    if (faceToward) {
+      this.placeFacing(piece, position, faceToward);
+    } else {
+      this.placeOnSphere(piece, position);
+    }
+    this.decorations.add(piece);
+    return piece;
   }
 
   private createPrimitiveHouse(): THREE.Group {
@@ -598,44 +777,12 @@ export class Planet {
     
     // AC unit
     const acGeo = new THREE.BoxGeometry(0.8, 0.4, 0.3);
-    const acMat = ToonMaterial.create({ color: BUILDING.ac });
+    const acMat = ToonMaterial.create({ color: BUILDING.trim });
     const ac = new THREE.Mesh(acGeo, acMat);
     ac.position.set(1.2, 2.0, -1.3);
     house.add(ac);
     
     return house;
-  }
-
-  private createVendingMachine(color: number = ACCENT.teal): THREE.Group {
-    const vm = new THREE.Group();
-    
-    const bodyGeo = new THREE.BoxGeometry(0.9, 1.8, 0.7);
-    const bodyMat = ToonMaterial.create({ color });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.9;
-    body.castShadow = true;
-    vm.add(body);
-    
-    const screenGeo = new THREE.BoxGeometry(0.7, 1.0, 0.05);
-    const screenMat = ToonMaterial.create({ color: MATERIAL.metalDark });
-    const screen = new THREE.Mesh(screenGeo, screenMat);
-    screen.position.set(0, 1.1, 0.38);
-    vm.add(screen);
-    
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 3; col++) {
-        const canGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.15, 8);
-        const canMat = ToonMaterial.create({ 
-          color: [ACCENT.ember, ACCENT.lemon, ACCENT.teal][Math.floor(Math.random() * 3)]
-        });
-        const can = new THREE.Mesh(canGeo, canMat);
-        can.position.set(-0.2 + col * 0.2, 0.8 + row * 0.3, 0.35);
-        can.rotation.x = Math.PI / 2;
-        vm.add(can);
-      }
-    }
-    
-    return vm;
   }
 
   private createMailbox(): THREE.Group {
@@ -666,108 +813,6 @@ export class Planet {
     mb.add(slot);
     
     return mb;
-  }
-
-  private createTelephonePole(): THREE.Group {
-    const pole = new THREE.Group();
-    
-    // Shorter pole to match house scale (~3 units, similar to house height)
-    // On a small curved planet, tall poles appear to diverge/lean
-    const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 3, 8);
-    const poleMat = ToonMaterial.create({ color: MATERIAL.woodDark });
-    const poleM = new THREE.Mesh(poleGeo, poleMat);
-    poleM.position.y = 1.5; // Base at y=0, top at y=3
-    poleM.castShadow = true;
-    pole.add(poleM);
-    
-    // Cross arm near top
-    const armGeo = new THREE.BoxGeometry(1.0, 0.06, 0.06);
-    const arm = new THREE.Mesh(armGeo, poleMat);
-    arm.position.y = 2.8;
-    pole.add(arm);
-    
-    // Shorter wires
-    for (let i = 0; i < 2; i++) {
-      const wireGeo = new THREE.CylinderGeometry(0.01, 0.01, 1.5, 4);
-      const wireMat = ToonMaterial.create({ color: MATERIAL.metalDark });
-      const wire = new THREE.Mesh(wireGeo, wireMat);
-      wire.position.set(i === 0 ? -0.35 : 0.35, 2.8, 0);
-      wire.rotation.z = Math.PI / 2;
-      pole.add(wire);
-    }
-    
-    return pole;
-  }
-
-  private createTrafficMirror(): THREE.Group {
-    const mirror = new THREE.Group();
-    
-    const poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.5, 8);
-    const poleMat = ToonMaterial.create({ color: ACCENT.lemon });
-    const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.y = 1.25;
-    mirror.add(pole);
-    
-    const mirrorGeo = new THREE.SphereGeometry(0.35, 16, 16, 0, Math.PI);
-    const mirrorMat = ToonMaterial.create({ color: MATERIAL.metal });
-    const mirrorM = new THREE.Mesh(mirrorGeo, mirrorMat);
-    mirrorM.position.y = 2.3;
-    mirrorM.rotation.y = Math.PI;
-    mirrorM.castShadow = true;
-    mirror.add(mirrorM);
-    
-    const frameGeo = new THREE.TorusGeometry(0.35, 0.04, 8, 16);
-    const frameMat = ToonMaterial.create({ color: ACCENT.lemon });
-    const frame = new THREE.Mesh(frameGeo, frameMat);
-    frame.position.y = 2.3;
-    frame.rotation.x = Math.PI / 2;
-    mirror.add(frame);
-    
-    return mirror;
-  }
-
-  private createTrafficCone(): THREE.Group {
-    const cone = new THREE.Group();
-    
-    const coneGeo = new THREE.ConeGeometry(0.15, 0.5, 8);
-    const coneMat = ToonMaterial.create({ color: ACCENT.ember });
-    const coneM = new THREE.Mesh(coneGeo, coneMat);
-    coneM.position.y = 0.25;
-    coneM.castShadow = true;
-    cone.add(coneM);
-    
-    const stripeGeo = new THREE.CylinderGeometry(0.08, 0.12, 0.1, 8);
-    const stripeMat = ToonMaterial.create({ color: BUILDING.trim });
-    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-    stripe.position.y = 0.25;
-    cone.add(stripe);
-    
-    const baseGeo = new THREE.BoxGeometry(0.35, 0.05, 0.35);
-    const baseMat = ToonMaterial.create({ color: ACCENT.ember });
-    const base = new THREE.Mesh(baseGeo, baseMat);
-    base.position.y = 0.025;
-    cone.add(base);
-    
-    return cone;
-  }
-
-  private createTrashBin(): THREE.Group {
-    const bin = new THREE.Group();
-    
-    const binGeo = new THREE.CylinderGeometry(0.25, 0.2, 0.6, 8);
-    const binMat = ToonMaterial.create({ color: ACCENT.teal });
-    const binM = new THREE.Mesh(binGeo, binMat);
-    binM.position.y = 0.3;
-    binM.castShadow = true;
-    bin.add(binM);
-    
-    const lidGeo = new THREE.CylinderGeometry(0.27, 0.27, 0.08, 8);
-    const lidMat = ToonMaterial.create({ color: MATERIAL.metalDark });
-    const lid = new THREE.Mesh(lidGeo, lidMat);
-    lid.position.y = 0.64;
-    bin.add(lid);
-    
-    return bin;
   }
 
   private createRetainingWall(): THREE.Group {
