@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ToonMaterial } from '../utils/ToonMaterial';
-import { PLAYER, NPC, BUILDING, MATERIAL, ACCENT } from '../utils/palette';
+import { PLAYER, NPC, MATERIAL, ACCENT } from '../utils/palette';
 
 /**
  * Loads the courier and the villagers, and hands out animatable instances.
@@ -39,29 +39,38 @@ export interface RiggedFigure {
   legR: THREE.Object3D | null;
 }
 
-/** Wardrobes, keyed to the villagers the delivery quests already name. */
+/**
+ * Wardrobes, keyed to the villagers the delivery quests already name.
+ *
+ * Present-day clothes, deliberately: the village is old, the people in it are
+ * not. Denim on everyone below the waist, and the courier — a teenager — is
+ * the only saturated top on screen, so your eye always finds them.
+ */
 export const WARDROBE: Record<string, FigureColours> = {
   Courier: {
-    coat: 0x35548c, coatAlt: PLAYER.shorts, hat: 0x2b4372,
-    bag: PLAYER.bag, accent: ACCENT.ember
+    coat: 0xd9542f,       // orange hoodie
+    coatAlt: 0x3f5878,    // denim
+    hat: 0x2b3340,
+    bag: 0x4a5560,
+    accent: 0xf2e8d8
   },
   Villager_Postmaster: {
-    coat: NPC.maple, coatAlt: 0x3a4048, hat: 0x2f4a63, bag: MATERIAL.woodDark
+    coat: 0x27476b, coatAlt: 0x5c5348, hat: 0x1f3350, bag: 0x6b6155
   },
   Villager_Baker: {
-    coat: 0xb9b0a0, coatAlt: 0x6b6558, hat: BUILDING.trim, apron: NPC.apron
+    coat: 0xe6e2d8, coatAlt: 0x46536b, apron: 0xf2ead6
   },
   Villager_Shepherd: {
-    coat: 0x7c6a4e, coatAlt: 0x4e4536, hat: 0x9a8763, bag: MATERIAL.woodDark
+    coat: 0x5c6b4a, coatAlt: 0x3f5878, hat: 0x8a6a4e, bag: MATERIAL.woodDark
   },
   Villager_Fisher: {
-    coat: NPC.finn, coatAlt: 0x4a5560, hat: 0x8d8676, bag: MATERIAL.woodDark
+    coat: 0xd6a83f, coatAlt: 0x44515e, hat: 0x7f8a76, bag: MATERIAL.woodDark
   },
   Villager_Artist: {
-    coat: NPC.hazel, coatAlt: 0x4b4553, hat: 0x6d3f4a, apron: NPC.apron
+    coat: 0x8d7fa8, coatAlt: 0x3f5878, hat: 0xb5654a, bag: 0xa89a80
   },
   Villager_Keeper: {
-    coat: NPC.kai, coatAlt: 0x50453c, hat: 0x8c5a44
+    coat: 0x8c9490, coatAlt: 0x4b4a46
   }
 };
 
@@ -106,6 +115,7 @@ export class Characters {
         case 'COAT_ALT': return colours.coatAlt ?? PLAYER.shorts;
         case 'APRON': return colours.apron ?? NPC.apron;
         case 'BOOT': return PLAYER.shoe;
+        case 'SOLE': return 0xefe9dd;
         case 'BAG': return colours.bag ?? PLAYER.bag;
         case 'HAT': return colours.hat ?? colours.coat;
         case 'ACCENT': return colours.accent ?? ACCENT.ember;
