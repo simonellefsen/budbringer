@@ -149,7 +149,7 @@ export class Planet {
           .normalize(), radius: 14 }
     ];
 
-    this.regionLayout = distributeRegions(16, seeds, this.radius);
+    this.regionLayout = distributeRegions(15, seeds, this.radius);
   }
 
   /**
@@ -171,6 +171,20 @@ export class Planet {
       .addScaledVector(along, 0.72)
       .normalize();
     this.terrain.addBasin(this.lakeCenter, 13);
+
+    // The boathouse sits on the shore, facing the water — not in the lattice,
+    // or it would land in a field.
+    const shore = this.getOffsetOnSphere(
+      this.lakeCenter.clone().multiplyScalar(this.radius),
+      1.15,
+      15.2
+    );
+    this.regionLayout.push({
+      kind: 'cale',
+      name: 'La Cale',
+      radius: 11,
+      center: shore.clone().normalize()
+    });
   }
 
   /**
@@ -201,7 +215,10 @@ export class Planet {
 
     // Built-up kinds get level ground. Pasture is included so the flock
     // does not stand in mid-air on a cliff face.
-    const needsLevel = new Set(['hamlet', 'graveyard', 'mill', 'chapel', 'ruin', 'pasture']);
+    const needsLevel = new Set([
+      'hamlet', 'graveyard', 'mill', 'chapel', 'ruin', 'pasture',
+      'clos', 'cale', 'allee', 'bocage'
+    ]);
     for (const region of this.regionLayout) {
       if (!needsLevel.has(region.kind)) continue;
       const pad = region.kind === 'ruin' ? 0.95 : region.kind === 'pasture' ? 0.7 : 0.75;
@@ -437,6 +454,65 @@ export class Planet {
     }
   }
 
+  /** A formal drive: a road with plane trees in two ranks. */
+  private buildAllee(center: THREE.Vector3, radius: number): void {
+    const bearing = Math.random() * Math.PI * 2;
+    const from = this.getOffsetOnSphere(center, bearing, radius * 0.72);
+    const to = this.getOffsetOnSphere(center, bearing + Math.PI, radius * 0.72);
+    this.layRoad(this.lineStations(from, to, 6), 2.0);
+
+    const side = bearing + Math.PI / 2;
+    const steps = 7;
+    for (let i = 0; i < steps; i++) {
+      const along = ((i / (steps - 1)) * 2 - 1) * radius * 0.66;
+      const heading = along >= 0 ? bearing : bearing + Math.PI;
+      const mid = this.getOffsetOnSphere(center, heading, Math.abs(along));
+      this.addPiece('Tree_Plane', this.getOffsetOnSphere(mid, side, 3.5));
+      this.addPiece('Tree_Plane', this.getOffsetOnSphere(mid, side + Math.PI, 3.5));
+    }
+  }
+
+  /** A walled garden with a well in the middle. */
+  private buildClos(center: THREE.Vector3, radius: number): void {
+    const ring = radius * 0.52;
+    const n = 8;
+    for (let i = 0; i < n; i++) {
+      const angle = (i / n) * Math.PI * 2;
+      const spot = this.getOffsetOnSphere(center, angle, ring);
+      const next = this.getOffsetOnSphere(center, angle + Math.PI * 2 / n, ring);
+      this.addPiece('Wall_Low', spot, next);
+    }
+    this.addPiece('Well', center);
+    this.layRows(center, ring * 0.55, 'Lavender_Row', 3.4, 5.6);
+    this.scatterInDisc(center, ring * 0.7, 3, ['Tree_Orchard', 'Hedge']);
+  }
+
+  /** A cut in the hillside: rock, a scrap of wall, trees on the rim. */
+  private buildQuarry(center: THREE.Vector3, radius: number): void {
+    this.addPiece('Cliff_Rock', center);
+    this.scatterInDisc(center, radius * 0.5, 6, ['Cliff_Rock'], 3.2);
+    this.scatterInDisc(center, radius * 0.75, 3, ['Ruin_Arch', 'Wall_Low'], 3.6);
+    this.scatterInDisc(center, radius, 6, ['Tree_Plane', 'Hedge']);
+  }
+
+  /** Hedge-lined fields — bocage, not another pasture. */
+  private buildBocage(center: THREE.Vector3, radius: number): void {
+    this.layRows(center, radius * 0.82, 'Hedge', 4.8, 5.5);
+    this.layRows(center, radius * 0.82, 'Hedge', 5.6, 6.2);
+    this.scatterInDisc(center, radius, 5, ['Tree_Plane', 'Tree_Orchard']);
+    this.scatterInDisc(center, radius * 0.45, 2, ['Sheep'], 2.4);
+  }
+
+  /** A boat shed facing the lake. */
+  private buildCale(center: THREE.Vector3, radius: number): void {
+    const water = this.lakeCenter.clone().multiplyScalar(this.radius);
+    this.addPiece('Boathouse', center, water);
+    this.scatterInDisc(center, radius * 0.7, 4, ['Tree_Plane', 'Wall_Low']);
+    const bench = this.createBench();
+    this.placeFacing(bench, this.getOffsetOnSphere(center, 2.1, 4.2), water);
+    this.decorations.add(bench);
+  }
+
   /** A short lane with houses either side — the shape of every hamlet. */
   private buildHamlet(center: THREE.Vector3, radius: number): void {
     const bearing = Math.random() * Math.PI * 2;
@@ -521,6 +597,26 @@ export class Planet {
         case 'chapel':
           this.addPiece('Chapel', center, this.getOffsetOnSphere(center, 0, 8));
           this.scatterInDisc(center, r, 10, ['Tree_Plane', 'Wall_Low', 'Hedge']);
+          break;
+
+        case 'allee':
+          this.buildAllee(center, r);
+          break;
+
+        case 'clos':
+          this.buildClos(center, r);
+          break;
+
+        case 'quarry':
+          this.buildQuarry(center, r);
+          break;
+
+        case 'bocage':
+          this.buildBocage(center, r);
+          break;
+
+        case 'cale':
+          this.buildCale(center, r);
           break;
 
         default:
