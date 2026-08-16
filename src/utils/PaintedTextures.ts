@@ -150,4 +150,39 @@ export class PaintedTextures {
     material.customProgramCacheKey = () => 'water-shimmer-v1';
     material.needsUpdate = true;
   }
+
+  /**
+   * Faster downward scroll for the hanging waterfall sheets.
+   *
+   * The kit UVs put V up the face, so a negative V flow reads as falling.
+   * Shares the same clock as the river shimmer.
+   */
+  public static fallWater(material: THREE.MeshToonMaterial): void {
+    if (!material.map) return;
+    const time = this.waterTime;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uWaterTime = time;
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          '#include <common>\nuniform float uWaterTime;'
+        )
+        .replace(
+          '#include <map_fragment>',
+          `
+#ifdef USE_MAP
+	vec2 flow = vec2(uWaterTime * 0.05, -uWaterTime * 0.28);
+	vec4 sheet = texture2D(map, vMapUv + flow);
+	vec4 streak = texture2D(map, vMapUv * vec2(1.15, 1.6) + vec2(0.18, -uWaterTime * 0.41));
+	vec4 sampledDiffuseColor = mix(sheet, streak, 0.38);
+	float thread = smoothstep(0.62, 0.96, sin(vMapUv.x * 22.0 + uWaterTime * 2.1));
+	sampledDiffuseColor.rgb += vec3(0.08, 0.1, 0.095) * thread;
+	diffuseColor *= sampledDiffuseColor;
+#endif
+`
+        );
+    };
+    material.customProgramCacheKey = () => 'water-fall-v1';
+    material.needsUpdate = true;
+  }
 }

@@ -154,7 +154,19 @@ export class Kit {
     const key = `${slotName}|${colour}|${map?.uuid ?? '-'}`;
     let material = this.materialCache.get(key);
     if (!material) {
-      material = ToonMaterial.create({ color: colour, map });
+      if (slotName === 'WATER' && map) {
+        // Own map so scrolling V does not move the river's tile, and a
+        // taller repeat so the sheet has enough streaks to read as a fall.
+        const fallMap = map.clone();
+        fallMap.wrapS = THREE.RepeatWrapping;
+        fallMap.wrapT = THREE.RepeatWrapping;
+        fallMap.repeat.set(1.4, 2.6);
+        const falling = ToonMaterial.create({ color: colour, map: fallMap, unique: true });
+        PaintedTextures.fallWater(falling);
+        material = falling;
+      } else {
+        material = ToonMaterial.create({ color: colour, map });
+      }
       this.materialCache.set(key, material);
     }
     return material;
