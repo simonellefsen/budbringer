@@ -10,6 +10,10 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Trees, sheep and the mill read as giants next to the courier, and the
+  camera could barely tilt (14°, inverted, look-at locked on the
+  shoulders) so a facade was hard to frame. Kit props are scaled down;
+  pitch now looks up a wall or down the street.
 - Music-box phrases fired every few seconds in the bright midrange and
   read as a loop — the bed is quieter now, melody is rare and rolled
   off, and pads plus wind do the sitting.

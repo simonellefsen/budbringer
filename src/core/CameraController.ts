@@ -8,15 +8,17 @@ export class CameraController {
   private game: Game;
   private camera: THREE.PerspectiveCamera;
   
-  // Close third-person, human height - see the street ahead
-  private distance: number = 4.5;
-  private height: number = 2.0;
+  // Close third-person. Pitch is the thing that lets you square up to a
+  // facade — the old 14° window and a look-at locked on the courier's
+  // shoulders made every building a roof.
+  private distance: number = 4.8;
+  private height: number = 1.85;
   
-  private pitchOffset: number = 0.08;
-  private maxPitch: number = 0.25;
-  private minPitch: number = 0.02; // Always look slightly up, never into ground
+  private pitchOffset: number = 0.18;
+  private maxPitch: number = 0.62;
+  private minPitch: number = -0.55;
   
-  private lookSensitivity: number = 0.003;
+  private lookSensitivity: number = 0.0036;
   private smoothing: number = 12;
   
   // Stable heading direction for parallel transport
@@ -35,7 +37,7 @@ export class CameraController {
   }
 
   public reset(): void {
-    this.pitchOffset = 0.1; // Start with slight downward look, not top-down
+    this.pitchOffset = 0.18;
     this.initializeStableHeading();
     this.snapToCharacter();
   }
@@ -165,9 +167,10 @@ export class CameraController {
       this.stableHeading.normalize();
     }
     
-    // Apply pitch
-    this.pitchOffset -= lookDelta.y * this.lookSensitivity;
-    this.pitchOffset = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitchOffset));
+    // Mouse-up / drag-up looks up (negative pitch). The old sign was inverted
+    // and the window was 14°, so a facade was almost impossible to frame.
+    this.pitchOffset += lookDelta.y * this.lookSensitivity;
+    this.pitchOffset = THREE.MathUtils.clamp(this.pitchOffset, this.minPitch, this.maxPitch);
     
     // Camera looks in direction of stableHeading, positioned behind character
     const behind = this.stableHeading.clone().negate();
@@ -179,17 +182,24 @@ export class CameraController {
       const pitchQuat = new THREE.Quaternion().setFromAxisAngle(pitchAxis, this.pitchOffset);
       cameraOffset.applyQuaternion(pitchQuat);
     }
+
+    const followDist = this.distance + Math.max(0, -this.pitchOffset) * 3.4;
     
     let targetPos = characterPos.clone()
-      .add(cameraOffset.clone().multiplyScalar(this.distance))
+      .add(cameraOffset.clone().multiplyScalar(followDist))
       .add(characterUp.clone().multiplyScalar(this.height));
     
     this.liftOffGround(targetPos, 1.25);
     targetPos = this.avoidBuildingCollision(characterPos, targetPos, characterUp);
     this.liftOffGround(targetPos, 1.25);
     
-    // Look at character's back for street-level feel
-    const targetLookAt = characterPos.clone().add(characterUp.clone().multiplyScalar(1.2));
+    // Look where the pitch is pointing — up a wall, or down the street —
+    // not only at the courier's shoulders.
+    const lookLift = 1.3 - this.pitchOffset * 1.7;
+    const lookAhead = 1.6 - this.pitchOffset * 3.4;
+    const targetLookAt = characterPos.clone()
+      .addScaledVector(characterUp, lookLift)
+      .addScaledVector(this.stableHeading, lookAhead);
     
     const smoothFactor = Math.min(1, Math.max(0, 1 - Math.exp(-this.smoothing * delta)));
     
