@@ -6,11 +6,7 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- **Camera clips into buildings.** `CameraController.avoidBuildingCollision`
-  rebuilds a `Box3` for every mesh in the scene each frame, and doesn't
-  account for terrain height. Seen clipping the courier's view into a
-  building interior. Needs: a cheaper broad-phase (three-mesh-bvh is already
-  installed for this) and terrain-aware clearance.
+- Walk cycle is still unblended joint rotations (no clip blending).
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
@@ -18,6 +14,9 @@ don't let it go stale.
   cliffs sharpened, and waterfalls (`Les Chutes`) placed on high river banks.
 - Road ribbons read as separate tiles — each street is now one strip of
   geometry with painted cobble, not a row of boxes.
+- Camera clipped into buildings — collision list is built once with a BVH,
+  and the camera is lifted using real terrain height instead of a flat
+  `planetRadius + 3`.
 - Props floating on the new cliffs — trees stand upright and skip steep
   ground, animals need nearly-flat pads, and `settleOnGround` drops each
   piece until its downhill feet meet the mesh. Farm, pasture, ruin, shrine
@@ -67,4 +66,3 @@ don't let it go stale.
   work now that title reuses the main scene/composer — verify).
 - Hand-paint a second grass variant in Krita so the 2×2 tile is less
   recognisable at walking speed.
-- Camera collision (still open above) is the next non-art blocker.

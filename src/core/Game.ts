@@ -221,6 +221,7 @@ export class Game {
     this.secrets = new Secrets(this);
 
     this.enableShadowsEverywhere();
+    this.cameraController.rebuildColliders();
   }
 
   /**
