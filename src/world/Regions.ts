@@ -27,6 +27,11 @@ export type RegionKind =
   | 'ruin'
   | 'mill'
   | 'chapel'
+  | 'allee'        // a formal double row of plane trees
+  | 'clos'         // walled garden, well in the middle
+  | 'quarry'       // cliff rock and a broken wall
+  | 'bocage'       // hedge grid, a few trees
+  | 'cale'         // boathouse on the lake shore
   | 'riverside';   // placed on the water rather than by the lattice
 
 export interface RegionSpec {
@@ -42,29 +47,28 @@ export interface RegionSpec {
  *
  * Names are French because they are proper nouns on a signpost, the same
  * reasoning as the shopfronts; the dialogue around them stays English.
- * Kinds repeat deliberately — two vineyards on opposite sides of the planet
- * read as one working landscape, whereas thirteen unique gimmicks read as a
- * theme park.
+ *
+ * Each kind appears once in the first sixteen slots so a lap of the globe
+ * is a sequence of different places, not forest–wheat–pasture again. A
+ * second hamlet sits at the end in case the lattice has room.
  */
 export const REGION_ROTA: RegionSpec[] = [
-  { kind: 'hamlet',    name: 'Le Hameau',        radius: 15 },
-  { kind: 'vineyard',  name: 'Les Vignes',       radius: 17 },
-  { kind: 'forest',    name: 'La Forêt',         radius: 18 },
-  { kind: 'wheat',     name: 'Les Champs',       radius: 17 },
-  { kind: 'mill',      name: 'Le Moulin',        radius: 14 },
-  { kind: 'lavender',  name: 'Les Lavandes',     radius: 16 },
-  { kind: 'pasture',   name: 'Les Prés',         radius: 16 },
-  { kind: 'orchard',   name: 'Le Verger',        radius: 16 },
-  { kind: 'ruin',      name: 'Le Vieux Château', radius: 15 },
-  { kind: 'graveyard', name: 'Le Cimetière',     radius: 13 },
-  { kind: 'hamlet',    name: 'Petit-Clocher',    radius: 14 },
-  { kind: 'forest',    name: 'Bois de Renard',   radius: 17 },
-  { kind: 'chapel',    name: 'La Chapelle',      radius: 13 },
-  { kind: 'vineyard',  name: 'Coteau du Sud',    radius: 16 },
-  { kind: 'wheat',     name: 'La Plaine',        radius: 17 },
-  { kind: 'pasture',   name: 'Les Communaux',    radius: 15 },
-  { kind: 'orchard',   name: 'Les Pommiers',     radius: 15 },
-  { kind: 'forest',    name: 'La Futaie',        radius: 16 }
+  { kind: 'hamlet',    name: 'Le Hameau',            radius: 15 },
+  { kind: 'vineyard',  name: 'Les Vignes',           radius: 17 },
+  { kind: 'allee',     name: "L'Allée des Tilleuls", radius: 16 },
+  { kind: 'mill',      name: 'Le Moulin',            radius: 14 },
+  { kind: 'forest',    name: 'La Forêt',             radius: 18 },
+  { kind: 'clos',      name: 'Le Clos Fleuri',       radius: 13 },
+  { kind: 'wheat',     name: 'Les Champs',           radius: 17 },
+  { kind: 'quarry',    name: 'La Carrière',          radius: 14 },
+  { kind: 'lavender',  name: 'Les Lavandes',         radius: 16 },
+  { kind: 'pasture',   name: 'Les Prés',             radius: 16 },
+  { kind: 'bocage',    name: 'Le Bocage',            radius: 16 },
+  { kind: 'orchard',   name: 'Le Verger',            radius: 16 },
+  { kind: 'ruin',      name: 'Le Vieux Château',     radius: 15 },
+  { kind: 'chapel',    name: 'La Chapelle',          radius: 13 },
+  { kind: 'graveyard', name: 'Le Cimetière',         radius: 13 },
+  { kind: 'hamlet',    name: 'Petit-Clocher',        radius: 14 }
 ];
 
 export interface PlacedRegion extends RegionSpec {

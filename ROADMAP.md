@@ -6,11 +6,14 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- Region kinds still rotate through a short list — the far side of the
-  globe can feel familiar after one lap.
+- Title-screen orbit reuses the main composer — confirm the ink lines
+  still read when the camera is a planet away.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Region kinds repeated every lap — the rota is now one of each (avenue,
+  walled garden, quarry, bocage, lakeside boathouse, plus the older
+  kinds), so the far side is no longer forest–wheat–pasture again.
 - The grass tile repeated as a recognisable 2×2 — a second painted fill
   now blends with the original per world-space patch, so neighbouring
   ground is not the same tuft.
@@ -70,8 +73,6 @@ don't let it go stale.
 
 ## Possible future work
 
-- Expand region variety further (currently 18 named areas from a fixed
-  rota of ~12 kinds, plus `Les Chutes`).
 - Investigate whether `postprocessing`'s ink/outline pass could also apply
   to the title-screen orbit view for visual consistency (should already
   work now that title reuses the main scene/composer — verify).
