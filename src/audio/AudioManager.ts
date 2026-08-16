@@ -62,7 +62,7 @@ export class AudioManager {
   private chordIndex = 0;
 
   private footstepTime: number = 0;
-  private footstepInterval: number = 0.32;
+  private footstepInterval: number = 0.22;
   private unlocked = false;
   private noiseCache: AudioBuffer | null = null;
 
@@ -410,13 +410,14 @@ export class AudioManager {
     noise.stop(now + 0.16);
   }
 
-  public playFootstep(): void {
+  public playFootstep(intensity = 1): void {
     if (!this.ensureContext() || this.isMuted || !this.audioContext || !this.sfxGain) return;
 
     const now = this.audioContext.currentTime;
     if (now - this.footstepTime < this.footstepInterval) return;
     this.footstepTime = now;
 
+    const amp = Math.min(1, Math.max(0.35, intensity));
     const noise = this.audioContext.createBufferSource();
     noise.buffer = this.noiseBurst();
     const filter = this.audioContext.createBiquadFilter();
@@ -424,7 +425,7 @@ export class AudioManager {
     filter.frequency.value = 170 + Math.random() * 80;
     filter.Q.value = 1.1;
     const gain = this.audioContext.createGain();
-    gain.gain.setValueAtTime(0.2 + Math.random() * 0.05, now);
+    gain.gain.setValueAtTime((0.2 + Math.random() * 0.05) * amp, now);
     gain.gain.exponentialRampToValueAtTime(0.008, now + 0.07);
     noise.connect(filter);
     filter.connect(gain);

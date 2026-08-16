@@ -9,6 +9,10 @@ export interface InputState {
   interact: boolean;
   lookDeltaX: number;
   lookDeltaY: number;
+  /** Stick / keyboard X, −1 left … +1 right. */
+  moveX: number;
+  /** Stick / keyboard Y, −1 back … +1 forward. */
+  moveY: number;
 }
 
 export class InputManager {
@@ -24,7 +28,9 @@ export class InputManager {
     jump: false,
     interact: false,
     lookDeltaX: 0,
-    lookDeltaY: 0
+    lookDeltaY: 0,
+    moveX: 0,
+    moveY: 0
   };
   
   private touchStartX: number = 0;
@@ -204,6 +210,40 @@ export class InputManager {
     this.state.interact = false;
     this.state.lookDeltaX = 0;
     this.state.lookDeltaY = 0;
+    this.state.moveX = 0;
+    this.state.moveY = 0;
+  }
+
+  private refreshDigitalAxes(): void {
+    this.state.moveX = (this.state.right ? 1 : 0) - (this.state.left ? 1 : 0);
+    this.state.moveY = (this.state.forward ? 1 : 0) - (this.state.backward ? 1 : 0);
+  }
+
+  /**
+   * Remap a unit stick sample past the deadzone so a light thumb push
+   * is a stroll and a full deflection is a run, instead of an 8-way snap.
+   */
+  private applyStick(nx: number, ny: number): void {
+    const dead = 0.18;
+    const raw = Math.hypot(nx, ny);
+    if (raw < dead) {
+      this.state.moveX = 0;
+      this.state.moveY = 0;
+      this.state.forward = false;
+      this.state.backward = false;
+      this.state.left = false;
+      this.state.right = false;
+      return;
+    }
+    const scaled = (raw - dead) / (1 - dead);
+    const ax = (nx / raw) * scaled;
+    const ay = (-ny / raw) * scaled;
+    this.state.moveX = ax;
+    this.state.moveY = ay;
+    this.state.forward = ay > dead;
+    this.state.backward = ay < -dead;
+    this.state.left = ax < -dead;
+    this.state.right = ax > dead;
   }
 
   private onKeyDown(e: KeyboardEvent): void {
@@ -235,6 +275,7 @@ export class InputManager {
         this.state.interact = true;
         break;
     }
+    this.refreshDigitalAxes();
   }
 
   private onKeyUp(e: KeyboardEvent): void {
@@ -263,6 +304,7 @@ export class InputManager {
         this.state.interact = false;
         break;
     }
+    this.refreshDigitalAxes();
   }
 
   private onMouseMove(e: MouseEvent): void {
@@ -341,13 +383,7 @@ export class InputManager {
         if (this.joystickKnob) {
           this.joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
         }
-        const nx = dx / maxDist;
-        const ny = dy / maxDist;
-        const dead = 0.18;
-        this.state.forward = ny < -dead;
-        this.state.backward = ny > dead;
-        this.state.left = nx < -dead;
-        this.state.right = nx > dead;
+        this.applyStick(dx / maxDist, dy / maxDist);
       }
       
       if (touch.identifier === this.touchLookId) {
@@ -372,6 +408,8 @@ export class InputManager {
         this.state.backward = false;
         this.state.left = false;
         this.state.right = false;
+        this.state.moveX = 0;
+        this.state.moveY = 0;
         if (this.joystickKnob) this.joystickKnob.style.transform = 'translate(0, 0)';
         if (this.virtualJoystick) {
           this.virtualJoystick.classList.remove('active');

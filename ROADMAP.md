@@ -6,10 +6,14 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- Walk cycle is still unblended joint rotations (no clip blending).
+- Villagers only breathe in place — they have no walk of their own when you
+  meet them away from their anchors.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Walk cycle snapped between idle / run / jump — those poses now mix with
+  damped joints, footsteps fire on foot-plant, and the iPhone stick is analog
+  so a light push is a stroll.
 - Relief too gentle vs the Messenger reference — ridge amplitude pushed up,
   cliffs sharpened, and waterfalls (`Les Chutes`) placed on high river banks.
 - Road ribbons read as separate tiles — each street is now one strip of
@@ -56,9 +60,8 @@ don't let it go stale.
 
 ## Possible future work
 
-- Modelled character animation improvements (currently simple node
-  rotations, no blending). The courier is now the right silhouette; the
-  walk is still unblended joint rotations.
+- Villager locomotion (they already idle-breathe; they still don't walk
+  between anchors).
 - Expand region variety further (currently 18 named areas from a fixed
   rota of ~12 kinds, plus `Les Chutes`).
 - Investigate whether `postprocessing`'s ink/outline pass could also apply

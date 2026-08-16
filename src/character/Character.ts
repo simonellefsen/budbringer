@@ -4,6 +4,17 @@ import { ToonMaterial } from '../utils/ToonMaterial';
 import { PLAYER } from '../utils/palette';
 import { RiggedFigure } from '../world/Characters';
 
+function mix3(
+  idle: number,
+  walk: number,
+  jump: number,
+  idleW: number,
+  walkW: number,
+  jumpW: number
+): number {
+  return idle * idleW + walk * walkW + jump * jumpW;
+}
+
 export class Character {
   private game: Game;
   public group: THREE.Group;
@@ -21,6 +32,11 @@ export class Character {
   
   private animationTime: number = 0;
   private isWalking: boolean = false;
+  private moveWeight: number = 0;
+  private walkBlend: number = 0;
+  private jumpBlend: number = 0;
+  private walkPhase: number = 0;
+  private lastStrideSin: number = 0;
   
   // Character parts for animation
   private torso!: THREE.Group;
@@ -294,28 +310,38 @@ export class Character {
     const forward = cameraController.getForwardOnSurface();
     const right = cameraController.getRightOnSurface();
     
+    let axisX = input.moveX;
+    let axisY = input.moveY;
+    if (axisX === 0 && axisY === 0) {
+      if (input.forward) axisY += 1;
+      if (input.backward) axisY -= 1;
+      if (input.left) axisX -= 1;
+      if (input.right) axisX += 1;
+    }
+
     const moveDir = new THREE.Vector3();
-    
-    if (input.forward) moveDir.add(forward);
-    if (input.backward) moveDir.sub(forward);
-    if (input.left) moveDir.sub(right);
-    if (input.right) moveDir.add(right);
+    moveDir.addScaledVector(forward, axisY);
+    moveDir.addScaledVector(right, axisX);
     
     const up = this.group.position.clone().normalize();
     moveDir.sub(up.clone().multiplyScalar(moveDir.dot(up)));
+
+    const intent = Math.min(1, moveDir.length());
     
-    if (moveDir.lengthSq() > 0.001) {
-      moveDir.normalize();
+    if (intent > 0.02) {
+      moveDir.multiplyScalar(1 / intent);
       this.isWalking = true;
+      this.moveWeight = intent;
       
       this.currentForward.lerp(moveDir, 10 * delta);
       this.currentForward.normalize();
       
       const verticalVel = up.clone().multiplyScalar(this.velocity.dot(up));
-      const targetHorizontalVel = moveDir.clone().multiplyScalar(this.moveSpeed);
+      const targetHorizontalVel = moveDir.clone().multiplyScalar(this.moveSpeed * intent);
       this.velocity.copy(targetHorizontalVel).add(verticalVel);
     } else {
       this.isWalking = false;
+      this.moveWeight = 0;
       const verticalVel = up.clone().multiplyScalar(this.velocity.dot(up));
       this.velocity.copy(verticalVel);
     }
@@ -439,108 +465,105 @@ export class Character {
   }
 
   private animate(delta: number): void {
+    const wantWalk = this.isWalking && this.isGrounded ? this.moveWeight : 0;
+    const wantJump = this.isGrounded ? 0 : 1;
+    this.walkBlend = THREE.MathUtils.damp(this.walkBlend, wantWalk, 10, delta);
+    this.jumpBlend = THREE.MathUtils.damp(this.jumpBlend, wantJump, 12, delta);
+
+    this.animationTime += delta * (1.7 + this.walkBlend * 6.5);
+    if (this.walkBlend > 0.01 && this.isGrounded) {
+      this.walkPhase += delta * (7.2 + this.walkBlend * 2.4);
+    }
+
+    const jumpW = this.jumpBlend;
+    const walkW = this.walkBlend * (1 - jumpW);
+    const idleW = Math.max(0, 1 - walkW - jumpW);
+
+    if (walkW > 0.35 && this.isGrounded) {
+      const stride = Math.sin(this.walkPhase);
+      if (
+        (this.lastStrideSin > 0 && stride <= 0) ||
+        (this.lastStrideSin < 0 && stride >= 0)
+      ) {
+        this.game.audioManager.playFootstep(0.55 + walkW * 0.45);
+      }
+      this.lastStrideSin = stride;
+    }
+
     if (this.figure) {
-      this.animateFigure(delta);
+      this.animateFigure(delta, idleW, walkW, jumpW);
       return;
     }
-    this.animatePrimitive(delta);
+    this.animatePrimitive(delta, idleW, walkW, jumpW);
   }
 
   /**
-   * Walk cycle for the modelled courier.
+   * Walk / idle / jump for the modelled courier.
    *
    * The Blender figure exports its limbs as separate nodes with pivots already
    * at the shoulders and hips, so a gait is just four rotations — no skinning
-   * and no animation clips.
+   * and no animation clips. Poses are mixed, then each joint damps toward the
+   * mix so start / stop / jump never snap.
    */
-  private animateFigure(delta: number): void {
+  private animateFigure(
+    delta: number,
+    idleW: number,
+    walkW: number,
+    jumpW: number
+  ): void {
     const { root, head, armL, armR, legL, legR } = this.figure!;
+    const swing = Math.sin(this.walkPhase);
+    const bob = Math.abs(swing);
+    const breathe = Math.sin(this.animationTime);
 
-    if (this.isWalking && this.isGrounded) {
-      this.animationTime += delta * 9;
+    const rootX = mix3(0, 0.09, -0.08, idleW, walkW, jumpW);
+    const rootY = mix3(breathe * 0.012, bob * 0.045, 0, idleW, walkW, jumpW);
+    const headZ = mix3(breathe * 0.018, Math.sin(this.walkPhase * 0.5) * 0.05, 0, idleW, walkW, jumpW);
+    const armLX = mix3(0, -swing * 0.48, 0.7, idleW, walkW, jumpW);
+    const armRX = mix3(0, swing * 0.48, 0.7, idleW, walkW, jumpW);
+    const legLX = mix3(0, swing * 0.62, -0.42, idleW, walkW, jumpW);
+    const legRX = mix3(0, -swing * 0.62, 0.2, idleW, walkW, jumpW);
 
-      const swing = Math.sin(this.animationTime);
-      if (legL) legL.rotation.x = swing * 0.62;
-      if (legR) legR.rotation.x = -swing * 0.62;
-      if (armL) armL.rotation.x = -swing * 0.48;
-      if (armR) armR.rotation.x = swing * 0.48;
-
-      // A slight forward lean and a bob on every other step.
-      root.rotation.x = 0.09;
-      root.position.y = Math.abs(Math.sin(this.animationTime)) * 0.045;
-      if (head) head.rotation.z = Math.sin(this.animationTime * 0.5) * 0.05;
-
-      this.game.audioManager.playFootstep();
-    } else if (this.isJumping) {
-      if (legL) legL.rotation.x = -0.42;
-      if (legR) legR.rotation.x = 0.2;
-      if (armL) armL.rotation.x = 0.7;
-      if (armR) armR.rotation.x = 0.7;
-      root.rotation.x = -0.08;
-    } else {
-      this.animationTime += delta * 1.7;
-
-      // Ease the limbs back to rest rather than snapping.
-      for (const limb of [armL, armR, legL, legR]) {
-        if (limb) limb.rotation.x *= 0.86;
-      }
-      root.rotation.x *= 0.86;
-      root.position.y = Math.sin(this.animationTime) * 0.012;
-      if (head) head.rotation.z *= 0.9;
-    }
+    root.rotation.x = THREE.MathUtils.damp(root.rotation.x, rootX, 14, delta);
+    root.position.y = THREE.MathUtils.damp(root.position.y, rootY, 16, delta);
+    if (head) head.rotation.z = THREE.MathUtils.damp(head.rotation.z, headZ, 12, delta);
+    if (armL) armL.rotation.x = THREE.MathUtils.damp(armL.rotation.x, armLX, 16, delta);
+    if (armR) armR.rotation.x = THREE.MathUtils.damp(armR.rotation.x, armRX, 16, delta);
+    if (legL) legL.rotation.x = THREE.MathUtils.damp(legL.rotation.x, legLX, 16, delta);
+    if (legR) legR.rotation.x = THREE.MathUtils.damp(legR.rotation.x, legRX, 16, delta);
   }
 
-  private animatePrimitive(delta: number): void {
-    if (this.isWalking && this.isGrounded) {
-      this.animationTime += delta * 16; // Faster animation cycle
-      
-      // Strong forward lean while running (Messenger-style sprint)
-      this.torso.rotation.x = 0.25;
-      this.head.rotation.x = -0.15;
-      
-      // Leg swing - wide stride
-      const legSwing = Math.sin(this.animationTime) * 0.75;
-      this.leftLeg.rotation.x = legSwing;
-      this.rightLeg.rotation.x = -legSwing;
-      
-      // Arm swing - pumping motion opposite to legs
-      const armSwing = Math.sin(this.animationTime) * 0.6;
-      this.leftArm.rotation.x = -armSwing - 0.2; // Arms slightly forward
-      this.rightArm.rotation.x = armSwing - 0.2;
-      
-      // Bounce - subtle for grounded feel
-      const bounce = Math.abs(Math.sin(this.animationTime * 2)) * 0.02;
-      this.torso.position.y = 0.82 + bounce;
-      this.head.position.y = 1.2 + bounce;
-      
-      // Bag sway
-      this.bag.rotation.z = Math.sin(this.animationTime * 0.7) * 0.06;
-      this.bag.rotation.x = Math.sin(this.animationTime * 1.4) * 0.03;
-      
-      this.game.audioManager.playFootstep();
-    } else if (this.isJumping) {
-      // Jump pose
-      this.torso.rotation.x = -0.1;
-      this.leftLeg.rotation.x = -0.35;
-      this.rightLeg.rotation.x = 0.15;
-      this.leftArm.rotation.x = 0.5;
-      this.rightArm.rotation.x = 0.5;
-    } else {
-      // Idle - subtle breathing
-      this.animationTime += delta * 2;
-      
-      this.torso.rotation.x = 0;
-      this.head.rotation.x = 0;
-      this.leftLeg.rotation.x *= 0.9;
-      this.rightLeg.rotation.x *= 0.9;
-      this.leftArm.rotation.x *= 0.9;
-      this.rightArm.rotation.x *= 0.9;
-      
-      // Subtle idle sway
-      const breathe = Math.sin(this.animationTime) * 0.008;
-      this.torso.position.y = 0.82 + breathe;
-      this.head.position.y = 1.2 + breathe;
-    }
+  private animatePrimitive(
+    delta: number,
+    idleW: number,
+    walkW: number,
+    jumpW: number
+  ): void {
+    const swing = Math.sin(this.walkPhase);
+    const bounce = Math.abs(swing) * 0.03;
+    const breathe = Math.sin(this.animationTime) * 0.008;
+
+    const torsoX = mix3(0, 0.25, -0.1, idleW, walkW, jumpW);
+    const headX = mix3(0, -0.15, 0, idleW, walkW, jumpW);
+    const torsoY = 0.82 + mix3(breathe, bounce, 0, idleW, walkW, jumpW);
+    const headY = 1.2 + mix3(breathe, bounce, 0, idleW, walkW, jumpW);
+    const armLX = mix3(0, -swing * 0.6 - 0.2, 0.5, idleW, walkW, jumpW);
+    const armRX = mix3(0, swing * 0.6 - 0.2, 0.5, idleW, walkW, jumpW);
+    const legLX = mix3(0, swing * 0.75, -0.35, idleW, walkW, jumpW);
+    const legRX = mix3(0, -swing * 0.75, 0.15, idleW, walkW, jumpW);
+    const bagZ = mix3(0, Math.sin(this.walkPhase * 0.7) * 0.06, 0, idleW, walkW, jumpW);
+    const bagX = mix3(0, Math.sin(this.walkPhase * 1.4) * 0.03, 0, idleW, walkW, jumpW);
+
+    this.torso.rotation.x = THREE.MathUtils.damp(this.torso.rotation.x, torsoX, 14, delta);
+    this.head.rotation.x = THREE.MathUtils.damp(this.head.rotation.x, headX, 12, delta);
+    this.torso.position.y = THREE.MathUtils.damp(this.torso.position.y, torsoY, 16, delta);
+    this.head.position.y = THREE.MathUtils.damp(this.head.position.y, headY, 16, delta);
+    this.leftArm.rotation.x = THREE.MathUtils.damp(this.leftArm.rotation.x, armLX, 16, delta);
+    this.rightArm.rotation.x = THREE.MathUtils.damp(this.rightArm.rotation.x, armRX, 16, delta);
+    this.leftLeg.rotation.x = THREE.MathUtils.damp(this.leftLeg.rotation.x, legLX, 16, delta);
+    this.rightLeg.rotation.x = THREE.MathUtils.damp(this.rightLeg.rotation.x, legRX, 16, delta);
+    this.bag.rotation.z = THREE.MathUtils.damp(this.bag.rotation.z, bagZ, 10, delta);
+    this.bag.rotation.x = THREE.MathUtils.damp(this.bag.rotation.x, bagX, 10, delta);
   }
 
   private checkNPCInteraction(): void {
