@@ -108,7 +108,7 @@ export class TitleScreen {
       </style>
       
       <div id="title-ui">
-        <div id="title-text">budbringer</div>
+        <div id="title-text">the postilion</div>
         <button id="enter-button">enter</button>
       </div>
       

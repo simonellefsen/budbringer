@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { Game, GameState } from '../core/Game';
 import { ToonMaterial } from '../utils/ToonMaterial';
-import { OutlineMaterial } from '../utils/OutlineMaterial';
+import { PLAYER } from '../utils/palette';
+import { RiggedFigure } from '../world/Characters';
 
 export class Character {
   private game: Game;
@@ -29,13 +30,14 @@ export class Character {
   private leftArm!: THREE.Group;
   private rightArm!: THREE.Group;
   private bag!: THREE.Group;
+  private figure: RiggedFigure | null = null;
   private groundShadow!: THREE.Mesh;
 
   constructor(game: Game, spawnPosition: THREE.Vector3) {
     this.game = game;
     this.group = new THREE.Group();
     
-    this.createKidCourier();
+    this.createCourier();
     
     const surfaceHeight = this.game.planetRadius + 0.5;
     const safeSpawn = spawnPosition.clone().normalize().multiplyScalar(surfaceHeight);
@@ -44,17 +46,50 @@ export class Character {
     this.isGrounded = true;
   }
 
-  private createKidCourier(): void {
-    // Colors matching Messenger-style kid
-    const skinColor = 0xf5d0b5;
-    const hairColor = 0x2a2a2a;
-    const shirtColor = 0xf5a623; // Yellow-orange like Messenger
-    const shortsColor = 0x1a1a1a;
-    const shoeColor = 0x2a2a2a;
-    const sockColor = 0xffffff;
-    const bagColor = 0x6b6b6b;
+  /**
+   * The courier. Uses the modelled figure from characters.glb when it loaded,
+   * and falls back to the old primitive assembly otherwise so a missing GLB
+   * still gives you someone to walk around with.
+   */
+  private createCourier(): void {
+    const rigged = this.game.characters?.isLoaded
+      ? this.game.characters.instance('Courier')
+      : null;
 
-    const outlineOpts = { thickness: 0.02, wobble: 0.005 };
+    if (rigged) {
+      this.figure = rigged;
+      // The kit models face +Z, but alignToSurface builds the group's basis
+      // with Matrix4.lookAt, which points -Z along the direction of travel.
+      // Without this the courier walks backwards.
+      rigged.root.rotation.y = Math.PI;
+      this.group.add(rigged.root);
+      this.createGroundShadow();
+      return;
+    }
+
+    this.createPrimitiveCourier();
+  }
+
+  private createGroundShadow(): void {
+    const shadowGeo = new THREE.CircleGeometry(0.4, 16);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false
+    });
+    this.groundShadow = new THREE.Mesh(shadowGeo, shadowMat);
+    this.groundShadow.rotation.x = -Math.PI / 2;
+    this.game.scene.add(this.groundShadow);
+  }
+
+  private createPrimitiveCourier(): void {
+    // Colors matching Messenger-style kid
+    const skinColor = PLAYER.skin;
+    const hairColor = PLAYER.hair;
+    const shirtColor = PLAYER.shirt;
+    const shortsColor = PLAYER.shorts;
+    const shoeColor = PLAYER.shoe;
+    const sockColor = PLAYER.sock;
+    const bagColor = PLAYER.bag;
+
 
     // === TORSO (t-shirt) ===
     this.torso = new THREE.Group();
@@ -63,7 +98,6 @@ export class Character {
     const torsoMesh = new THREE.Mesh(torsoGeo, torsoMat);
     torsoMesh.castShadow = true;
     this.torso.add(torsoMesh);
-    this.torso.add(OutlineMaterial.addOutlineToMesh(torsoMesh, outlineOpts));
     this.torso.position.y = 0.82;
     this.group.add(this.torso);
 
@@ -74,7 +108,6 @@ export class Character {
     const headMesh = new THREE.Mesh(headGeo, headMat);
     headMesh.castShadow = true;
     this.head.add(headMesh);
-    this.head.add(OutlineMaterial.addOutlineToMesh(headMesh, outlineOpts));
 
     // Hair - messy dark style
     const hairGroup = new THREE.Group();
@@ -86,7 +119,6 @@ export class Character {
     mainHair.scale.set(1.15, 0.85, 1.1);
     mainHair.position.y = 0.05;
     hairGroup.add(mainHair);
-    hairGroup.add(OutlineMaterial.addOutlineToMesh(mainHair, outlineOpts));
 
     // Messy spiky bits
     for (let i = 0; i < 6; i++) {
@@ -107,7 +139,7 @@ export class Character {
     // Eyes - simple dots
     for (let i = 0; i < 2; i++) {
       const eyeGeo = new THREE.SphereGeometry(0.022, 8, 8);
-      const eyeMat = ToonMaterial.create({ color: 0x1a1a1a });
+      const eyeMat = ToonMaterial.create({ color: PLAYER.hair });
       const eye = new THREE.Mesh(eyeGeo, eyeMat);
       eye.position.set(i === 0 ? -0.055 : 0.055, 0.02, 0.13);
       this.head.add(eye);
@@ -134,7 +166,6 @@ export class Character {
     const leftArmMesh = new THREE.Mesh(armGeo, armMat);
     leftArmMesh.castShadow = true;
     this.leftArm.add(leftArmMesh);
-    this.leftArm.add(OutlineMaterial.addOutlineToMesh(leftArmMesh, outlineOpts));
     this.leftArm.position.set(-0.25, 0.9, 0);
     this.group.add(this.leftArm);
 
@@ -142,7 +173,6 @@ export class Character {
     const rightArmMesh = new THREE.Mesh(armGeo, armMat);
     rightArmMesh.castShadow = true;
     this.rightArm.add(rightArmMesh);
-    this.rightArm.add(OutlineMaterial.addOutlineToMesh(rightArmMesh, outlineOpts));
     this.rightArm.position.set(0.25, 0.9, 0);
     this.group.add(this.rightArm);
 
@@ -161,12 +191,10 @@ export class Character {
     const leftUpperLeg = new THREE.Mesh(upperLegGeo, shortsMat);
     leftUpperLeg.position.y = -0.08;
     this.leftLeg.add(leftUpperLeg);
-    this.leftLeg.add(OutlineMaterial.addOutlineToMesh(leftUpperLeg, outlineOpts));
     
     const leftLowerLeg = new THREE.Mesh(lowerLegGeo, skinMat);
     leftLowerLeg.position.y = -0.28;
     this.leftLeg.add(leftLowerLeg);
-    this.leftLeg.add(OutlineMaterial.addOutlineToMesh(leftLowerLeg, outlineOpts));
     
     const leftSock = new THREE.Mesh(sockGeo, sockMat);
     leftSock.position.y = -0.42;
@@ -175,7 +203,6 @@ export class Character {
     const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
     leftShoe.position.set(0, -0.48, 0.02);
     this.leftLeg.add(leftShoe);
-    this.leftLeg.add(OutlineMaterial.addOutlineToMesh(leftShoe, outlineOpts));
     
     this.leftLeg.position.set(-0.09, 0.58, 0);
     this.group.add(this.leftLeg);
@@ -185,12 +212,10 @@ export class Character {
     const rightUpperLeg = new THREE.Mesh(upperLegGeo, shortsMat);
     rightUpperLeg.position.y = -0.08;
     this.rightLeg.add(rightUpperLeg);
-    this.rightLeg.add(OutlineMaterial.addOutlineToMesh(rightUpperLeg, outlineOpts));
     
     const rightLowerLeg = new THREE.Mesh(lowerLegGeo, skinMat);
     rightLowerLeg.position.y = -0.28;
     this.rightLeg.add(rightLowerLeg);
-    this.rightLeg.add(OutlineMaterial.addOutlineToMesh(rightLowerLeg, outlineOpts));
     
     const rightSock = new THREE.Mesh(sockGeo, sockMat);
     rightSock.position.y = -0.42;
@@ -199,7 +224,6 @@ export class Character {
     const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
     rightShoe.position.set(0, -0.48, 0.02);
     this.rightLeg.add(rightShoe);
-    this.rightLeg.add(OutlineMaterial.addOutlineToMesh(rightShoe, outlineOpts));
     
     this.rightLeg.position.set(0.09, 0.58, 0);
     this.group.add(this.rightLeg);
@@ -214,7 +238,6 @@ export class Character {
     strap.position.set(0, 0.9, 0.12);
     strap.rotation.z = -0.35;
     this.bag.add(strap);
-    this.bag.add(OutlineMaterial.addOutlineToMesh(strap, outlineOpts));
 
     // Bag body on hip
     const bagBodyGeo = new THREE.BoxGeometry(0.24, 0.18, 0.1);
@@ -223,7 +246,6 @@ export class Character {
     bagBody.rotation.z = -0.12;
     bagBody.castShadow = true;
     this.bag.add(bagBody);
-    this.bag.add(OutlineMaterial.addOutlineToMesh(bagBody, outlineOpts));
 
     // Bag flap
     const flapGeo = new THREE.BoxGeometry(0.22, 0.06, 0.015);
@@ -231,7 +253,6 @@ export class Character {
     flap.position.set(0.2, 0.6, 0.12);
     flap.rotation.z = -0.12;
     this.bag.add(flap);
-    this.bag.add(OutlineMaterial.addOutlineToMesh(flap, outlineOpts));
 
     this.group.add(this.bag);
 
@@ -411,6 +432,58 @@ export class Character {
   }
 
   private animate(delta: number): void {
+    if (this.figure) {
+      this.animateFigure(delta);
+      return;
+    }
+    this.animatePrimitive(delta);
+  }
+
+  /**
+   * Walk cycle for the modelled courier.
+   *
+   * The Blender figure exports its limbs as separate nodes with pivots already
+   * at the shoulders and hips, so a gait is just four rotations — no skinning
+   * and no animation clips.
+   */
+  private animateFigure(delta: number): void {
+    const { root, head, armL, armR, legL, legR } = this.figure!;
+
+    if (this.isWalking && this.isGrounded) {
+      this.animationTime += delta * 9;
+
+      const swing = Math.sin(this.animationTime);
+      if (legL) legL.rotation.x = swing * 0.62;
+      if (legR) legR.rotation.x = -swing * 0.62;
+      if (armL) armL.rotation.x = -swing * 0.48;
+      if (armR) armR.rotation.x = swing * 0.48;
+
+      // A slight forward lean and a bob on every other step.
+      root.rotation.x = 0.09;
+      root.position.y = Math.abs(Math.sin(this.animationTime)) * 0.045;
+      if (head) head.rotation.z = Math.sin(this.animationTime * 0.5) * 0.05;
+
+      this.game.audioManager.playFootstep();
+    } else if (this.isJumping) {
+      if (legL) legL.rotation.x = -0.42;
+      if (legR) legR.rotation.x = 0.2;
+      if (armL) armL.rotation.x = 0.7;
+      if (armR) armR.rotation.x = 0.7;
+      root.rotation.x = -0.08;
+    } else {
+      this.animationTime += delta * 1.7;
+
+      // Ease the limbs back to rest rather than snapping.
+      for (const limb of [armL, armR, legL, legR]) {
+        if (limb) limb.rotation.x *= 0.86;
+      }
+      root.rotation.x *= 0.86;
+      root.position.y = Math.sin(this.animationTime) * 0.012;
+      if (head) head.rotation.z *= 0.9;
+    }
+  }
+
+  private animatePrimitive(delta: number): void {
     if (this.isWalking && this.isGrounded) {
       this.animationTime += delta * 16; // Faster animation cycle
       

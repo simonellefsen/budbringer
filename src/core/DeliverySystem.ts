@@ -178,7 +178,7 @@ export class DeliverySystem {
       this.hasLetter = false;
       this.game.dialogueSystem.showMessage(
         "All Deliveries Complete!",
-        "You've connected everyone on this little planet. The town feels warmer now. Thanks for being our budbringer!"
+        "You've connected everyone on this little planet. The town feels warmer now. Thanks for being our postilion!"
       );
       return;
     }
@@ -257,7 +257,7 @@ export class DeliverySystem {
       'Postmaster Maple': [
         "Good work! Ready for the next delivery?",
         "Excellent! The mail must flow!",
-        "You've done it. Every letter, every connection. You're a true budbringer."
+        "You've done it. Every letter, every connection. You're a true postilion."
       ]
     };
     

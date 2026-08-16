@@ -1,0 +1,855 @@
+<title>Postilion Art Pass</title>
+<style>
+  :root {
+    --ink:        #17211f;
+    --ink-soft:   #3d4a47;
+    --moss:       #6d7d78;
+    --moss-faint: #cfd4cd;
+    --paper:      #f3efe4;
+    --paper-2:    #e9e3d4;
+    --paper-3:    #ded7c5;
+    --teal:       #2f8d84;
+    --teal-fill:  #cfe6e2;
+    --ember:      #c9501d;
+    --ember-fill: #f7ddd0;
+    --good:       #4a7c46;
+    --good-fill:  #dbe7d6;
+    --warn:       #9a6b16;
+    --warn-fill:  #f2e6cb;
+    --bad:        #b03a2e;
+    --bad-fill:   #f5dcd8;
+
+    --rule: rgba(23, 33, 31, 0.14);
+    --shadow: 0 1px 0 rgba(23,33,31,.05), 0 2px 10px -6px rgba(23,33,31,.22);
+
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Cascadia Mono", "Roboto Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    --measure: 68ch;
+    --pad: clamp(1.1rem, 4vw, 2.5rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink:        #e7e1d3;
+      --ink-soft:   #b3ada0;
+      --moss:       #8b9a95;
+      --moss-faint: #2c3836;
+      --paper:      #111a19;
+      --paper-2:    #182322;
+      --paper-3:    #22302e;
+      --teal:       #63c3b7;
+      --teal-fill:  #17322f;
+      --ember:      #ef8351;
+      --ember-fill: #38221a;
+      --good:       #8dc086;
+      --good-fill:  #1e2c1d;
+      --warn:       #dcb060;
+      --warn-fill:  #2f2716;
+      --bad:        #ef8b7d;
+      --bad-fill:   #341f1c;
+      --rule: rgba(231, 225, 211, 0.15);
+      --shadow: 0 1px 0 rgba(0,0,0,.3), 0 2px 12px -6px rgba(0,0,0,.6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink:        #e7e1d3;
+    --ink-soft:   #b3ada0;
+    --moss:       #8b9a95;
+    --moss-faint: #2c3836;
+    --paper:      #111a19;
+    --paper-2:    #182322;
+    --paper-3:    #22302e;
+    --teal:       #63c3b7;
+    --teal-fill:  #17322f;
+    --ember:      #ef8351;
+    --ember-fill: #38221a;
+    --good:       #8dc086;
+    --good-fill:  #1e2c1d;
+    --warn:       #dcb060;
+    --warn-fill:  #2f2716;
+    --bad:        #ef8b7d;
+    --bad-fill:   #341f1c;
+    --rule: rgba(231, 225, 211, 0.15);
+    --shadow: 0 1px 0 rgba(0,0,0,.3), 0 2px 12px -6px rgba(0,0,0,.6);
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 7vw, 5rem) var(--pad) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(3rem, 7vw, 5rem);
+  }
+
+  .col { max-width: var(--measure); }
+
+  /* ---------- masthead ---------- */
+
+  .masthead { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  .kicker {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--teal);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1rem;
+    align-items: baseline;
+  }
+  .kicker .dot { color: var(--moss); }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(2.1rem, 6.5vw, 3.4rem);
+    line-height: 1.04;
+    letter-spacing: -.035em;
+    font-weight: 600;
+    text-wrap: balance;
+    max-width: 18ch;
+  }
+
+  .standfirst {
+    font-size: clamp(1.05rem, 2.4vw, 1.22rem);
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 60ch;
+  }
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- hand-drawn rule ---------- */
+
+  .rule { display: block; width: 100%; height: 9px; color: var(--ink); opacity: .34; }
+  .rule path { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+
+  /* ---------- sections ---------- */
+
+  section { display: flex; flex-direction: column; gap: 1.6rem; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--moss);
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+  }
+  .eyebrow::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  h2 {
+    font-family: var(--mono);
+    font-size: clamp(1.4rem, 3.4vw, 1.85rem);
+    line-height: 1.16;
+    letter-spacing: -.025em;
+    font-weight: 600;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--mono);
+    font-size: 1.02rem;
+    line-height: 1.3;
+    letter-spacing: -.01em;
+    font-weight: 600;
+    text-wrap: balance;
+  }
+
+  p { max-width: var(--measure); }
+  p + p { margin-top: .85rem; }
+
+  a { color: var(--teal); text-underline-offset: 3px; }
+  a:focus-visible, .card:focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; }
+
+  code {
+    font-family: var(--mono);
+    font-size: .87em;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: .1em .36em;
+    word-break: break-word;
+  }
+
+  /* ---------- telemetry strip ---------- */
+
+  .telemetry {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .stat {
+    background: var(--paper-2);
+    padding: 1rem 1.1rem 1.05rem;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+  }
+  .stat .n {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 1.55rem;
+    line-height: 1;
+    letter-spacing: -.04em;
+    font-weight: 600;
+  }
+  .stat .l {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--moss);
+    line-height: 1.4;
+  }
+  .stat.flag .n { color: var(--bad); }
+  .stat.headroom .n { color: var(--teal); }
+
+  .caption {
+    font-family: var(--mono);
+    font-size: .74rem;
+    line-height: 1.6;
+    color: var(--moss);
+    max-width: 72ch;
+  }
+
+  /* ---------- findings ---------- */
+
+  .findings { display: flex; flex-direction: column; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+
+  .finding {
+    background: var(--paper-2);
+    padding: 1.3rem var(--pad) 1.4rem;
+    display: grid;
+    grid-template-columns: 2.2rem 1fr;
+    gap: .3rem 1rem;
+    align-items: baseline;
+  }
+  @media (max-width: 560px) {
+    .finding { grid-template-columns: 1fr; gap: .5rem; }
+  }
+  .finding .idx {
+    font-family: var(--mono);
+    font-size: .78rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ember);
+    font-weight: 600;
+    letter-spacing: .04em;
+  }
+  .finding .body { display: flex; flex-direction: column; gap: .55rem; }
+  .finding p { font-size: .95rem; color: var(--ink-soft); max-width: 66ch; }
+  .finding p strong { color: var(--ink); font-weight: 600; }
+
+  .evidence {
+    font-family: var(--mono);
+    font-size: .74rem;
+    line-height: 1.5;
+    color: var(--ink);
+    background: var(--paper-3);
+    border-left: 2px solid var(--ember);
+    padding: .5rem .75rem;
+    border-radius: 0 3px 3px 0;
+    align-self: start;
+    max-width: 62ch;
+  }
+  .evidence b { color: var(--ember); font-weight: 600; }
+
+  /* ---------- anatomy grid ---------- */
+
+  .anatomy {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .layer {
+    background: var(--paper-2);
+    padding: 1.15rem 1.2rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+  }
+  .layer p { font-size: .89rem; line-height: 1.55; color: var(--ink-soft); }
+  .layer .top { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+
+  .chip {
+    font-family: var(--mono);
+    font-size: .62rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: .22rem .5rem;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .chip.missing { background: var(--bad-fill); color: var(--bad); }
+  .chip.broken  { background: var(--bad-fill); color: var(--bad); }
+  .chip.partial { background: var(--warn-fill); color: var(--warn); }
+  .chip.ok      { background: var(--good-fill); color: var(--good); }
+
+  .swatches { display: flex; gap: 0; border-radius: 3px; overflow: hidden; height: 26px; border: 1px solid var(--rule); }
+  .swatches i { flex: 1; }
+
+  /* ---------- tables ---------- */
+
+  .scroller { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; background: var(--paper-2); }
+  th, td { text-align: left; padding: .72rem .95rem; border-bottom: 1px solid var(--rule); vertical-align: top; font-size: .9rem; line-height: 1.5; }
+  tbody tr:last-child td { border-bottom: 0; }
+  th {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--moss);
+    font-weight: 600;
+    background: var(--paper-3);
+    white-space: nowrap;
+  }
+  td.pkg { font-family: var(--mono); font-size: .82rem; white-space: nowrap; color: var(--ink); }
+  td.why { color: var(--ink-soft); }
+
+  /* ---------- roadmap ---------- */
+
+  .phases { display: flex; flex-direction: column; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+  .phase {
+    background: var(--paper-2);
+    padding: 1.3rem var(--pad) 1.45rem;
+    display: grid;
+    grid-template-columns: 3.4rem 1fr;
+    gap: .4rem 1rem;
+  }
+  @media (max-width: 620px) { .phase { grid-template-columns: 1fr; gap: .55rem; } }
+  .phase .num {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--teal);
+    font-weight: 600;
+    padding-top: .18rem;
+  }
+  .phase .body { display: flex; flex-direction: column; gap: .6rem; }
+  .phase p { font-size: .93rem; color: var(--ink-soft); max-width: 64ch; }
+  .phase ul { margin: 0; padding-left: 1.05rem; display: flex; flex-direction: column; gap: .28rem; }
+  .phase li { font-size: .9rem; color: var(--ink-soft); max-width: 62ch; }
+  .buys {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .02em;
+    color: var(--teal);
+    background: var(--teal-fill);
+    padding: .45rem .7rem;
+    border-radius: 3px;
+    align-self: start;
+    max-width: 60ch;
+    line-height: 1.5;
+  }
+
+  /* ---------- callout ---------- */
+
+  .callout {
+    background: var(--ember-fill);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--ember);
+    border-radius: 0 4px 4px 0;
+    padding: 1.1rem 1.25rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    max-width: var(--measure);
+  }
+  .callout h3 { color: var(--ember); }
+  .callout p { font-size: .93rem; color: var(--ink); }
+
+  pre {
+    font-family: var(--mono);
+    font-size: .8rem;
+    line-height: 1.6;
+    background: var(--paper-3);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+  }
+
+  ul.plain { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .4rem; max-width: var(--measure); }
+  ul.plain li { color: var(--ink-soft); }
+  ul.plain li strong { color: var(--ink); font-weight: 600; }
+
+  footer {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .04em;
+    color: var(--moss);
+    line-height: 1.7;
+    max-width: var(--measure);
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="kicker">
+      <span>The Postilion</span><span class="dot">/</span>
+      <span>Graphics review</span><span class="dot">/</span>
+      <span>16 Aug 2026</span><span class="dot">/</span>
+      <span>three.js r170 &middot; vanilla TS</span>
+    </div>
+    <h1>The world is a stage set with the lights switched off</h1>
+    <p class="standfirst">
+      I read the source and ran the game to measure it. The look isn't failing because the budget is
+      spent — it's failing because <strong>nothing in the scene responds to light</strong>, the ink
+      lines that define the reference style are <strong>geometrically broken</strong>, and the
+      triangle budget is <strong>1&ndash;3% used</strong>. All three are fixable in a defined order.
+    </p>
+  </header>
+
+  <svg class="rule" viewBox="0 0 1000 9" preserveAspectRatio="none" aria-hidden="true"><path d="M2 5.4 C 90 3.2, 150 6.4, 244 4.6 S 380 6.8, 470 4.2 S 610 6.2, 700 4.8 S 856 3.4, 998 5.1"/></svg>
+
+  <section>
+    <div class="eyebrow">What the running game measures</div>
+    <h2>Fragmentation, not load</h2>
+    <div class="telemetry">
+      <div class="stat"><span class="n">3,719</span><span class="l">Meshes in scene</span></div>
+      <div class="stat flag"><span class="n">3,530</span><span class="l">Unique materials</span></div>
+      <div class="stat flag"><span class="n">0</span><span class="l">Light-aware meshes</span></div>
+      <div class="stat headroom"><span class="n">85,120</span><span class="l">Total triangles</span></div>
+      <div class="stat"><span class="n">728</span><span class="l">Draw calls / frame</span></div>
+      <div class="stat"><span class="n">2,199</span><span class="l">Road &amp; decoration nodes</span></div>
+    </div>
+    <p class="caption">
+      Captured from <code>renderer.info</code> and a scene traversal at the town spawn point, 1280&times;800.
+    </p>
+    <p>
+      Those two coloured numbers are the whole story. The scene is carrying <strong>3,530 distinct
+      shader materials to draw 85,120 triangles</strong> — roughly one material per twenty-four
+      triangles. A browser on this machine will happily push two to three million triangles a frame,
+      so the entire visual budget is being spent on <em>object count</em> rather than on detail. There
+      is something like 30&times; headroom sitting unused, and it is exactly the headroom a proper
+      art pass needs.
+    </p>
+  </section>
+
+  <svg class="rule" viewBox="0 0 1000 9" preserveAspectRatio="none" aria-hidden="true"><path d="M2 4.4 C 110 6.4, 178 3.4, 260 5.4 S 392 3.6, 486 5.8 S 628 4.1, 722 5.4 S 870 6.6, 998 4.3"/></svg>
+
+  <section>
+    <div class="eyebrow">Diagnosis &mdash; six specific causes</div>
+    <h2>Why it reads as flat cardboard</h2>
+
+    <div class="findings">
+
+      <article class="finding">
+        <div class="idx">01</div>
+        <div class="body">
+          <h3>Every light in the scene is inert</h3>
+          <p>
+            <code>ToonMaterial</code> is a raw <code>ShaderMaterial</code> that computes its own
+            three-band ramp from a hand-set direction uniform. It never samples a shadow map, never
+            reads a light, and never applies fog. Three lights are created in
+            <code>Game.setupLighting()</code>, a 2048&sup2; shadow map is rendered every frame, and
+            <strong>not one pixel is affected by any of it</strong>. The world has no cast shadows,
+            no contact darkening, no ambient occlusion — which is precisely the depth cue the
+            reference frames lean on hardest.
+          </p>
+          <p class="evidence">
+            <b>Measured:</b> 3,717 of 3,719 meshes are <code>ShaderMaterial</code>; light-aware
+            meshes = <b>0</b>. 521 meshes carry <code>castShadow = true</code> into a shadow map
+            nothing reads. The <code>uLightColor</code> uniform is declared, assigned, and never
+            referenced in the fragment shader.
+          </p>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="idx">02</div>
+        <div class="body">
+          <h3>The ink outlines are broken, not merely thin</h3>
+          <p>
+            Outlines come from inverted hulls: a duplicated mesh, back-faces, vertices pushed along
+            their normals. On <code>BoxGeometry</code> and <code>ExtrudeGeometry</code> the vertices
+            are split with per-face normals, so pushing outward <strong>separates the box into six
+            disconnected floating plates</strong> instead of growing a shell. I confirmed this by
+            forcing thickness to 0.5 and the colour to magenta in the live scene: the houses sprouted
+            detached slabs above their roofs, and the character was swallowed whole.
+          </p>
+          <p>
+            Thickness is also in world units, so a line's screen width changes with distance and with
+            the size of the object it wraps — the opposite of the constant-weight pen stroke the
+            reference is built on.
+          </p>
+          <p class="evidence">
+            <b>Measured:</b> only <b>227</b> of 3,719 meshes have outline hulls at all — roads,
+            props, NPCs and terrain have none. Meanwhile <code>OutlinePass.ts</code>, a 205-line
+            screen-space edge detector that is far closer to the right answer, is <b>never imported
+            anywhere</b>.
+          </p>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="idx">03</div>
+        <div class="body">
+          <h3>The palette is a stock CSS framework</h3>
+          <p>
+            <code>0x2ecc71</code>, <code>0x3498db</code>, <code>0xe74c3c</code>,
+            <code>0xf39c12</code>, <code>0x9b59b6</code>, <code>0x2c3e50</code> — that is the Flat UI
+            palette, used unmodified, at full saturation, next to pure-black roofs and pure-black
+            roads. The reference works the other way round: chalky desaturated creams and green-greys
+            carry ninety percent of the frame, and saturation is rationed to a single orange and a
+            single teal.
+          </p>
+          <p>
+            There is no palette module. Hex literals are inline at roughly ninety call sites across
+            <code>Planet.ts</code>, <code>NPCManager.ts</code> and <code>Character.ts</code>, so the
+            look cannot be re-graded without a hunt.
+          </p>
+          <div class="swatches" role="img" aria-label="Current saturated palette versus the muted target palette">
+            <i style="background:#2ecc71"></i><i style="background:#3498db"></i><i style="background:#e74c3c"></i><i style="background:#f39c12"></i><i style="background:#9b59b6"></i><i style="background:#000000"></i>
+            <i style="background:#f3efe4"></i><i style="background:#ded7c5"></i><i style="background:#a8b0a6"></i><i style="background:#6d7d78"></i><i style="background:#dd5f2a"></i><i style="background:#17211f"></i>
+          </div>
+          <p class="caption">Left six: shipping now. Right six: the reference's actual working range.</p>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="idx">04</div>
+        <div class="body">
+          <h3>The road network drowns the world</h3>
+          <p>
+            <code>createRoads()</code> lays eleven latitude rings, twelve longitude lines, eight
+            diagonals, six biome connectors and three concentric rings per biome — each segment a
+            separate box mesh with its own material, plus separate meshes for the dashes. The result
+            is that <strong>asphalt is the dominant surface of the planet</strong> and white dashes
+            speckle every shot. The reference has almost no visible road: it has alleys, kerbs,
+            stairs, gutters and thresholds.
+          </p>
+          <p class="evidence">
+            <b>Measured:</b> the decorations group holds <b>2,199</b> children, the overwhelming
+            majority of them road and dash segments.
+          </p>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="idx">05</div>
+        <div class="body">
+          <h3>The horizon is ten metres away and nothing hides it</h3>
+          <p>
+            At radius 30 with an eye height near 1.7, the horizon sits about <strong>10 units from
+            the character and 14 from the camera</strong>. Houses are 3.7 units tall. So every shot
+            shows the ground curving away after three house-lengths, with flat sky above it — the
+            "green ball" read. The reference never shows you a horizon; it terminates every sightline
+            with a four-to-eight-unit wall, a stairway, or a building edge.
+          </p>
+          <p class="evidence">
+            <b>Consequence:</b> fog is configured at 25&ndash;70 on a world where nothing is ever
+            further than ~14 units away, so the fog never engages at all. Sky meets ground on a hard
+            unmodulated seam.
+          </p>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="idx">06</div>
+        <div class="body">
+          <h3>Placement is uniform random, so nothing composes</h3>
+          <p>
+            <code>fillGlobalDecorations()</code> scatters 60 houses, 70 trees and 80 props at
+            uniformly random spherical coordinates. Vending machines land in fields; benches face
+            nothing; there is no clustering, no frontage, no negative space, no sense that a person
+            arranged any of it. Charm in this genre comes from <em>composition</em> — a bicycle
+            against a wall, a crate by a door, a wire crossing a gap.
+          </p>
+          <p class="evidence">
+            <b>Also worth fixing:</b> <code>CameraController.avoidBuildingCollision()</code>
+            traverses the whole scene and computes a fresh <code>Box3</code> for all 3,719 meshes
+            <b>every frame</b>. That is the single hottest thing in the update loop.
+          </p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <svg class="rule" viewBox="0 0 1000 9" preserveAspectRatio="none" aria-hidden="true"><path d="M2 5.8 C 96 3.6, 164 6.2, 252 4.4 S 388 6.4, 478 4.0 S 616 5.9, 712 4.5 S 862 6.3, 998 4.6"/></svg>
+
+  <section>
+    <div class="eyebrow">The target, taken apart</div>
+    <h2>What the reference look is actually made of</h2>
+    <p>
+      The screenshots you shared aren't one effect, they're six layers stacked. Naming them
+      separately is what makes the makeover tractable — each is a discrete piece of work with a
+      discrete payoff, and they're worth roughly the proportions below.
+    </p>
+
+    <div class="anatomy">
+      <div class="layer">
+        <div class="top"><h3>Ink</h3><span class="chip broken">Broken</span></div>
+        <p>
+          Constant-weight dark lines on silhouettes <em>and</em> interior creases, with a faint
+          hand-drawn wobble. Alone this is about half the style. It must be screen-space, so a line
+          is the same pixel width on a doorknob and a lighthouse.
+        </p>
+      </div>
+      <div class="layer">
+        <div class="top"><h3>Two-band fill</h3><span class="chip partial">Partial</span></div>
+        <p>
+          One lit tone, one shadow tone, a hard terminator, and — critically — the shadow is
+          <em>tinted cool</em>, never a darker version of the same hue. Big shadow shapes do the
+          modelling that geometry doesn't.
+        </p>
+      </div>
+      <div class="layer">
+        <div class="top"><h3>Chalky palette</h3><span class="chip missing">Missing</span></div>
+        <p>
+          Bone, cream, warm grey, sage. Saturation rationed to one orange and one teal, spent on the
+          things that matter: a lifebuoy, a door, a nameplate.
+        </p>
+      </div>
+      <div class="layer">
+        <div class="top"><h3>Paper grain</h3><span class="chip missing">Missing</span></div>
+        <p>
+          A subtle noise and vignette composited over the whole frame. Cheap, and it's what stops the
+          image reading as "clean 3D". The current 0.02 dither in the fragment shader is a hundredth
+          of what's needed and applied per-object rather than per-frame.
+        </p>
+      </div>
+      <div class="layer">
+        <div class="top"><h3>Dense human clutter</h3><span class="chip missing">Missing</span></div>
+        <p>
+          Railings, downpipes, AC units, crates, wires, planters, signage, stairs. This is where the
+          unused 30&times; triangle headroom goes, and it's the layer Blender is for.
+        </p>
+      </div>
+      <div class="layer">
+        <div class="top"><h3>Corridor framing</h3><span class="chip missing">Missing</span></div>
+        <p>
+          Every shot walled on two sides, foreground occluder, mid-ground subject, sky as a slot
+          rather than a field. Moderate FOV, camera low. Never a visible horizon.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <svg class="rule" viewBox="0 0 1000 9" preserveAspectRatio="none" aria-hidden="true"><path d="M2 4.2 C 104 6.5, 172 3.5, 266 5.6 S 398 3.8, 492 5.9 S 634 4.2, 728 5.5 S 874 3.6, 998 5.2"/></svg>
+
+  <section>
+    <div class="eyebrow">Tooling</div>
+    <h2>What you have, and what's missing</h2>
+
+    <div class="callout">
+      <h3>Blender MCP is installed but not connected</h3>
+      <p>
+        Blender 5.2 LTS is here and the <code>Blender MCP</code> add-on v1.5 is in your add-ons
+        folder listening on port 9876 — but no MCP server is registered with Claude Code, so I can't
+        drive Blender from this session. <code>uvx</code> is already on your PATH, so it's one
+        command plus a session restart:
+      </p>
+      <pre>claude mcp add blender -- uvx blender-mcp</pre>
+      <p>
+        Then open Blender, enable <em>Blender MCP</em> in Preferences &rarr; Add-ons, and hit
+        <em>Connect</em> in the View3D sidebar. Nothing in phases 1&ndash;4 needs it; everything in
+        phase 5 does.
+      </p>
+    </div>
+
+    <h3>Install now &mdash; all MIT or similar, all free</h3>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Package</th><th>What it's for</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="pkg">postprocessing</td>
+            <td class="why">pmndrs' effect composer. Merges passes into one shader and gives you proper multi-render-target depth and normals — which is where the ink pass, the grain and the vignette all live. Meaningfully faster than three's own composer.</td>
+          </tr>
+          <tr>
+            <td class="pkg">three-custom-shader-material</td>
+            <td class="why">Lets you write the toon ramp <em>on top of</em> <code>MeshStandardMaterial</code>, so shadows, fog, lights and texture maps keep working. This is the direct fix for finding 01. A zero-dependency alternative is three's built-in <code>MeshToonMaterial</code> with a gradient map — start there if you want fewer moving parts.</td>
+          </tr>
+          <tr>
+            <td class="pkg">tweakpane</td>
+            <td class="why">Live sliders for palette, light angle, band thresholds, ink width, grain strength. You cannot art-direct a look by editing hex literals and reloading; this is the difference between a week and an afternoon.</td>
+          </tr>
+          <tr>
+            <td class="pkg">three-mesh-bvh</td>
+            <td class="why">Fast spatial queries for camera collision and ground snapping, replacing the per-frame full-scene <code>Box3</code> sweep.</td>
+          </tr>
+          <tr>
+            <td class="pkg">troika-three-text</td>
+            <td class="why">Crisp SDF text on 3D surfaces. Shop signs, banners and vertical signage carry a surprising amount of the reference's character, and they're currently absent entirely.</td>
+          </tr>
+          <tr>
+            <td class="pkg">simplex-noise</td>
+            <td class="why">Coherent noise to replace <code>Math.random()</code> scatter, so props cluster into settlements instead of dusting the sphere evenly.</td>
+          </tr>
+          <tr>
+            <td class="pkg">stats-gl</td>
+            <td class="why">On-screen draw-call and frame-time readout, so detail gets added against a visible number rather than a hunch.</td>
+          </tr>
+          <tr>
+            <td class="pkg">@gltf-transform/cli</td>
+            <td class="why">Command-line inspect, dedupe, weld and Draco/meshopt compression for GLBs coming out of Blender. Run it as a build step once real assets land.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Worth it later, not yet</h3>
+    <ul class="plain">
+      <li><strong>Playwright</strong> — screenshot a fixed set of camera positions on every commit. During a long art pass, catching "did that shader change break the shrine?" automatically is genuinely valuable. Free.</li>
+      <li><strong>Material Maker</strong> — free, GPL, Godot-based procedural texture authoring, if you end up wanting tileable painted asphalt and concrete. Krita covers hand-painted work fine until then.</li>
+      <li><strong>LibreSprite</strong> — free Aseprite fork, only if the UI goes pixel-art. Your reference's UI is chunky-pixel, so this is plausible.</li>
+    </ul>
+
+    <h3>Skip</h3>
+    <ul class="plain">
+      <li><strong>React Three Fiber / drei</strong> — the project is vanilla TypeScript and healthier for it. The rewrite cost buys nothing the plan below needs.</li>
+      <li><strong>Extra Blender add-ons</strong> — 5.2's stock glTF exporter is fine, and Grease Pencil (built in) covers hand-drawn texture work.</li>
+      <li><strong>Inkscape</strong> — Affinity Designer already does this job for you.</li>
+    </ul>
+  </section>
+
+  <svg class="rule" viewBox="0 0 1000 9" preserveAspectRatio="none" aria-hidden="true"><path d="M2 5.5 C 98 3.4, 158 6.6, 248 4.5 S 386 6.5, 476 4.1 S 618 6.0, 714 4.7 S 858 3.5, 998 5.0"/></svg>
+
+  <section>
+    <div class="eyebrow">Roadmap &mdash; the order is load-bearing</div>
+    <h2>Six phases, each unblocking the next</h2>
+    <p>
+      The sequencing matters more than usual here. The ink pass needs clean depth and normals, which
+      needs phase 1. Palette can only be judged against the ink, so it follows phase 2. And there's
+      no point modelling a building kit before the street layout tells you what buildings are needed.
+    </p>
+
+    <div class="phases">
+
+      <div class="phase">
+        <div class="num">Ph 1</div>
+        <div class="body">
+          <h3>Put the lights back on</h3>
+          <ul>
+            <li>Replace <code>ToonMaterial</code> with <code>MeshToonMaterial</code> + gradient map, or CSM over <code>MeshStandardMaterial</code>.</li>
+            <li>Introduce a material cache — one material per palette entry, not one per mesh.</li>
+            <li>Delete all 227 inverted-hull outline meshes and the unused <code>OutlinePass.ts</code>.</li>
+            <li>Instance the repeated props: trees, poles, cones, mailboxes, road segments.</li>
+          </ul>
+          <p class="buys">Buys: real cast shadows and contact darkening. 3,530 materials &rarr; a few dozen. The scene stops looking like unlit cardboard before a single asset is remade.</p>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="num">Ph 2</div>
+        <div class="body">
+          <h3>The ink pass</h3>
+          <ul>
+            <li>Screen-space edge detection over depth + view-normal buffers, composited dark.</li>
+            <li>Constant pixel width; small animated UV wobble for the hand-drawn quality.</li>
+            <li>Separate thresholds for silhouette edges and interior creases.</li>
+          </ul>
+          <p class="buys">Buys: roughly half the target look, at a fixed per-frame cost that doesn't grow as you add detail. Highest visual return of anything on this list.</p>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="num">Ph 3</div>
+        <div class="body">
+          <h3>Grade and atmosphere</h3>
+          <ul>
+            <li>One <code>palette.ts</code>; every hex literal in the codebase moves into it.</li>
+            <li>Two-band ramp with a cool-tinted shadow and a warm rim.</li>
+            <li>Gradient sky dome and soft cloud cards, replacing the flat background colour.</li>
+            <li>Paper grain + vignette in the composite; refit fog to roughly 8&ndash;30.</li>
+          </ul>
+          <p class="buys">Buys: the "painted, not rendered" read. Also makes every later decision cheap, because the whole grade is now four values in one file.</p>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="num">Ph 4</div>
+        <div class="body">
+          <h3>Rebuild the layout</h3>
+          <ul>
+            <li>Tear out the global road grid; author a handful of real streets and alleys instead.</li>
+            <li>Raise planet radius to roughly 60&ndash;80 and cut prop density to match.</li>
+            <li>Build walled corridors — buildings 4&ndash;8 units tall — so structures, never the horizon, close every sightline.</li>
+            <li>Replace random scatter with noise-driven clustering and hand-placed set pieces.</li>
+          </ul>
+          <p class="buys">Buys: shots that frame like the reference. This is also where "walk around the whole planet" stops fighting "the street feels like a place".</p>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="num">Ph 5</div>
+        <div class="body">
+          <h3>Real assets, out of Blender</h3>
+          <ul>
+            <li>A kit: 10&ndash;14 building variants plus stairs, railings, awnings, downpipes, wires, signage, planters, crates.</li>
+            <li>Export GLB, instance everything, run <code>gltf-transform</code> as a build step.</li>
+            <li>Hand-painted texture work in Krita; signage typography in Affinity.</li>
+          </ul>
+          <p class="buys">Buys: the clutter density that separates the reference from every other cel-shaded browser game. This is where the unused triangle headroom finally gets spent.</p>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="num">Ph 6</div>
+        <div class="body">
+          <h3>Character and interface</h3>
+          <ul>
+            <li>Model and rig the courier properly; export GLB with run, idle, hop and talk clips.</li>
+            <li>Rework the HUD to match — chunky nameplates, ink borders, the reference's UI voice.</li>
+          </ul>
+          <p class="buys">Buys: the last thing the player looks at for the entire game stops being fourteen primitives with a sine-wave gait.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <svg class="rule" viewBox="0 0 1000 9" preserveAspectRatio="none" aria-hidden="true"><path d="M2 4.6 C 100 6.3, 168 3.7, 258 5.5 S 392 4.0, 488 6.0 S 626 4.4, 720 5.3 S 868 6.4, 998 4.4"/></svg>
+
+  <section>
+    <div class="eyebrow">If you only do one thing</div>
+    <h2>Start with phase 1</h2>
+    <p>
+      It's the least glamorous item on the list and it unblocks everything else. Right now a 2048&sup2;
+      shadow map is rendered sixty times a second into the void, and no surface in the game knows
+      where the sun is. Fixing that costs one material swap and a cache, and the difference will be
+      visible in the first screenshot — before any new art exists at all.
+    </p>
+  </section>
+
+  <footer>
+    Sources: full read of <code>src/</code> (5,918 lines); live instrumentation of the running dev
+    server at the town spawn; live manipulation of outline uniforms to confirm finding 02.
+    Dev server left running on <code>localhost:3000</code>.
+  </footer>
+
+</div>

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ToonMaterial } from '../utils/ToonMaterial';
-import { OutlineMaterial } from '../utils/OutlineMaterial';
+import { GROUND, BUILDING, ROAD, MATERIAL, ACCENT, SKY, pick } from '../utils/palette';
+import { Kit, SHOP_SIGNS } from './Kit';
 
 export enum BiomeType {
   TOWN,
@@ -9,7 +10,19 @@ export enum BiomeType {
   SHRINE
 }
 
-const OUTLINE_OPTS = { thickness: 0.04, wobble: 0.008 };
+
+/** How far the road slabs stand proud of the sphere surface. */
+const ROAD_THICKNESS = 0.08;
+
+/** Radius of clear ground kept around the player's start, in world units. */
+const SPAWN_CLEARANCE = 11;
+
+/** A point along a street: where it is, which way it runs, which way is up. */
+interface StreetStation {
+  pos: THREE.Vector3;
+  tangent: THREE.Vector3;
+  up: THREE.Vector3;
+}
 
 interface BiomeData {
   type: BiomeType;
@@ -28,8 +41,14 @@ export class Planet {
   private foliageBaseQuaternions: Map<THREE.Object3D, THREE.Quaternion> = new Map();
   private windTime: number = 0;
   private clouds: THREE.Group;
+  private spawnPoint!: THREE.Vector3;
+  private kit: Kit | null = null;
+  private houseVariant = 0;
+  private shopsPlaced = 0;
+  private riverAxis!: THREE.Vector3;
 
-  constructor(radius: number) {
+  constructor(radius: number, kit: Kit | null = null) {
+    this.kit = kit;
     this.radius = radius;
     this.mesh = new THREE.Group();
     this.decorations = new THREE.Group();
@@ -37,6 +56,7 @@ export class Planet {
     
     this.createPlanetSphere();
     this.defineBiomes();
+    this.spawnPoint = this.computeSpawnPoint();
     this.createRoads();
     this.createDecorations();
     this.createClouds();
@@ -64,8 +84,7 @@ export class Planet {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     
     const material = ToonMaterial.create({
-      vertexColors: true,
-      flatShading: false
+      vertexColors: true
     });
     
     this.sphere = new THREE.Mesh(geometry, material);
@@ -77,25 +96,25 @@ export class Planet {
     this.biomes = [
       {
         type: BiomeType.TOWN,
-        color: new THREE.Color(0x8a9a7b),
+        color: new THREE.Color(GROUND.town),
         center: new THREE.Vector3(0, 1, 0).normalize(),
         radius: 0.45
       },
       {
         type: BiomeType.SEASIDE,
-        color: new THREE.Color(0xc4b99a),
+        color: new THREE.Color(GROUND.seaside),
         center: new THREE.Vector3(0.7, 0.3, 0.5).normalize(),
         radius: 0.35
       },
       {
         type: BiomeType.HILLSIDE,
-        color: new THREE.Color(0x7a9a6b),
+        color: new THREE.Color(GROUND.hillside),
         center: new THREE.Vector3(-0.5, 0.5, 0.7).normalize(),
         radius: 0.45
       },
       {
         type: BiomeType.SHRINE,
-        color: new THREE.Color(0x6a8a7b),
+        color: new THREE.Color(GROUND.shrine),
         center: new THREE.Vector3(-0.6, -0.2, -0.7).normalize(),
         radius: 0.35
       }
@@ -105,7 +124,7 @@ export class Planet {
   private getBiomeColorAtPosition(pos: THREE.Vector3): THREE.Color {
     const normalizedPos = pos.clone().normalize();
     
-    const baseGreen = new THREE.Color(0x6a7a5b);
+    const baseGreen = new THREE.Color(GROUND.base);
     let finalColor = baseGreen.clone();
     
     for (const biome of this.biomes) {
@@ -120,172 +139,23 @@ export class Planet {
     return finalColor;
   }
 
+  /**
+   * Roads only where a road would actually be: between the places you walk to,
+   * and one loop through each settlement.
+   *
+   * This used to lay eleven latitude rings, twelve longitude lines, eight
+   * diagonals and three concentric rings per biome — around 2,000 separate box
+   * meshes, which made asphalt the dominant surface of the planet and speckled
+   * every shot with centre-line dashes. Once the ink pass went in, every one of
+   * those boxes also started contributing edges, so the ground turned to hatch.
+   */
   private createRoads(): void {
-    // Create a dense road network wrapping the ENTIRE sphere
-    // Dense latitude roads covering ENTIRE sphere
-    for (let lat = -0.9; lat <= 0.9; lat += 0.18) {
-      this.createLatitudeRoad(lat);
-    }
-    
-    // Dense longitude roads for better coverage
-    for (let lon = 0; lon < Math.PI * 2; lon += Math.PI / 6) {
-      this.createLongitudeRoad(lon);
-    }
-    
-    // Extra diagonal roads to fill gaps
-    for (let i = 0; i < 8; i++) {
-      const startTheta = (i / 8) * Math.PI * 2;
-      const startPhi = 0.3;
-      const endTheta = startTheta + Math.PI / 4;
-      const endPhi = Math.PI - 0.3;
-      
-      const from = new THREE.Vector3(
-        Math.sin(startPhi) * Math.cos(startTheta),
-        Math.cos(startPhi),
-        Math.sin(startPhi) * Math.sin(startTheta)
-      ).multiplyScalar(this.radius);
-      
-      const to = new THREE.Vector3(
-        Math.sin(endPhi) * Math.cos(endTheta),
-        Math.cos(endPhi),
-        Math.sin(endPhi) * Math.sin(endTheta)
-      ).multiplyScalar(this.radius);
-      
-      this.createConnectingRoad(from, to);
-    }
-    
-    // Connect all biomes with roads
+    // Trunk roads between settlements.
     for (let i = 0; i < this.biomes.length; i++) {
       for (let j = i + 1; j < this.biomes.length; j++) {
         const from = this.biomes[i].center.clone().multiplyScalar(this.radius);
         const to = this.biomes[j].center.clone().multiplyScalar(this.radius);
         this.createConnectingRoad(from, to);
-      }
-    }
-    
-    // Local road networks within each biome
-    for (const biome of this.biomes) {
-      this.createLocalRoadNetwork(biome.center.clone().multiplyScalar(this.radius), 15);
-    }
-  }
-
-  private createLatitudeRoad(latitude: number): void {
-    const y = latitude;
-    const ringRadius = Math.sqrt(1 - y * y);
-    const segments = 32;
-    
-    for (let i = 0; i < segments; i++) {
-      const angle1 = (i / segments) * Math.PI * 2;
-      const angle2 = ((i + 1) / segments) * Math.PI * 2;
-      
-      const p1 = new THREE.Vector3(
-        Math.cos(angle1) * ringRadius,
-        y,
-        Math.sin(angle1) * ringRadius
-      ).normalize().multiplyScalar(this.radius);
-      
-      const p2 = new THREE.Vector3(
-        Math.cos(angle2) * ringRadius,
-        y,
-        Math.sin(angle2) * ringRadius
-      ).normalize().multiplyScalar(this.radius);
-      
-      this.createRoadSegment(p1, p2);
-    }
-  }
-
-  private createLongitudeRoad(longitude: number): void {
-    const segments = 24;
-    
-    for (let i = 0; i < segments; i++) {
-      const lat1 = (i / segments) * Math.PI - Math.PI / 2;
-      const lat2 = ((i + 1) / segments) * Math.PI - Math.PI / 2;
-      
-      const p1 = new THREE.Vector3(
-        Math.cos(lat1) * Math.cos(longitude),
-        Math.sin(lat1),
-        Math.cos(lat1) * Math.sin(longitude)
-      ).normalize().multiplyScalar(this.radius);
-      
-      const p2 = new THREE.Vector3(
-        Math.cos(lat2) * Math.cos(longitude),
-        Math.sin(lat2),
-        Math.cos(lat2) * Math.sin(longitude)
-      ).normalize().multiplyScalar(this.radius);
-      
-      this.createRoadSegment(p1, p2);
-    }
-  }
-
-  private createRoadSegment(from: THREE.Vector3, to: THREE.Vector3): void {
-    // Calculate road length based on arc distance
-    const arcLength = from.angleTo(to) * this.radius;
-    const roadWidth = 2.2;
-    const roadThickness = 0.08; // Thicker so it embeds into surface
-    const roadGeo = new THREE.BoxGeometry(roadWidth, roadThickness, Math.max(arcLength * 1.1, 1.5));
-    const roadMat = ToonMaterial.create({ color: 0x404040 });
-    const road = new THREE.Mesh(roadGeo, roadMat);
-    road.receiveShadow = true;
-    
-    // Position at midpoint FLUSH with the surface (half-embedded)
-    const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius);
-    road.position.copy(mid);
-    
-    // Orient: up is surface normal, forward points along the road
-    const up = mid.clone().normalize();
-    const dir = to.clone().sub(from);
-    dir.sub(up.clone().multiplyScalar(dir.dot(up))).normalize();
-    
-    const right = new THREE.Vector3().crossVectors(up, dir).normalize();
-    const correctedDir = new THREE.Vector3().crossVectors(right, up).normalize();
-    
-    const matrix = new THREE.Matrix4();
-    matrix.makeBasis(right, up, correctedDir);
-    road.quaternion.setFromRotationMatrix(matrix);
-    
-    this.decorations.add(road);
-    
-    // Center line dash - on top of road
-    const lineGeo = new THREE.BoxGeometry(0.15, 0.02, Math.max(arcLength * 0.4, 0.5));
-    const lineMat = ToonMaterial.create({ color: 0xeeeeee });
-    const line = new THREE.Mesh(lineGeo, lineMat);
-    const lineMid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(this.radius + roadThickness / 2 + 0.01);
-    line.position.copy(lineMid);
-    line.quaternion.copy(road.quaternion);
-    this.decorations.add(line);
-  }
-
-  private createLocalRoadNetwork(center: THREE.Vector3, _radius: number): void {
-    // Create a grid of roads around biome center
-    for (let ring = 0; ring < 3; ring++) {
-      const ringRadius = 3 + ring * 4;
-      const segments = 8 + ring * 4;
-      
-      for (let i = 0; i < segments; i++) {
-        const angle = (i / segments) * Math.PI * 2;
-        const pos = this.getOffsetOnSphere(center, angle, ringRadius);
-        
-        const roadThickness = 0.08;
-        const roadGeo = new THREE.BoxGeometry(2.2, roadThickness, 3);
-        const roadMat = ToonMaterial.create({ color: 0x484848 });
-        const road = new THREE.Mesh(roadGeo, roadMat);
-        road.receiveShadow = true;
-        
-        // Place flush with surface with specific orientation
-        this.placeOnSphere(road, pos, angle + Math.PI / 2);
-        this.decorations.add(road);
-        
-        // Center line dashes - on top of road
-        for (let d = 0; d < 2; d++) {
-          const dashGeo = new THREE.BoxGeometry(0.1, 0.02, 0.5);
-          const dashMat = ToonMaterial.create({ color: 0xffffff });
-          const dash = new THREE.Mesh(dashGeo, dashMat);
-          dash.position.copy(road.position);
-          dash.quaternion.copy(road.quaternion);
-          dash.translateY(roadThickness / 2 + 0.01);
-          dash.translateZ(-0.6 + d * 1.2);
-          this.decorations.add(dash);
-        }
       }
     }
   }
@@ -296,9 +166,8 @@ export class Planet {
       const t = i / steps;
       const pos = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
       
-      const roadThickness = 0.08;
-      const roadGeo = new THREE.BoxGeometry(1.8, roadThickness, 2);
-      const roadMat = ToonMaterial.create({ color: 0x4a4a4a });
+      const roadGeo = new THREE.BoxGeometry(1.8, ROAD_THICKNESS, 2);
+      const roadMat = ToonMaterial.create({ color: ROAD.asphalt });
       const road = new THREE.Mesh(roadGeo, roadMat);
       
       // Use proper orientation with makeBasis
@@ -330,45 +199,332 @@ export class Planet {
     this.createSeasideArea();
     this.createHillsideArea();
     this.createShrineArea();
-    
+
     // Fill gaps between biomes with additional houses and props
     this.fillGlobalDecorations();
+
+    // The set pieces that make it a French village rather than a generic one.
+    this.createRiver();
+    this.createChurch();
+    this.createSquare();
+    this.createPark();
+    this.createFarm();
+  }
+
+  // ------------------------------------------------------------ set pieces
+
+  /**
+   * A river running the whole way round the sphere on a great circle, with a
+   * stone bridge where the village's main road crosses it.
+   *
+   * A great circle rather than a meandering path: on a closed surface the
+   * water has to either loop or end abruptly, and a loop is the only one of
+   * those that doesn't look like a bug.
+   */
+  private createRiver(): void {
+    const townCenter = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
+
+    // Tilt the river's plane so it passes near, but not through, the village.
+    this.riverAxis = new THREE.Vector3(0.82, 0.24, -0.52).normalize();
+
+    let u = new THREE.Vector3().crossVectors(this.riverAxis, townCenter);
+    if (u.lengthSq() < 1e-6) u = new THREE.Vector3().crossVectors(this.riverAxis, new THREE.Vector3(1, 0, 0));
+    u.normalize();
+    const v = new THREE.Vector3().crossVectors(this.riverAxis, u).normalize();
+
+    const segments = 96;
+    const halfWidth = 3.4;
+    const positions: number[] = [];
+
+    for (let i = 0; i < segments; i++) {
+      const a0 = (i / segments) * Math.PI * 2;
+      const a1 = ((i + 1) / segments) * Math.PI * 2;
+
+      const centre0 = u.clone().multiplyScalar(Math.cos(a0)).addScaledVector(v, Math.sin(a0));
+      const centre1 = u.clone().multiplyScalar(Math.cos(a1)).addScaledVector(v, Math.sin(a1));
+
+      // Widen and narrow gently so it reads as a river, not a canal.
+      const w0 = halfWidth * (1 + Math.sin(a0 * 3) * 0.22);
+      const w1 = halfWidth * (1 + Math.sin(a1 * 3) * 0.22);
+
+      const edge = (centre: THREE.Vector3, w: number, side: number) =>
+        centre.clone().addScaledVector(this.riverAxis, (side * w) / this.radius)
+          .normalize().multiplyScalar(this.radius - 0.28);
+
+      const a = edge(centre0, w0, 1);
+      const b = edge(centre1, w1, 1);
+      const c = edge(centre1, w1, -1);
+      const d = edge(centre0, w0, -1);
+
+      positions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+      positions.push(a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.computeVertexNormals();
+
+    const water = new THREE.Mesh(geometry, ToonMaterial.create({
+      color: GROUND.water,
+      transparent: true,
+      opacity: 0.9
+    }));
+    water.receiveShadow = true;
+    this.decorations.add(water);
+
+    // Bridge at the point on the river nearest the village.
+    const nearest = townCenter.clone()
+      .sub(this.riverAxis.clone().multiplyScalar(townCenter.dot(this.riverAxis)))
+      .normalize().multiplyScalar(this.radius);
+
+    const along = new THREE.Vector3().crossVectors(this.riverAxis, nearest).normalize();
+    const bridge = this.addPiece('Bridge_Stone', nearest,
+      nearest.clone().addScaledVector(along, 5));
+
+    if (bridge) {
+      // The kit bridge spans along its own X, so face it across the water.
+      const across = nearest.clone().addScaledVector(this.riverAxis, 5);
+      this.placeFacing(bridge, nearest, across);
+    }
+  }
+
+  /** The church, set back from the square on its own patch of ground. */
+  private createChurch(): void {
+    const center = this.biomes.find(b => b.type === BiomeType.TOWN)!
+      .center.clone().multiplyScalar(this.radius);
+
+    const site = this.getOffsetOnSphere(center, 2.3, 15);
+    this.addPiece('Church', site, center);
+
+    // Churchyard wall and a couple of trees.
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const spot = this.getOffsetOnSphere(site, angle, 9);
+      this.addPiece('Wall_Low', spot, site);
+    }
+    for (const angle of [0.8, 3.9]) {
+      this.addPiece('Tree_Plane', this.getOffsetOnSphere(site, angle, 7));
+    }
+  }
+
+  /** The village square: fountain, plane trees, benches, a well. */
+  private createSquare(): void {
+    const center = this.biomes.find(b => b.type === BiomeType.TOWN)!
+      .center.clone().multiplyScalar(this.radius);
+
+    const square = this.getOffsetOnSphere(center, 4.6, 13);
+
+    this.addPiece('Fountain', square);
+    this.addPiece('Well', this.getOffsetOnSphere(square, 1.2, 5));
+
+    // Plane trees ringing the square, as in every French village.
+    for (let i = 0; i < 7; i++) {
+      const angle = (i / 7) * Math.PI * 2 + 0.2;
+      this.addPiece('Tree_Plane', this.getOffsetOnSphere(square, angle, 6.5));
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + 0.7;
+      const bench = this.createBench();
+      this.placeFacing(bench, this.getOffsetOnSphere(square, angle, 3.4), square);
+      this.decorations.add(bench);
+    }
+  }
+
+  /** A park along the river bank: trees, benches, low walls. */
+  private createPark(): void {
+    if (!this.riverAxis) return;
+
+    const townCenter = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
+    const onRiver = townCenter.clone()
+      .sub(this.riverAxis.clone().multiplyScalar(townCenter.dot(this.riverAxis)))
+      .normalize().multiplyScalar(this.radius);
+
+    const along = new THREE.Vector3().crossVectors(this.riverAxis, onRiver).normalize();
+
+    for (let i = -4; i <= 4; i++) {
+      if (i === 0) continue; // leave the bridge approach clear
+      const base = onRiver.clone().addScaledVector(along, i * 4.5)
+        .normalize().multiplyScalar(this.radius);
+
+      // Bank side away from the water.
+      const spot = base.clone().addScaledVector(this.riverAxis, 6.2)
+        .normalize().multiplyScalar(this.radius);
+
+      if (i % 2 === 0) {
+        this.addPiece('Tree_Plane', spot);
+      } else {
+        const bench = this.createBench();
+        this.placeFacing(bench, spot, base);
+        this.decorations.add(bench);
+      }
+    }
+  }
+
+  /** A smallholding outside the village: barn, fenced paddock, sheep and goats. */
+  private createFarm(): void {
+    const center = this.biomes.find(b => b.type === BiomeType.HILLSIDE)!
+      .center.clone().multiplyScalar(this.radius);
+
+    const yard = this.getOffsetOnSphere(center, 1.1, 6);
+    this.addPiece('Barn', yard, center);
+
+    // Paddock fence, a ring of panels each facing the middle.
+    const paddock = this.getOffsetOnSphere(yard, 2.6, 10);
+    const panels = 14;
+    for (let i = 0; i < panels; i++) {
+      const angle = (i / panels) * Math.PI * 2;
+      const post = this.getOffsetOnSphere(paddock, angle, 8);
+      const next = this.getOffsetOnSphere(paddock, angle + Math.PI * 2 / panels, 8);
+      this.addPiece('Fence', post, next);
+    }
+
+    // The flock.
+    for (let i = 0; i < 9; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * 6;
+      const spot = this.getOffsetOnSphere(paddock, angle, dist);
+      const facing = this.getOffsetOnSphere(paddock, angle + 1.2, dist + 3);
+      this.addPiece(i % 3 === 0 ? 'Goat' : 'Sheep', spot, facing, i);
+    }
+  }
+
+  // ---------------------------------------------------------------- streets
+
+  /**
+   * Orient an object so its local +Y is the surface normal and its local +Z
+   * points at `faceToward`.
+   *
+   * The kit's buildings have their fronts on +Z: Blender models them facing -Y,
+   * and the glTF exporter's Z-up to Y-up conversion maps Blender -Y onto +Z.
+   */
+  private placeFacing(
+    object: THREE.Object3D,
+    position: THREE.Vector3,
+    faceToward: THREE.Vector3
+  ): void {
+    const up = position.clone().normalize();
+
+    const forward = faceToward.clone().sub(position);
+    forward.sub(up.clone().multiplyScalar(forward.dot(up)));
+
+    if (forward.lengthSq() < 1e-8) {
+      // Degenerate: the target is directly overhead. Any tangent will do.
+      forward.set(0, 1, 0).sub(up.clone().multiplyScalar(up.y));
+      if (forward.lengthSq() < 1e-8) forward.set(1, 0, 0);
+    }
+    forward.normalize();
+
+    // right x up = forward, so makeBasis gives a right-handed frame with the
+    // building's face along +Z.
+    const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+    const matrix = new THREE.Matrix4().makeBasis(right, up, forward);
+
+    object.position.copy(position);
+    object.quaternion.setFromRotationMatrix(matrix);
+  }
+
+  /** Evenly spaced points around a circle of surface-arc `radius` about `center`. */
+  private ringStations(center: THREE.Vector3, radius: number, count: number): StreetStation[] {
+    const stations: StreetStation[] = [];
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const pos = this.getOffsetOnSphere(center, angle, radius);
+      const next = this.getOffsetOnSphere(center, angle + 0.01, radius);
+      const up = pos.clone().normalize();
+      const tangent = next.sub(pos);
+      tangent.sub(up.clone().multiplyScalar(tangent.dot(up))).normalize();
+      stations.push({ pos, tangent, up });
+    }
+    return stations;
+  }
+
+  /** Points along the great-circle arc from `from` to `to`. */
+  private lineStations(from: THREE.Vector3, to: THREE.Vector3, count: number): StreetStation[] {
+    const stations: StreetStation[] = [];
+    for (let i = 0; i <= count; i++) {
+      const t = i / count;
+      const pos = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
+      const ahead = from.clone().lerp(to, Math.min(1, t + 0.01))
+        .normalize().multiplyScalar(this.radius);
+      const up = pos.clone().normalize();
+      const tangent = ahead.sub(pos);
+      tangent.sub(up.clone().multiplyScalar(tangent.dot(up)));
+      if (tangent.lengthSq() < 1e-8) continue;
+      tangent.normalize();
+      stations.push({ pos, tangent, up });
+    }
+    return stations;
+  }
+
+  /** Lay road slabs down the centreline of a run of stations. */
+  private layRoad(stations: StreetStation[], width: number = 2.6): void {
+    for (const station of stations) {
+      const geo = new THREE.BoxGeometry(width, ROAD_THICKNESS, 2.6);
+      const road = new THREE.Mesh(geo, ToonMaterial.create({ color: ROAD.asphalt }));
+      road.receiveShadow = true;
+
+      const right = new THREE.Vector3().crossVectors(station.up, station.tangent).normalize();
+      const matrix = new THREE.Matrix4().makeBasis(right, station.up, station.tangent);
+      road.position.copy(station.pos);
+      road.quaternion.setFromRotationMatrix(matrix);
+
+      this.decorations.add(road);
+    }
+  }
+
+  /**
+   * Line both sides of a street with buildings that face it.
+   *
+   * This is what replaces uniform-random scatter. Placement used to drop
+   * houses at arbitrary positions and arbitrary yaw, so nothing addressed a
+   * road and the town read as a field with objects in it.
+   */
+  private layFrontage(
+    stations: StreetStation[],
+    options: { setback?: number; gapChance?: number; sides?: number[]; stride?: number } = {}
+  ): void {
+    const {
+      setback = 7.0,
+      gapChance = 0.22,
+      sides = [1, -1],
+      stride = 1
+    } = options;
+
+    for (let i = 0; i < stations.length; i += stride) {
+      const station = stations[i];
+      const across = new THREE.Vector3()
+        .crossVectors(station.up, station.tangent).normalize();
+
+      for (const side of sides) {
+        // Alleys: the gaps between buildings are as much of the look as the
+        // buildings, so leave some plots empty.
+        if (Math.random() < gapChance) continue;
+
+        const plot = station.pos.clone()
+          .addScaledVector(across, side * setback)
+          .normalize().multiplyScalar(this.radius);
+
+        if (!this.clearOfSpawn(plot, SPAWN_CLEARANCE * 0.8)) continue;
+
+        const house = this.createHouse();
+        this.placeFacing(house, plot, station.pos);
+        this.decorations.add(house);
+      }
+    }
   }
 
   private fillGlobalDecorations(): void {
     // Scatter houses, trees, and props across the entire sphere
     // Dense content to wrap the entire sphere - no empty patches
     
-    const numGlobalHouses = 60; // Dense houses across the globe
     const numGlobalTrees = 70;
     const numGlobalProps = 80;
-    
-    // Random houses everywhere
-    for (let i = 0; i < numGlobalHouses; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const pos = new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta),
-        Math.cos(phi),
-        Math.sin(phi) * Math.sin(theta)
-      ).multiplyScalar(this.radius);
-      
-      // Check distance from biome centers to avoid overlap
-      let tooClose = false;
-      for (const biome of this.biomes) {
-        const dist = pos.clone().normalize().distanceTo(biome.center);
-        if (dist < biome.radius * 0.6) {
-          tooClose = true;
-          break;
-        }
-      }
-      if (tooClose) continue;
-      
-      const house = this.createJapaneseHouse();
-      this.placeOnSphere(house, pos);
-      this.decorations.add(house);
-    }
-    
+
+    // Roadside hamlets rather than 60 houses scattered at random bearings.
+    // Buildings only exist where a road gives them something to address.
+    this.createRoadsideHamlets();
+
     // Trees everywhere
     for (let i = 0; i < numGlobalTrees; i++) {
       const theta = Math.random() * Math.PI * 2;
@@ -379,6 +535,8 @@ export class Planet {
         Math.sin(phi) * Math.sin(theta)
       ).multiplyScalar(this.radius);
       
+      if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.7)) continue;
+
       const tree = this.createTree();
       this.placeOnSphere(tree, pos);
       this.decorations.add(tree);
@@ -396,33 +554,52 @@ export class Planet {
         Math.sin(phi) * Math.sin(theta)
       ).multiplyScalar(this.radius);
       
-      const propType = Math.floor(Math.random() * 5);
-      let prop: THREE.Group;
-      
-      switch (propType) {
-        case 0:
-          prop = this.createTelephonePole();
-          break;
-        case 1:
-          prop = this.createVendingMachine([0x2ecc71, 0x3498db, 0xe74c3c][Math.floor(Math.random() * 3)]);
-          break;
-        case 2:
-          prop = this.createBench();
-          break;
-        case 3:
-          prop = this.createTrafficCone();
-          break;
-        default:
-          prop = this.createMailbox();
-          break;
-      }
-      
+      if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.6)) continue;
+
+      // Village furniture only. Traffic cones, traffic mirrors and vending
+      // machines belonged to the Japanese-alley direction and read as litter
+      // in a French village.
+      const kitProp = ['Tree_Plane', 'Wall_Low', 'Tree_Plane', 'Well'][
+        Math.floor(Math.random() * 4)];
+
+      if (this.addPiece(kitProp, pos)) continue;
+
+      const prop = Math.random() < 0.5 ? this.createBench() : this.createMailbox();
       this.placeOnSphere(prop, pos);
       this.decorations.add(prop);
     }
     
     // Add retaining walls along roads
     this.createGlobalRetainingWalls();
+  }
+
+  /**
+   * Small clusters of frontage along the trunk roads between settlements, so
+   * the walk between biomes passes through inhabited places instead of an
+   * evenly dusted field of houses.
+   */
+  private createRoadsideHamlets(): void {
+    for (let i = 0; i < this.biomes.length; i++) {
+      for (let j = i + 1; j < this.biomes.length; j++) {
+        const from = this.biomes[i].center.clone().multiplyScalar(this.radius);
+        const to = this.biomes[j].center.clone().multiplyScalar(this.radius);
+
+        // Two hamlets per trunk road, at a third and two thirds along.
+        for (const t of [0.34, 0.66]) {
+          const mid = from.clone().lerp(to, t).normalize().multiplyScalar(this.radius);
+          const ahead = from.clone().lerp(to, t + 0.04)
+            .normalize().multiplyScalar(this.radius);
+
+          const span = this.lineStations(
+            mid.clone().lerp(ahead, -1.6).normalize().multiplyScalar(this.radius),
+            mid.clone().lerp(ahead, 2.6).normalize().multiplyScalar(this.radius),
+            3
+          );
+
+          this.layFrontage(span, { setback: 6.8, gapChance: 0.35 });
+        }
+      }
+    }
   }
 
   private createGlobalRetainingWalls(): void {
@@ -448,69 +625,108 @@ export class Planet {
     const biome = this.biomes.find(b => b.type === BiomeType.TOWN)!;
     const center = biome.center.clone().multiplyScalar(this.radius);
     
-    // Spaced houses along streets - not cramped rings
-    // Leave clear road corridors for open vistas
-    const houseAngles = [0.3, 0.8, 1.4, 2.0, 2.6, 3.2, 3.8, 4.4, 5.0, 5.6];
-    const houseDists = [8, 12, 16]; // Further apart, leaving central road clear
-    
-    for (const baseDist of houseDists) {
-      for (let i = 0; i < houseAngles.length; i += 2) { // Skip every other to leave gaps
-        const angle = houseAngles[i] + baseDist * 0.05;
-        const dist = baseDist + Math.random() * 3;
-        const offset = this.getOffsetOnSphere(center, angle, dist);
-        
-        const house = this.createJapaneseHouse();
-        this.placeOnSphere(house, offset, angle + Math.PI + (Math.random() - 0.5) * 0.2);
-        this.decorations.add(house);
-      }
+    // The town is a ring road with buildings addressing it from both sides,
+    // plus radial lanes running out of it. Everything faces a street.
+    const ringRadius = 11;
+    const ring = this.ringStations(center, ringRadius, 20);
+    this.layRoad(ring, 3.0);
+    this.layFrontage(ring, { setback: 7.4, gapChance: 0.24 });
+
+    // Radial lanes off the ring. Their outer frontage forms the town edge.
+    const laneCount = 4;
+    for (let i = 0; i < laneCount; i++) {
+      const angle = (i / laneCount) * Math.PI * 2 + 0.4;
+      const inner = this.getOffsetOnSphere(center, angle, ringRadius + 1);
+      const outer = this.getOffsetOnSphere(center, angle, ringRadius + 11);
+
+      const lane = this.lineStations(inner, outer, 5);
+      this.layRoad(lane, 2.4);
+      this.layFrontage(lane, { setback: 6.6, gapChance: 0.3, stride: 1 });
     }
+
+    // A short high street running past the start, so the opening shot looks
+    // down a corridor rather than across open ground.
+    const spawn = this.spawnPoint.clone();
+    const towardCenter = center.clone().sub(spawn).normalize();
+    const highStart = spawn.clone().addScaledVector(towardCenter, -7)
+      .normalize().multiplyScalar(this.radius);
+    const highEnd = spawn.clone().addScaledVector(towardCenter, 16)
+      .normalize().multiplyScalar(this.radius);
+
+    const highStreet = this.lineStations(highStart, highEnd, 7);
+    this.layRoad(highStreet, 3.0);
+    this.layFrontage(highStreet, { setback: 7.2, gapChance: 0.18 });
     
-    // Multiple vending machines
-    for (let i = 0; i < 5; i++) {
-      const vm = this.createVendingMachine([0x2ecc71, 0x3498db, 0xe74c3c][i % 3]);
-      const angle = 0.5 + i * 1.2;
-      this.placeOnSphere(vm, this.getOffsetOnSphere(center, angle, 3 + i * 2));
-      this.decorations.add(vm);
-    }
-    
+    // Street furniture. A French village has a post box, garden walls and
+    // plane trees — not vending machines, traffic mirrors and cones, which
+    // were props for the Japanese-alley direction this started as.
     const mailbox = this.createMailbox();
-    this.placeOnSphere(mailbox, this.getOffsetOnSphere(center, 1.5, 4));
+    this.placeOnSphere(mailbox, this.getOffsetOnSphere(center, 1.5, 5));
     this.decorations.add(mailbox);
-    
+
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2 + 0.3;
+      const spot = this.getOffsetOnSphere(center, angle, 7 + Math.random() * 2);
+      if (!this.clearOfSpawn(spot, SPAWN_CLEARANCE * 0.7)) continue;
+      this.addPiece('Tree_Plane', spot);
+    }
+
     for (let i = 0; i < 4; i++) {
-      const pole = this.createTelephonePole();
-      const angle = (i / 4) * Math.PI * 2 + 0.3;
-      this.placeOnSphere(pole, this.getOffsetOnSphere(center, angle, 6 + Math.random() * 2));
-      this.decorations.add(pole);
+      const angle = (i / 4) * Math.PI * 2 + 1.1;
+      const spot = this.getOffsetOnSphere(center, angle, 9);
+      this.addPiece('Wall_Low', spot, center);
     }
-    
-    const mirror = this.createTrafficMirror();
-    this.placeOnSphere(mirror, this.getOffsetOnSphere(center, 2.2, 5));
-    this.decorations.add(mirror);
-    
-    for (let i = 0; i < 3; i++) {
-      const cone = this.createTrafficCone();
-      this.placeOnSphere(cone, this.getOffsetOnSphere(center, 1.8 + i * 0.15, 4 + i * 0.5));
-      this.decorations.add(cone);
-    }
-    
-    const bin = this.createTrashBin();
-    this.placeOnSphere(bin, this.getOffsetOnSphere(center, 0.3, 3.5));
-    this.decorations.add(bin);
-    
-    const wall = this.createRetainingWall();
-    this.placeOnSphere(wall, this.getOffsetOnSphere(center, Math.PI, 7));
-    this.decorations.add(wall);
   }
 
-  private createJapaneseHouse(): THREE.Group {
+  /**
+   * A street-front building. Comes from the Blender kit when it has loaded,
+   * and falls back to the old primitive assembly so a missing GLB degrades
+   * to a playable world rather than an empty one.
+   *
+   * Roughly one plot in four is a shop, which is what puts French signage
+   * along the street without turning the village into a high street.
+   */
+  private createHouse(allowShop: boolean = true): THREE.Object3D {
+    if (this.kit && this.kit.isLoaded) {
+      const variant = this.houseVariant++;
+      const wantShop = allowShop && this.shopsPlaced < SHOP_SIGNS.length
+        && Math.random() < 0.28;
+
+      const built = wantShop
+        ? this.kit.shop(variant, SHOP_SIGNS[this.shopsPlaced++])
+        : this.kit.house(variant);
+
+      if (built) return built;
+    }
+    return this.createPrimitiveHouse();
+  }
+
+  /** A kit prop placed flat on the surface, facing a given point. */
+  private addPiece(
+    name: string,
+    position: THREE.Vector3,
+    faceToward?: THREE.Vector3,
+    variant: number = 0
+  ): THREE.Object3D | null {
+    if (!this.kit || !this.kit.isLoaded || !this.kit.has(name)) return null;
+    const piece = this.kit.instance(name, variant);
+    if (!piece) return null;
+
+    if (faceToward) {
+      this.placeFacing(piece, position, faceToward);
+    } else {
+      this.placeOnSphere(piece, position);
+    }
+    this.decorations.add(piece);
+    return piece;
+  }
+
+  private createPrimitiveHouse(): THREE.Group {
     const house = new THREE.Group();
     
     // Random house colors for variety
-    const wallColors = [0xd4cbb8, 0xe0d6c8, 0xc8c0b0, 0xdcd4c4, 0xf0e8d8];
-    const roofColors = [0x4a4a4a, 0x3a3a3a, 0x5a4a3a, 0x4a3a3a];
-    const wallColor = wallColors[Math.floor(Math.random() * wallColors.length)];
-    const roofColor = roofColors[Math.floor(Math.random() * roofColors.length)];
+    const wallColor = pick(BUILDING.walls);
+    const roofColor = pick(BUILDING.roofs);
     
     // Main body
     const bodyGeo = new THREE.BoxGeometry(3, 2.5, 2.5);
@@ -520,7 +736,6 @@ export class Planet {
     body.castShadow = true;
     body.receiveShadow = true;
     house.add(body);
-    house.add(OutlineMaterial.addOutlineToMesh(body, OUTLINE_OPTS));
     
     // Pitched roof (proper triangle/gable)
     const roofShape = new THREE.Shape();
@@ -536,11 +751,10 @@ export class Planet {
     roof.position.set(0, 2.5, -1.6);
     roof.castShadow = true;
     house.add(roof);
-    house.add(OutlineMaterial.addOutlineToMesh(roof, OUTLINE_OPTS));
     
     // Door
     const doorGeo = new THREE.BoxGeometry(0.8, 1.6, 0.1);
-    const doorMat = ToonMaterial.create({ color: 0x6b5344 });
+    const doorMat = ToonMaterial.create({ color: BUILDING.door });
     const door = new THREE.Mesh(doorGeo, doorMat);
     door.position.set(0, 0.8, 1.3);
     house.add(door);
@@ -548,13 +762,13 @@ export class Planet {
     // Windows with frames
     for (let i = 0; i < 2; i++) {
       const windowGeo = new THREE.BoxGeometry(0.6, 0.6, 0.1);
-      const windowMat = ToonMaterial.create({ color: 0x87CEEB });
+      const windowMat = ToonMaterial.create({ color: BUILDING.window });
       const windowMesh = new THREE.Mesh(windowGeo, windowMat);
       windowMesh.position.set(i === 0 ? -0.9 : 0.9, 1.8, 1.3);
       house.add(windowMesh);
       
       const frameGeo = new THREE.BoxGeometry(0.7, 0.7, 0.05);
-      const frameMat = ToonMaterial.create({ color: 0x3a3a3a });
+      const frameMat = ToonMaterial.create({ color: BUILDING.windowFrame });
       const frame = new THREE.Mesh(frameGeo, frameMat);
       frame.position.copy(windowMesh.position);
       frame.position.z += 0.03;
@@ -563,58 +777,25 @@ export class Planet {
     
     // AC unit
     const acGeo = new THREE.BoxGeometry(0.8, 0.4, 0.3);
-    const acMat = ToonMaterial.create({ color: 0xe8e8e8 });
+    const acMat = ToonMaterial.create({ color: BUILDING.trim });
     const ac = new THREE.Mesh(acGeo, acMat);
     ac.position.set(1.2, 2.0, -1.3);
     house.add(ac);
-    house.add(OutlineMaterial.addOutlineToMesh(ac, { thickness: 0.02, wobble: 0.004 }));
     
     return house;
-  }
-
-  private createVendingMachine(color: number = 0x2ecc71): THREE.Group {
-    const vm = new THREE.Group();
-    
-    const bodyGeo = new THREE.BoxGeometry(0.9, 1.8, 0.7);
-    const bodyMat = ToonMaterial.create({ color });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.9;
-    body.castShadow = true;
-    vm.add(body);
-    
-    const screenGeo = new THREE.BoxGeometry(0.7, 1.0, 0.05);
-    const screenMat = ToonMaterial.create({ color: 0x2c3e50 });
-    const screen = new THREE.Mesh(screenGeo, screenMat);
-    screen.position.set(0, 1.1, 0.38);
-    vm.add(screen);
-    
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 3; col++) {
-        const canGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.15, 8);
-        const canMat = ToonMaterial.create({ 
-          color: [0xe74c3c, 0xf39c12, 0x3498db][Math.floor(Math.random() * 3)]
-        });
-        const can = new THREE.Mesh(canGeo, canMat);
-        can.position.set(-0.2 + col * 0.2, 0.8 + row * 0.3, 0.35);
-        can.rotation.x = Math.PI / 2;
-        vm.add(can);
-      }
-    }
-    
-    return vm;
   }
 
   private createMailbox(): THREE.Group {
     const mb = new THREE.Group();
     
     const postGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.2, 8);
-    const postMat = ToonMaterial.create({ color: 0xe74c3c });
+    const postMat = ToonMaterial.create({ color: ACCENT.ember });
     const post = new THREE.Mesh(postGeo, postMat);
     post.position.y = 0.6;
     mb.add(post);
     
     const boxGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.5, 16);
-    const boxMat = ToonMaterial.create({ color: 0xe74c3c });
+    const boxMat = ToonMaterial.create({ color: ACCENT.ember });
     const box = new THREE.Mesh(boxGeo, boxMat);
     box.position.y = 1.35;
     box.castShadow = true;
@@ -626,7 +807,7 @@ export class Planet {
     mb.add(top);
     
     const slotGeo = new THREE.BoxGeometry(0.2, 0.03, 0.1);
-    const slotMat = ToonMaterial.create({ color: 0x2c3e50 });
+    const slotMat = ToonMaterial.create({ color: MATERIAL.metalDark });
     const slot = new THREE.Mesh(slotGeo, slotMat);
     slot.position.set(0, 1.45, 0.2);
     mb.add(slot);
@@ -634,114 +815,12 @@ export class Planet {
     return mb;
   }
 
-  private createTelephonePole(): THREE.Group {
-    const pole = new THREE.Group();
-    
-    // Shorter pole to match house scale (~3 units, similar to house height)
-    // On a small curved planet, tall poles appear to diverge/lean
-    const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 3, 8);
-    const poleMat = ToonMaterial.create({ color: 0x6b5344 });
-    const poleM = new THREE.Mesh(poleGeo, poleMat);
-    poleM.position.y = 1.5; // Base at y=0, top at y=3
-    poleM.castShadow = true;
-    pole.add(poleM);
-    
-    // Cross arm near top
-    const armGeo = new THREE.BoxGeometry(1.0, 0.06, 0.06);
-    const arm = new THREE.Mesh(armGeo, poleMat);
-    arm.position.y = 2.8;
-    pole.add(arm);
-    
-    // Shorter wires
-    for (let i = 0; i < 2; i++) {
-      const wireGeo = new THREE.CylinderGeometry(0.01, 0.01, 1.5, 4);
-      const wireMat = ToonMaterial.create({ color: 0x2c2c2c });
-      const wire = new THREE.Mesh(wireGeo, wireMat);
-      wire.position.set(i === 0 ? -0.35 : 0.35, 2.8, 0);
-      wire.rotation.z = Math.PI / 2;
-      pole.add(wire);
-    }
-    
-    return pole;
-  }
-
-  private createTrafficMirror(): THREE.Group {
-    const mirror = new THREE.Group();
-    
-    const poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.5, 8);
-    const poleMat = ToonMaterial.create({ color: 0xf39c12 });
-    const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.y = 1.25;
-    mirror.add(pole);
-    
-    const mirrorGeo = new THREE.SphereGeometry(0.35, 16, 16, 0, Math.PI);
-    const mirrorMat = ToonMaterial.create({ color: 0xbdc3c7 });
-    const mirrorM = new THREE.Mesh(mirrorGeo, mirrorMat);
-    mirrorM.position.y = 2.3;
-    mirrorM.rotation.y = Math.PI;
-    mirrorM.castShadow = true;
-    mirror.add(mirrorM);
-    
-    const frameGeo = new THREE.TorusGeometry(0.35, 0.04, 8, 16);
-    const frameMat = ToonMaterial.create({ color: 0xf39c12 });
-    const frame = new THREE.Mesh(frameGeo, frameMat);
-    frame.position.y = 2.3;
-    frame.rotation.x = Math.PI / 2;
-    mirror.add(frame);
-    
-    return mirror;
-  }
-
-  private createTrafficCone(): THREE.Group {
-    const cone = new THREE.Group();
-    
-    const coneGeo = new THREE.ConeGeometry(0.15, 0.5, 8);
-    const coneMat = ToonMaterial.create({ color: 0xf39c12 });
-    const coneM = new THREE.Mesh(coneGeo, coneMat);
-    coneM.position.y = 0.25;
-    coneM.castShadow = true;
-    cone.add(coneM);
-    
-    const stripeGeo = new THREE.CylinderGeometry(0.08, 0.12, 0.1, 8);
-    const stripeMat = ToonMaterial.create({ color: 0xffffff });
-    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-    stripe.position.y = 0.25;
-    cone.add(stripe);
-    
-    const baseGeo = new THREE.BoxGeometry(0.35, 0.05, 0.35);
-    const baseMat = ToonMaterial.create({ color: 0xf39c12 });
-    const base = new THREE.Mesh(baseGeo, baseMat);
-    base.position.y = 0.025;
-    cone.add(base);
-    
-    return cone;
-  }
-
-  private createTrashBin(): THREE.Group {
-    const bin = new THREE.Group();
-    
-    const binGeo = new THREE.CylinderGeometry(0.25, 0.2, 0.6, 8);
-    const binMat = ToonMaterial.create({ color: 0x3498db });
-    const binM = new THREE.Mesh(binGeo, binMat);
-    binM.position.y = 0.3;
-    binM.castShadow = true;
-    bin.add(binM);
-    
-    const lidGeo = new THREE.CylinderGeometry(0.27, 0.27, 0.08, 8);
-    const lidMat = ToonMaterial.create({ color: 0x2980b9 });
-    const lid = new THREE.Mesh(lidGeo, lidMat);
-    lid.position.y = 0.64;
-    bin.add(lid);
-    
-    return bin;
-  }
-
   private createRetainingWall(): THREE.Group {
     const wall = new THREE.Group();
     
     for (let i = 0; i < 5; i++) {
       const blockGeo = new THREE.BoxGeometry(2, 1.5, 0.8);
-      const blockMat = ToonMaterial.create({ color: 0x9a9a8a });
+      const blockMat = ToonMaterial.create({ color: MATERIAL.stone });
       const block = new THREE.Mesh(blockGeo, blockMat);
       block.position.set(i * 2 - 4, 0.75, 0);
       block.castShadow = true;
@@ -782,7 +861,7 @@ export class Planet {
     const waterGroup = new THREE.Group();
     
     const waterMat = ToonMaterial.create({ 
-      color: 0x4a90a4,
+      color: GROUND.water,
       transparent: true,
       opacity: 0.85
     });
@@ -837,7 +916,7 @@ export class Planet {
     const pier = new THREE.Group();
     
     const deckGeo = new THREE.BoxGeometry(2, 0.2, 8);
-    const deckMat = ToonMaterial.create({ color: 0x8b7355 });
+    const deckMat = ToonMaterial.create({ color: MATERIAL.wood });
     const deck = new THREE.Mesh(deckGeo, deckMat);
     deck.position.y = 0.8;
     deck.castShadow = true;
@@ -846,7 +925,7 @@ export class Planet {
     
     for (let i = 0; i < 6; i++) {
       const postGeo = new THREE.CylinderGeometry(0.1, 0.12, 1.5, 6);
-      const postMat = ToonMaterial.create({ color: 0x6b5344 });
+      const postMat = ToonMaterial.create({ color: MATERIAL.woodDark });
       const post = new THREE.Mesh(postGeo, postMat);
       post.position.set(
         (i % 2 === 0 ? -0.7 : 0.7),
@@ -864,14 +943,14 @@ export class Planet {
     const boat = new THREE.Group();
     
     const hullGeo = new THREE.BoxGeometry(1.2, 0.6, 3);
-    const hullMat = ToonMaterial.create({ color: 0x2980b9 });
+    const hullMat = ToonMaterial.create({ color: ACCENT.teal });
     const hull = new THREE.Mesh(hullGeo, hullMat);
     hull.position.y = 0.3;
     hull.castShadow = true;
     boat.add(hull);
     
     const cabinGeo = new THREE.BoxGeometry(0.8, 0.8, 1);
-    const cabinMat = ToonMaterial.create({ color: 0xecf0f1 });
+    const cabinMat = ToonMaterial.create({ color: BUILDING.trim });
     const cabin = new THREE.Mesh(cabinGeo, cabinMat);
     cabin.position.set(0, 0.9, -0.5);
     cabin.castShadow = true;
@@ -884,14 +963,14 @@ export class Planet {
     const umbrella = new THREE.Group();
     
     const poleGeo = new THREE.CylinderGeometry(0.03, 0.03, 2, 6);
-    const poleMat = ToonMaterial.create({ color: 0x8b7355 });
+    const poleMat = ToonMaterial.create({ color: MATERIAL.wood });
     const pole = new THREE.Mesh(poleGeo, poleMat);
     pole.position.y = 1;
     umbrella.add(pole);
     
     const topGeo = new THREE.ConeGeometry(1, 0.6, 8);
     const topMat = ToonMaterial.create({ 
-      color: [0xe74c3c, 0xf39c12, 0x3498db][Math.floor(Math.random() * 3)]
+      color: [ACCENT.ember, ACCENT.lemon, ACCENT.teal][Math.floor(Math.random() * 3)]
     });
     const top = new THREE.Mesh(topGeo, topMat);
     top.position.y = 2.1;
@@ -906,7 +985,7 @@ export class Planet {
     const lh = new THREE.Group();
     
     const baseGeo = new THREE.CylinderGeometry(1, 1.3, 4, 8);
-    const baseMat = ToonMaterial.create({ color: 0xecf0f1 });
+    const baseMat = ToonMaterial.create({ color: BUILDING.trim });
     const base = new THREE.Mesh(baseGeo, baseMat);
     base.position.y = 2;
     base.castShadow = true;
@@ -914,20 +993,20 @@ export class Planet {
     
     for (let i = 0; i < 3; i++) {
       const stripeGeo = new THREE.CylinderGeometry(1.05 - i * 0.1, 1.15 - i * 0.1, 0.5, 8);
-      const stripeMat = ToonMaterial.create({ color: 0xe74c3c });
+      const stripeMat = ToonMaterial.create({ color: ACCENT.ember });
       const stripe = new THREE.Mesh(stripeGeo, stripeMat);
       stripe.position.y = 0.8 + i * 1.3;
       lh.add(stripe);
     }
     
     const lampGeo = new THREE.CylinderGeometry(0.6, 0.8, 1, 8);
-    const lampMat = ToonMaterial.create({ color: 0x2c3e50 });
+    const lampMat = ToonMaterial.create({ color: MATERIAL.metalDark });
     const lamp = new THREE.Mesh(lampGeo, lampMat);
     lamp.position.y = 4.5;
     lh.add(lamp);
     
     const lightGeo = new THREE.SphereGeometry(0.4, 8, 8);
-    const lightMat = ToonMaterial.create({ color: 0xffeaa7, emissive: 0xf39c12, emissiveIntensity: 0.5 });
+    const lightMat = ToonMaterial.create({ color: ACCENT.lamp, emissive: ACCENT.lemon, emissiveIntensity: 0.5 });
     const light = new THREE.Mesh(lightGeo, lightMat);
     light.position.y = 4.5;
     lh.add(light);
@@ -967,14 +1046,14 @@ export class Planet {
     const tree = new THREE.Group();
     
     const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 2, 8);
-    const trunkMat = ToonMaterial.create({ color: 0x6b5344 });
+    const trunkMat = ToonMaterial.create({ color: MATERIAL.trunk });
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.y = 1;
     trunk.castShadow = true;
     tree.add(trunk);
     
     const foliageGeo = new THREE.IcosahedronGeometry(1.3, 1);
-    const foliageMat = ToonMaterial.create({ color: 0x4a8a5b });
+    const foliageMat = ToonMaterial.create({ color: MATERIAL.foliage });
     const foliage = new THREE.Mesh(foliageGeo, foliageMat);
     foliage.position.y = 2.8;
     foliage.castShadow = true;
@@ -987,7 +1066,7 @@ export class Planet {
     const lookout = new THREE.Group();
     
     const platformGeo = new THREE.CylinderGeometry(1.8, 1.8, 0.3, 8);
-    const platformMat = ToonMaterial.create({ color: 0x8b7355 });
+    const platformMat = ToonMaterial.create({ color: MATERIAL.wood });
     const platform = new THREE.Mesh(platformGeo, platformMat);
     platform.position.y = 2.5;
     platform.castShadow = true;
@@ -997,7 +1076,7 @@ export class Planet {
     for (let i = 0; i < 4; i++) {
       const angle = (i / 4) * Math.PI * 2;
       const postGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.5, 6);
-      const postMat = ToonMaterial.create({ color: 0x6b5344 });
+      const postMat = ToonMaterial.create({ color: MATERIAL.woodDark });
       const post = new THREE.Mesh(postGeo, postMat);
       post.position.set(
         Math.cos(angle) * 1.4,
@@ -1009,7 +1088,7 @@ export class Planet {
     }
     
     const railGeo = new THREE.TorusGeometry(1.5, 0.06, 8, 16);
-    const railMat = ToonMaterial.create({ color: 0x8b7355 });
+    const railMat = ToonMaterial.create({ color: MATERIAL.wood });
     const rail = new THREE.Mesh(railGeo, railMat);
     rail.position.y = 2.9;
     rail.rotation.x = Math.PI / 2;
@@ -1022,7 +1101,7 @@ export class Planet {
     const bench = new THREE.Group();
     
     const seatGeo = new THREE.BoxGeometry(1.5, 0.1, 0.5);
-    const seatMat = ToonMaterial.create({ color: 0x8b7355 });
+    const seatMat = ToonMaterial.create({ color: MATERIAL.wood });
     const seat = new THREE.Mesh(seatGeo, seatMat);
     seat.position.y = 0.45;
     seat.castShadow = true;
@@ -1036,7 +1115,7 @@ export class Planet {
     
     for (let i = 0; i < 2; i++) {
       const legGeo = new THREE.BoxGeometry(0.1, 0.4, 0.4);
-      const legMat = ToonMaterial.create({ color: 0x4a4a4a });
+      const legMat = ToonMaterial.create({ color: MATERIAL.metalDark });
       const leg = new THREE.Mesh(legGeo, legMat);
       leg.position.set(i === 0 ? -0.6 : 0.6, 0.2, 0);
       bench.add(leg);
@@ -1072,7 +1151,7 @@ export class Planet {
   private createToriiGate(): THREE.Group {
     const gate = new THREE.Group();
     
-    const postMat = ToonMaterial.create({ color: 0xc0392b });
+    const postMat = ToonMaterial.create({ color: ACCENT.emberDeep });
     
     for (let i = 0; i < 2; i++) {
       const postGeo = new THREE.CylinderGeometry(0.2, 0.25, 5, 8);
@@ -1100,7 +1179,7 @@ export class Planet {
     const shrine = new THREE.Group();
     
     const baseGeo = new THREE.BoxGeometry(5, 0.5, 4);
-    const baseMat = ToonMaterial.create({ color: 0x8a8a7a });
+    const baseMat = ToonMaterial.create({ color: MATERIAL.stone });
     const base = new THREE.Mesh(baseGeo, baseMat);
     base.position.y = 0.25;
     base.castShadow = true;
@@ -1108,14 +1187,14 @@ export class Planet {
     shrine.add(base);
     
     const bodyGeo = new THREE.BoxGeometry(4, 3, 3);
-    const bodyMat = ToonMaterial.create({ color: 0xc0392b });
+    const bodyMat = ToonMaterial.create({ color: ACCENT.emberDeep });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.y = 2;
     body.castShadow = true;
     shrine.add(body);
     
     const roofGeo = new THREE.BoxGeometry(5.5, 0.5, 4);
-    const roofMat = ToonMaterial.create({ color: 0x2c3e50 });
+    const roofMat = ToonMaterial.create({ color: MATERIAL.metalDark });
     const roof = new THREE.Mesh(roofGeo, roofMat);
     roof.position.y = 3.75;
     roof.castShadow = true;
@@ -1133,7 +1212,7 @@ export class Planet {
     const lantern = new THREE.Group();
     
     const baseGeo = new THREE.CylinderGeometry(0.25, 0.3, 0.3, 6);
-    const stoneMat = ToonMaterial.create({ color: 0x7a7a6a });
+    const stoneMat = ToonMaterial.create({ color: MATERIAL.stoneDark });
     const base = new THREE.Mesh(baseGeo, stoneMat);
     base.position.y = 0.15;
     base.castShadow = true;
@@ -1145,7 +1224,7 @@ export class Planet {
     lantern.add(stem);
     
     const houseGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const houseMat = ToonMaterial.create({ color: 0xffeaa7, emissive: 0xf39c12, emissiveIntensity: 0.3 });
+    const houseMat = ToonMaterial.create({ color: ACCENT.lamp, emissive: ACCENT.lemon, emissiveIntensity: 0.3 });
     const house = new THREE.Mesh(houseGeo, houseMat);
     house.position.y = 1.55;
     lantern.add(house);
@@ -1164,7 +1243,7 @@ export class Planet {
     
     for (let i = 0; i < 5; i++) {
       const stepGeo = new THREE.BoxGeometry(2, 0.2, 0.5);
-      const stepMat = ToonMaterial.create({ color: 0x7a7a6a });
+      const stepMat = ToonMaterial.create({ color: MATERIAL.stoneDark });
       const step = new THREE.Mesh(stepGeo, stepMat);
       step.position.set(0, i * 0.25, -i * 0.5);
       step.castShadow = true;
@@ -1196,7 +1275,7 @@ export class Planet {
   private createCloud(): THREE.Group {
     const cloud = new THREE.Group();
     
-    const cloudMat = ToonMaterial.create({ color: 0x9fd5d1 });
+    const cloudMat = ToonMaterial.create({ color: SKY.cloud });
     
     for (let i = 0; i < 5; i++) {
       const blobGeo = new THREE.SphereGeometry(1 + Math.random() * 0.5, 8, 8);
@@ -1267,21 +1346,43 @@ export class Planet {
     object.quaternion.setFromRotationMatrix(matrix);
   }
 
-  public getSpawnPosition(): THREE.Vector3 {
+  private computeSpawnPoint(): THREE.Vector3 {
     const townBiome = this.biomes.find(b => b.type === BiomeType.TOWN)!;
-    // Spawn offset from town center on a road, not in the middle of buildings
     const townCenter = townBiome.center.clone();
-    
-    // Get a tangent direction to offset spawn point
+
     let tangent = new THREE.Vector3(0, 1, 0);
     if (Math.abs(townCenter.dot(tangent)) > 0.9) {
       tangent.set(1, 0, 0);
     }
     const offset = new THREE.Vector3().crossVectors(townCenter, tangent).normalize();
-    
-    // Spawn slightly offset from center on the road
+
     const spawnDir = townCenter.clone().add(offset.multiplyScalar(0.15)).normalize();
-    return spawnDir.multiplyScalar(this.radius + 0.5);
+    return spawnDir.multiplyScalar(this.radius);
+  }
+
+  public getSpawnPosition(): THREE.Vector3 {
+    return this.spawnPoint.clone().normalize().multiplyScalar(this.radius + 0.5);
+  }
+
+  /**
+   * Surface distance from the spawn, in world units along the sphere.
+   */
+  private arcFromSpawn(pos: THREE.Vector3): number {
+    const a = this.spawnPoint.clone().normalize();
+    const b = pos.clone().normalize();
+    return this.radius * Math.acos(THREE.MathUtils.clamp(a.dot(b), -1, 1));
+  }
+
+  /**
+   * Keep a clear plaza around the start.
+   *
+   * The camera trails the player by 4.5 units, so a building anywhere inside
+   * that radius ends up between the camera and the courier — filling the frame
+   * with a roof. Placement was uniform random and only avoided the biome
+   * centres, so the opening shot of the game was routinely a wall.
+   */
+  private clearOfSpawn(pos: THREE.Vector3, margin: number = SPAWN_CLEARANCE): boolean {
+    return this.arcFromSpawn(pos) > margin;
   }
 
   public getBiomePosition(biome: BiomeType): THREE.Vector3 {
@@ -1291,6 +1392,16 @@ export class Planet {
 
   public getSurfacePosition(direction: THREE.Vector3): THREE.Vector3 {
     return direction.clone().normalize().multiplyScalar(this.radius);
+  }
+
+  /** True if the mesh belongs to the cloud layer. */
+  public isCloudMesh(mesh: THREE.Object3D): boolean {
+    let node: THREE.Object3D | null = mesh;
+    while (node) {
+      if (node === this.clouds) return true;
+      node = node.parent;
+    }
+    return false;
   }
 
   public update(elapsed: number): void {
