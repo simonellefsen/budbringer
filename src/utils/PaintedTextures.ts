@@ -22,6 +22,7 @@ export type PaintedSlot = keyof typeof URLS;
 export class PaintedTextures {
   private static maps = new Map<string, THREE.Texture>();
   private static loaded = false;
+  private static waterTime = { value: 0 };
 
   public static async load(): Promise<void> {
     if (this.loaded) return;
@@ -106,6 +107,47 @@ export class PaintedTextures {
         );
     };
     material.customProgramCacheKey = () => 'grass-vary-v1';
+    material.needsUpdate = true;
+  }
+
+  public static tickWater(elapsed: number): void {
+    this.waterTime.value = elapsed;
+  }
+
+  /**
+   * A slow drift on the painted water tile, plus a soft travelling glint.
+   *
+   * Vertex ripples would chew the ink lines; sliding the gouache and mixing
+   * a second, offset sample is enough to stop the river reading as a decal.
+   */
+  public static shimmerWater(material: THREE.MeshToonMaterial): void {
+    if (!material.map) return;
+    const time = this.waterTime;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uWaterTime = time;
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          '#include <common>\nuniform float uWaterTime;'
+        )
+        .replace(
+          '#include <map_fragment>',
+          `
+#ifdef USE_MAP
+	vec2 flow = vec2(uWaterTime * 0.016, uWaterTime * -0.011);
+	vec4 strokeA = texture2D(map, vMapUv + flow);
+	vec4 strokeB = texture2D(map, vMapUv * 1.12 + vec2(-flow.y, flow.x) + 0.33);
+	float mixW = 0.5 + 0.5 * sin(uWaterTime * 0.27 + vMapUv.x * 3.4);
+	vec4 sampledDiffuseColor = mix(strokeA, strokeB, mixW * 0.28);
+	float glint = smoothstep(0.78, 0.97,
+		sin(vMapUv.x * 6.5 + uWaterTime * 0.42) * sin(vMapUv.y * 3.2 - uWaterTime * 0.25));
+	sampledDiffuseColor.rgb += vec3(0.06, 0.08, 0.075) * glint;
+	diffuseColor *= sampledDiffuseColor;
+#endif
+`
+        );
+    };
+    material.customProgramCacheKey = () => 'water-shimmer-v1';
     material.needsUpdate = true;
   }
 }

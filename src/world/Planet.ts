@@ -687,12 +687,7 @@ export class Planet {
     geometry.computeVertexNormals();
 
     this.applyPlanarUVs(geometry, 0.12);
-    const water = new THREE.Mesh(geometry, ToonMaterial.create({
-      color: GROUND.water,
-      transparent: true,
-      opacity: 0.88,
-      map: PaintedTextures.get('water', 3)
-    }));
+    const water = new THREE.Mesh(geometry, this.waterMaterial(0.88));
     water.receiveShadow = true;
     this.decorations.add(water);
 
@@ -751,12 +746,7 @@ export class Planet {
     geometry.computeVertexNormals();
 
     this.applyPlanarUVs(geometry, 0.1);
-    const lake = new THREE.Mesh(geometry, ToonMaterial.create({
-      color: GROUND.water,
-      transparent: true,
-      opacity: 0.9,
-      map: PaintedTextures.get('water', 3)
-    }));
+    const lake = new THREE.Mesh(geometry, this.waterMaterial(0.9));
     lake.receiveShadow = true;
     this.decorations.add(lake);
 
@@ -1658,11 +1648,7 @@ export class Planet {
   private createWater(center: THREE.Vector3): void {
     const waterGroup = new THREE.Group();
     
-    const waterMat = ToonMaterial.create({ 
-      color: GROUND.water,
-      transparent: true,
-      opacity: 0.85
-    });
+    const waterMat = this.waterMaterial(0.85);
     
     for (let ring = 0; ring < 3; ring++) {
       const innerRadius = 6 + ring * 3;
@@ -2303,8 +2289,22 @@ export class Planet {
     return false;
   }
 
+  /** Painted water that drifts, used by the river, the lake and the seaside. */
+  private waterMaterial(opacity: number): THREE.MeshToonMaterial {
+    const material = ToonMaterial.create({
+      color: GROUND.water,
+      transparent: true,
+      opacity,
+      map: PaintedTextures.get('water', 3),
+      unique: true
+    });
+    PaintedTextures.shimmerWater(material);
+    return material;
+  }
+
   public update(elapsed: number): void {
     this.windTime = elapsed;
+    PaintedTextures.tickWater(elapsed);
 
     for (const mill of this.windmills) {
       mill.sails.rotation.z = elapsed * mill.speed;
