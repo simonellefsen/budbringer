@@ -31,10 +31,12 @@ export class NPCManager {
     this.createHermitHazel();
     this.createKeeperKai();
     this.createBakerBrie();
+    this.createShepherdSylvie();
   }
 
   private createPostmasterMaple(): void {
-    const position = this.getPositionInBiome(BiomeType.TOWN, 0, 5);
+    const position = this.positionAt('post',
+      () => this.getPositionInBiome(BiomeType.TOWN, 0, 5));
     const built = this.buildVillager('Postmaster Maple', {
       bodyColor: NPC_COLOR.maple,
       hatColor: MATERIAL.metalDark,
@@ -63,7 +65,8 @@ export class NPCManager {
   }
 
   private createFisherFinn(): void {
-    const position = this.getPositionInBiome(BiomeType.SEASIDE, 0.5, 6);
+    const position = this.positionAt('riverbank',
+      () => this.getPositionInBiome(BiomeType.SEASIDE, 0.5, 6));
     const built = this.buildVillager('Fisher Finn', {
       bodyColor: NPC_COLOR.finn,
       hatColor: MATERIAL.stone,
@@ -98,7 +101,8 @@ export class NPCManager {
     const hillsBiome = this.game.planet.getBiomePosition(BiomeType.HILLSIDE);
     const beachBiome = this.game.planet.getBiomePosition(BiomeType.SEASIDE);
     const midpoint = hillsBiome.clone().add(beachBiome).multiplyScalar(0.5);
-    const position = midpoint.normalize().multiplyScalar(this.game.planetRadius);
+    const position = this.positionAt('outskirts',
+      () => midpoint.normalize().multiplyScalar(this.game.planetRadius));
     
     const built = this.buildVillager('Hermit Hazel', {
       bodyColor: NPC_COLOR.hazel,
@@ -128,7 +132,8 @@ export class NPCManager {
   }
 
   private createKeeperKai(): void {
-    const position = this.getPositionInBiome(BiomeType.SHRINE, Math.PI, 4);
+    const position = this.positionAt('church',
+      () => this.getPositionInBiome(BiomeType.SHRINE, Math.PI, 4));
     const built = this.buildVillager('Keeper Kai', {
       bodyColor: NPC_COLOR.kai,
       hatColor: ACCENT.lamp,
@@ -157,7 +162,8 @@ export class NPCManager {
   }
 
   private createBakerBrie(): void {
-    const position = this.getPositionInBiome(BiomeType.TOWN, Math.PI * 0.7, 6);
+    const position = this.positionAt('bakery',
+      () => this.getPositionInBiome(BiomeType.TOWN, Math.PI * 0.7, 6));
     const built = this.buildVillager('Baker Brie', {
       bodyColor: NPC_COLOR.brie,
       hatColor: ACCENT.lamp,
@@ -222,6 +228,37 @@ export class NPCManager {
     }
 
     return { mesh: this.createNPCMesh(options), figure: null };
+  }
+
+  private createShepherdSylvie(): void {
+    const position = this.positionAt('farm',
+      () => this.getPositionInBiome(BiomeType.HILLSIDE, 1.1, 12));
+
+    const built = this.buildVillager('Shepherd Sylvie', {
+      bodyColor: 0x7c6a4e,
+      hatColor: 0x9a8763,
+      hatStyle: 'wide',
+      hasApron: false,
+      hasBag: true
+    });
+    const mesh = built.mesh;
+
+    this.placeOnSphere(mesh, position);
+    this.game.scene.add(mesh);
+
+    this.npcs.push({
+      name: 'Shepherd Sylvie',
+      position,
+      mesh,
+      figure: built.figure,
+      idleAnimation: () => {},
+      greetings: [
+        "Mind the goats, they'll eat a letter if you let them.",
+        "Twenty-two sheep this morning. Twenty-one now. It's always the same one.",
+        "Come far? The walk up here sorts out who really wants to visit."
+      ],
+      biome: BiomeType.HILLSIDE
+    });
   }
 
   private createNPCMesh(options: {
@@ -338,6 +375,20 @@ export class NPCManager {
     return rod;
   }
 
+  /**
+   * Where a villager stands.
+   *
+   * Positions used to be fixed bearings and distances from a biome centre,
+   * computed with no knowledge of what the world generator had actually built
+   * there. Once the church, square and farm went in, that put the baker inside
+   * the nave and the fisher inside a tree. Each villager now takes a named
+   * anchor the generator registered next to the building they belong to.
+   */
+  private positionAt(anchor: string, fallback: () => THREE.Vector3): THREE.Vector3 {
+    const at = this.game.planet.anchors.get(anchor);
+    return at ? at.clone() : fallback();
+  }
+
   private getPositionInBiome(biome: BiomeType, angle: number, distance: number): THREE.Vector3 {
     const biomeCenter = this.game.planet.getBiomePosition(biome);
     const up = biomeCenter.clone().normalize();
@@ -358,13 +409,31 @@ export class NPCManager {
     return newPos.normalize().multiplyScalar(this.game.planetRadius);
   }
 
+  /**
+   * Stand a villager on the surface, facing the middle of the village.
+   *
+   * setFromUnitVectors alone only aligns the up axis; the yaw it leaves behind
+   * is whatever the shortest arc happens to give, so villagers ended up facing
+   * walls at arbitrary angles. The modelled figures front on +Z, so build the
+   * basis explicitly and point that at the village.
+   */
   private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3): void {
     const up = position.clone().normalize();
     object.position.copy(position);
-    
-    const defaultUp = new THREE.Vector3(0, 1, 0);
-    const quaternion = new THREE.Quaternion().setFromUnitVectors(defaultUp, up);
-    object.quaternion.copy(quaternion);
+
+    const lookAt = this.game.planet.getBiomePosition(BiomeType.TOWN);
+    const forward = lookAt.clone().sub(position);
+    forward.sub(up.clone().multiplyScalar(forward.dot(up)));
+
+    if (forward.lengthSq() < 1e-8) {
+      forward.set(0, 1, 0).sub(up.clone().multiplyScalar(up.y));
+      if (forward.lengthSq() < 1e-8) forward.set(1, 0, 0);
+    }
+    forward.normalize();
+
+    const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+    const matrix = new THREE.Matrix4().makeBasis(right, up, forward);
+    object.quaternion.setFromRotationMatrix(matrix);
   }
 
   /**

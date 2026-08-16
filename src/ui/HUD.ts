@@ -195,6 +195,34 @@ export class HUD {
           pointer-events: auto;
         }
         
+        #audio-toggle {
+          position: absolute;
+          top: 20px;
+          right: 150px;
+          width: 46px;
+          height: 46px;
+          background: #fff;
+          border: 3px solid #1a1a1a;
+          border-radius: 8px;
+          cursor: pointer;
+          pointer-events: auto;
+          box-shadow: 3px 3px 0 #1a1a1a;
+          font-size: 1.2rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+        }
+
+        #audio-toggle:hover {
+          background: #f4d03f;
+        }
+
+        #audio-toggle.muted {
+          background: #e4ded0;
+          color: #8a8378;
+        }
+
         .emote-btn {
           width: 40px;
           height: 40px;
@@ -217,6 +245,9 @@ export class HUD {
         <div id="compass-arrow"></div>
       </div>
       
+      <button id="audio-toggle" title="Sound on/off" aria-label="Sound on/off"
+              aria-pressed="false">🔊</button>
+
       <button id="checklist-toggle">📋 Checklist</button>
       
       <div id="checklist-panel">
@@ -254,6 +285,22 @@ export class HUD {
       e.stopPropagation();
     });
     
+    // Sound on/off. AudioManager.toggleMute already handles stopping and
+    // restarting the music loop; this only reflects the state it returns.
+    const audioToggle = document.getElementById('audio-toggle')!;
+    audioToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const muted = this.game.audioManager.toggleMute();
+      audioToggle.textContent = muted ? '🔇' : '🔊';
+      audioToggle.classList.toggle('muted', muted);
+      audioToggle.setAttribute('aria-pressed', String(muted));
+    });
+    audioToggle.addEventListener('mousedown', (e) => {
+      // The canvas grabs the pointer for look control, so keep this off it.
+      e.stopPropagation();
+    });
+
     document.querySelectorAll('.emote-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();

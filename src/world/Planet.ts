@@ -46,6 +46,10 @@ export class Planet {
   private houseVariant = 0;
   private shopsPlaced = 0;
   private riverAxis!: THREE.Vector3;
+  /** Ground already taken by something solid, so scatter can avoid it. */
+  private occupied: { pos: THREE.Vector3; radius: number }[] = [];
+  /** Named places the NPCs are posted to. */
+  public anchors: Map<string, THREE.Vector3> = new Map();
 
   constructor(radius: number, kit: Kit | null = null) {
     this.kit = kit;
@@ -193,22 +197,28 @@ export class Planet {
     }
   }
 
+  /**
+   * Order is load-bearing. Every pass claims the ground it uses, and later
+   * passes skip claimed ground — so the big set pieces have to go down first.
+   * Running the scatter before the church meant trees were planted where the
+   * nave was about to be.
+   */
   private createDecorations(): void {
-    // Create dense decorations for each biome
+    // Landmarks first: they are the largest and least movable.
+    this.createRiver();
+    this.createChurch();
+    this.createSquare();
+    this.createFarm();
+
+    // Then streets and the frontage that addresses them.
     this.createTownArea();
     this.createSeasideArea();
     this.createHillsideArea();
     this.createShrineArea();
-
-    // Fill gaps between biomes with additional houses and props
-    this.fillGlobalDecorations();
-
-    // The set pieces that make it a French village rather than a generic one.
-    this.createRiver();
-    this.createChurch();
-    this.createSquare();
     this.createPark();
-    this.createFarm();
+
+    // Loose scatter last, into whatever ground is left.
+    this.fillGlobalDecorations();
   }
 
   // ------------------------------------------------------------ set pieces
@@ -296,6 +306,9 @@ export class Planet {
     const site = this.getOffsetOnSphere(center, 2.3, 15);
     this.addPiece('Church', site, center);
 
+    // The keeper stands at the west door, not inside the nave.
+    this.anchors.set('church', this.getOffsetOnSphere(site, 2.3 + Math.PI, 9));
+
     // Churchyard wall and a couple of trees.
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2;
@@ -316,6 +329,28 @@ export class Planet {
 
     this.addPiece('Fountain', square);
     this.addPiece('Well', this.getOffsetOnSphere(square, 1.2, 5));
+    this.anchors.set('square', this.getOffsetOnSphere(square, 3.0, 3.2));
+
+    // Two shops on the square, so the baker and the postmaster each have a
+    // doorway to stand outside rather than a spot in an empty field.
+    const trades: [string, string, number][] = [
+      ['bakery', 'Boulangerie', 0.6],
+      ['post', 'La Poste', 3.5]
+    ];
+    for (const [key, signText, angle] of trades) {
+      const plot = this.getOffsetOnSphere(square, angle, 9.5);
+      const shop = this.kit?.isLoaded
+        ? this.kit.shop(this.houseVariant++, signText)
+        : null;
+      if (shop) {
+        this.placeFacing(shop, plot, square);
+        this.decorations.add(shop);
+        this.claim(plot, 3.4);
+      }
+      // Stand them in front of the shop, between it and the square.
+      this.anchors.set(key, plot.clone().lerp(square, 0.42)
+        .normalize().multiplyScalar(this.radius));
+    }
 
     // Plane trees ringing the square, as in every French village.
     for (let i = 0; i < 7; i++) {
@@ -341,6 +376,12 @@ export class Planet {
       .normalize().multiplyScalar(this.radius);
 
     const along = new THREE.Vector3().crossVectors(this.riverAxis, onRiver).normalize();
+
+    // The fisher sits on the bank, a little upstream of the bridge.
+    this.anchors.set('riverbank', onRiver.clone()
+      .addScaledVector(along, 7)
+      .addScaledVector(this.riverAxis, 4.2)
+      .normalize().multiplyScalar(this.radius));
 
     for (let i = -4; i <= 4; i++) {
       if (i === 0) continue; // leave the bridge approach clear
@@ -368,9 +409,11 @@ export class Planet {
 
     const yard = this.getOffsetOnSphere(center, 1.1, 6);
     this.addPiece('Barn', yard, center);
+    this.anchors.set('outskirts', this.getOffsetOnSphere(center, 4.4, 17));
 
     // Paddock fence, a ring of panels each facing the middle.
     const paddock = this.getOffsetOnSphere(yard, 2.6, 10);
+    this.anchors.set('farm', this.getOffsetOnSphere(paddock, 2.6 + Math.PI, 9));
     const panels = 14;
     for (let i = 0; i < panels; i++) {
       const angle = (i / panels) * Math.PI * 2;
@@ -507,9 +550,12 @@ export class Planet {
 
         if (!this.clearOfSpawn(plot, SPAWN_CLEARANCE * 0.8)) continue;
 
+        if (!this.isFree(plot, 3.0)) continue;
+
         const house = this.createHouse();
         this.placeFacing(house, plot, station.pos);
         this.decorations.add(house);
+        this.claim(plot, 3.2);
       }
     }
   }
@@ -536,12 +582,7 @@ export class Planet {
       ).multiplyScalar(this.radius);
       
       if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.7)) continue;
-
-      const tree = this.createTree();
-      this.placeOnSphere(tree, pos);
-      this.decorations.add(tree);
-      this.foliage.push(tree);
-      this.foliageBaseQuaternions.set(tree, tree.quaternion.clone());
+      this.plantTree(pos);
     }
     
     // Random props: poles, vending machines, benches, etc.
@@ -701,6 +742,55 @@ export class Planet {
     return this.createPrimitiveHouse();
   }
 
+  /**
+   * Record that something solid stands here, so later placement passes can
+   * avoid it.
+   *
+   * Trees were landing inside houses because scatter only ever tested the
+   * distance to a biome centre — it had no idea where any building actually
+   * ended up.
+   */
+  private claim(position: THREE.Vector3, radius: number): void {
+    this.occupied.push({ pos: position.clone().normalize(), radius });
+  }
+
+  /** True if nothing already claimed ground within `clearance` of here. */
+  private isFree(position: THREE.Vector3, clearance: number): boolean {
+    const dir = position.clone().normalize();
+    for (const claim of this.occupied) {
+      const dot = THREE.MathUtils.clamp(dir.dot(claim.pos), -1, 1);
+      const arc = this.radius * Math.acos(dot);
+      if (arc < claim.radius + clearance) return false;
+    }
+    return true;
+  }
+
+  /** A tree. Uses the kit's plane tree; falls back to the primitive one. */
+  private createTree(): THREE.Object3D {
+    if (this.kit?.isLoaded && this.kit.has('Tree_Plane')) {
+      const tree = this.kit.instance('Tree_Plane', this.houseVariant++);
+      if (tree) return tree;
+    }
+    return this.createPrimitiveTree();
+  }
+
+  /**
+   * Plant a tree only where there is room for it, and register the space it
+   * takes so nothing else lands on top.
+   */
+  private plantTree(position: THREE.Vector3, clearance: number = 3.4): boolean {
+    if (!this.isFree(position, clearance)) return false;
+
+    const tree = this.createTree();
+    this.placeOnSphere(tree, position);
+    this.decorations.add(tree);
+    this.claim(position, 1.6);
+
+    this.foliage.push(tree);
+    this.foliageBaseQuaternions.set(tree, tree.quaternion.clone());
+    return true;
+  }
+
   /** A kit prop placed flat on the surface, facing a given point. */
   private addPiece(
     name: string,
@@ -718,6 +808,13 @@ export class Planet {
       this.placeOnSphere(piece, position);
     }
     this.decorations.add(piece);
+
+    const footprint: Record<string, number> = {
+      Church: 11, Barn: 5, Bridge_Stone: 7, Fountain: 2.4,
+      Well: 1.6, Tree_Plane: 1.6, Wall_Low: 2.6
+    };
+    this.claim(position, footprint[name] ?? 1.2);
+
     return piece;
   }
 
@@ -1023,11 +1120,7 @@ export class Planet {
       const dist = 2 + Math.random() * 5;
       const offset = this.getOffsetOnSphere(center, angle, dist);
       
-      const tree = this.createTree();
-      this.placeOnSphere(tree, offset);
-      this.decorations.add(tree);
-      this.foliage.push(tree);
-      this.foliageBaseQuaternions.set(tree, tree.quaternion.clone());
+      this.plantTree(offset);
     }
     
     const lookout = this.createLookoutPlatform();
@@ -1042,7 +1135,7 @@ export class Planet {
     }
   }
 
-  private createTree(): THREE.Group {
+  private createPrimitiveTree(): THREE.Group {
     const tree = new THREE.Group();
     
     const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 2, 8);
@@ -1254,19 +1347,27 @@ export class Planet {
     return steps;
   }
 
+  /**
+   * Clouds.
+   *
+   * These used to be five near-spherical blobs scaled 2-4x and parked 20 units
+   * up, which on a radius-30 planet made each one about as wide as the visible
+   * world — they read as blimps rather than weather. They are now much flatter,
+   * smaller, higher and more numerous.
+   */
   private createClouds(): void {
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 22; i++) {
       const cloud = this.createCloud();
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.random() * Math.PI;
       
-      const dist = this.radius + 20 + Math.random() * 15;
+      const dist = this.radius + 34 + Math.random() * 22;
       cloud.position.set(
         Math.sin(phi) * Math.cos(theta) * dist,
-        Math.cos(phi) * dist * 0.5 + 10,
+        Math.cos(phi) * dist,
         Math.sin(phi) * Math.sin(theta) * dist
       );
-      cloud.scale.setScalar(2 + Math.random() * 2);
+      cloud.scale.setScalar(0.85 + Math.random() * 0.75);
       
       this.clouds.add(cloud);
     }
@@ -1277,15 +1378,17 @@ export class Planet {
     
     const cloudMat = ToonMaterial.create({ color: SKY.cloud });
     
-    for (let i = 0; i < 5; i++) {
-      const blobGeo = new THREE.SphereGeometry(1 + Math.random() * 0.5, 8, 8);
+    // A flat raft of overlapping lobes, wider than it is tall.
+    const lobes = 4 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < lobes; i++) {
+      const blobGeo = new THREE.SphereGeometry(1.1 + Math.random() * 0.7, 7, 5);
       const blob = new THREE.Mesh(blobGeo, cloudMat);
       blob.position.set(
-        (Math.random() - 0.5) * 3,
-        (Math.random() - 0.5) * 0.5,
-        (Math.random() - 0.5) * 2
+        (i - (lobes - 1) / 2) * 1.35 + (Math.random() - 0.5) * 0.5,
+        (Math.random() - 0.5) * 0.25,
+        (Math.random() - 0.5) * 1.1
       );
-      blob.scale.y = 0.6;
+      blob.scale.set(1.15, 0.34, 0.9);
       cloud.add(blob);
     }
     

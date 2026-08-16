@@ -3,9 +3,13 @@ Builds the courier and the villagers, and exports them to public/models/.
 
 The figures were fourteen box primitives with a sine-wave gait — readable as
 "a person" and nothing more. These are still simple and low-poly, but they are
-dressed for a French village: the courier in a postal-blue jacket with a
-satchel and a flat cap, the villagers in aprons, work coats, smocks and hats
-that say what they do.
+dressed in present-day clothes: hoodies, zip jackets, jeans, gilets and
+trainers. The village is old; the people living in it are not.
+
+The courier is a teenager — shorter and slighter than the adults, in a hoodie
+and a backwards cap with a backpack. The `scale` argument on build_figure is
+what carries that: a teen reads as a teen mostly through height and limb
+thickness relative to head size, so the same parts build both.
 
 Conventions match build_kit.py:
 
@@ -37,9 +41,10 @@ MAT_BOOT = "BOOT"
 MAT_BAG = "BAG"
 MAT_HAT = "HAT"
 MAT_ACCENT = "ACCENT"
+MAT_SOLE = "SOLE"    # trainer soles; the one reliably near-white thing worn
 
 SLOTS = [MAT_SKIN, MAT_HAIR, MAT_COAT, MAT_COAT_ALT, MAT_APRON,
-         MAT_BOOT, MAT_BAG, MAT_HAT, MAT_ACCENT]
+         MAT_BOOT, MAT_BAG, MAT_HAT, MAT_ACCENT, MAT_SOLE]
 
 PREVIEW = {
     MAT_SKIN:     (0.94, 0.82, 0.69, 1.0),
@@ -51,6 +56,7 @@ PREVIEW = {
     MAT_BAG:      (0.45, 0.31, 0.19, 1.0),
     MAT_HAT:      (0.18, 0.22, 0.32, 1.0),
     MAT_ACCENT:   (0.77, 0.30, 0.22, 1.0),
+    MAT_SOLE:     (0.93, 0.92, 0.89, 1.0),
 }
 
 
@@ -156,123 +162,208 @@ def make_object(name, parts, parent=None, origin=(0.0, 0.0, 0.0)):
 
 # ------------------------------------------------------------------ anatomy
 
-def head_parts(hair=MAT_HAIR, hat=None, hat_style="cap", z=1.42):
-    """Head, hair, ears, eyes, and an optional hat."""
+def head_parts(hair=MAT_HAIR, hat=None, z=1.42, scale=1.0):
+    """Head, hair, ears, and modern headwear."""
+    k = scale
+    z = z * k
     parts = [
-        box((0.2, 0.19, 0.24), (0, 0, z), MAT_SKIN, taper=0.94),
-        box((0.21, 0.2, 0.08), (0, 0, z + 0.11), hair, taper=0.96),
-        box((0.2, 0.1, 0.1), (0, -0.055, z + 0.09), hair),
+        box((0.2 * k, 0.19 * k, 0.24 * k), (0, 0, z), MAT_SKIN, taper=0.94),
+        box((0.21 * k, 0.2 * k, 0.08 * k), (0, 0, z + 0.11 * k), hair, taper=0.96),
+        box((0.2 * k, 0.1 * k, 0.1 * k), (0, -0.055 * k, z + 0.09 * k), hair),
     ]
     for side in (-1, 1):
-        parts.append(box((0.035, 0.06, 0.08), (side * 0.105, 0.005, z), MAT_SKIN))
-        parts.append(box((0.03, 0.02, 0.035), (side * 0.05, -0.098, z + 0.012),
-                         MAT_HAIR))
+        parts.append(box((0.035 * k, 0.06 * k, 0.08 * k),
+                         (side * 0.105 * k, 0.005 * k, z), MAT_SKIN))
+        parts.append(box((0.03 * k, 0.02 * k, 0.035 * k),
+                         (side * 0.05 * k, -0.098 * k, z + 0.012 * k), MAT_HAIR))
 
     if hat == "cap":
-        parts.append(box((0.23, 0.22, 0.07), (0, 0.005, z + 0.18), MAT_HAT, taper=0.86))
-        parts.append(box((0.2, 0.11, 0.03), (0, -0.13, z + 0.16), MAT_HAT))
-    elif hat == "beret":
-        parts.append(prism(9, 0.14, 0.06, (0, 0.01, z + 0.15), MAT_HAT, taper=0.8))
-        parts.append(box((0.03, 0.03, 0.03), (0, 0.01, z + 0.21), MAT_HAT))
-    elif hat == "brim":
-        parts.append(prism(10, 0.24, 0.025, (0, 0, z + 0.15), MAT_HAT))
-        parts.append(prism(9, 0.135, 0.13, (0, 0, z + 0.16), MAT_HAT, taper=0.9))
-    elif hat == "chef":
-        parts.append(prism(10, 0.115, 0.2, (0, 0, z + 0.15), MAT_HAT))
-        parts.append(prism(10, 0.14, 0.09, (0, 0, z + 0.34), MAT_HAT, taper=0.8))
-    elif hat == "scarf":
-        parts.append(box((0.23, 0.22, 0.1), (0, 0, z + 0.16), MAT_HAT, taper=0.7))
+        parts.append(box((0.225 * k, 0.215 * k, 0.08 * k),
+                         (0, 0.005 * k, z + 0.175 * k), MAT_HAT, taper=0.86))
+        parts.append(box((0.2 * k, 0.12 * k, 0.028 * k),
+                         (0, -0.135 * k, z + 0.15 * k), MAT_HAT))
+    elif hat == "cap_back":
+        # Peak round the back — the whole point of a teenager's cap.
+        parts.append(box((0.225 * k, 0.215 * k, 0.08 * k),
+                         (0, 0.005 * k, z + 0.175 * k), MAT_HAT, taper=0.86))
+        parts.append(box((0.2 * k, 0.12 * k, 0.028 * k),
+                         (0, 0.145 * k, z + 0.15 * k), MAT_HAT))
+        parts.append(box((0.07 * k, 0.02 * k, 0.03 * k),
+                         (0, 0.115 * k, z + 0.175 * k), MAT_ACCENT))
+    elif hat == "beanie":
+        parts.append(box((0.225 * k, 0.215 * k, 0.14 * k),
+                         (0, 0, z + 0.16 * k), MAT_HAT, taper=0.9))
+        parts.append(box((0.235 * k, 0.225 * k, 0.045 * k),
+                         (0, 0, z + 0.105 * k), MAT_HAT))
+    elif hat == "bucket":
+        parts.append(prism(10, 0.135 * k, 0.13 * k, (0, 0, z + 0.14 * k),
+                           MAT_HAT, taper=0.95))
+        parts.append(prism(10, 0.22 * k, 0.025 * k, (0, 0, z + 0.13 * k), MAT_HAT))
     return parts
 
 
-def torso_parts(coat=MAT_COAT, apron=False, z=1.05, width=0.32):
-    """Chest, hips, and an optional apron over the front."""
+def torso_parts(coat=MAT_COAT, style="hoodie", apron=False, z=1.05,
+                width=0.32, scale=1.0):
+    """
+    Chest and hips in present-day clothing.
+
+    "hoodie" gets a hood bunched at the neck and a kangaroo pocket; "jacket"
+    gets a zip line and a collar; "tee" is a plain short-sleeved top. All three
+    sit over jeans, which is what MAT_COAT_ALT is on every figure.
+    """
+    k = scale
+    z = z * k
+    w = width * k
     parts = [
-        box((width, 0.2, 0.42), (0, 0, z), coat, taper=0.88),
-        box((width * 0.92, 0.19, 0.16), (0, 0, z - 0.28), MAT_COAT_ALT),
-        # Collar.
-        box((width * 0.6, 0.17, 0.05), (0, 0, z + 0.23), MAT_COAT_ALT),
+        box((w, 0.2 * k, 0.42 * k), (0, 0, z), coat, taper=0.9),
+        box((w * 0.94, 0.19 * k, 0.16 * k), (0, 0, z - 0.28 * k), MAT_COAT_ALT),
     ]
+
+    if style == "hoodie":
+        # Hood, sitting behind the neck rather than up.
+        parts.append(box((w * 0.78, 0.13 * k, 0.15 * k),
+                         (0, 0.085 * k, z + 0.24 * k), coat, taper=0.85))
+        # Kangaroo pocket and drawstrings.
+        parts.append(box((w * 0.64, 0.05 * k, 0.14 * k),
+                         (0, -0.105 * k, z - 0.12 * k), coat))
+        for side in (-1, 1):
+            parts.append(box((0.022 * k, 0.02 * k, 0.16 * k),
+                             (side * 0.05 * k, -0.1 * k, z + 0.13 * k), MAT_ACCENT))
+    elif style == "jacket":
+        parts.append(box((w * 0.62, 0.16 * k, 0.06 * k),
+                         (0, -0.03 * k, z + 0.235 * k), MAT_COAT_ALT))
+        parts.append(box((0.03 * k, 0.05 * k, 0.4 * k),
+                         (0, -0.1 * k, z), MAT_ACCENT))
+    else:  # tee
+        parts.append(box((w * 0.6, 0.17 * k, 0.05 * k),
+                         (0, 0, z + 0.225 * k), coat))
+
     if apron:
-        parts.append(box((width * 0.86, 0.05, 0.46), (0, -0.11, z - 0.09), MAT_APRON))
-        parts.append(box((width * 0.3, 0.04, 0.12), (0, -0.11, z + 0.19), MAT_APRON))
+        parts.append(box((w * 0.86, 0.05 * k, 0.46 * k),
+                         (0, -0.11 * k, z - 0.09 * k), MAT_APRON))
+        parts.append(box((w * 0.3, 0.04 * k, 0.12 * k),
+                         (0, -0.11 * k, z + 0.19 * k), MAT_APRON))
     return parts
 
 
-def arm_parts(side, coat=MAT_COAT, z=1.16, reach=0.28):
-    """Upper sleeve, forearm, hand. Pivot goes at the shoulder."""
-    x = side * 0.215
+def arm_parts(side, coat=MAT_COAT, z=1.16, reach=0.28, scale=1.0, short=False):
+    """
+    Sleeve, forearm, hand. Pivot goes at the shoulder.
+
+    `short` gives a t-shirt sleeve, so more of the arm is skin.
+    """
+    k = scale
+    z = z * k
+    x = side * 0.215 * k
+    sleeve = reach * (0.42 if short else 1.0) * k
+    r = reach * k
     return [
-        box((0.095, 0.1, reach), (x, 0, z - reach / 2), coat, taper=0.9),
-        box((0.082, 0.088, 0.2), (x, 0, z - reach - 0.1), MAT_SKIN),
-        box((0.09, 0.075, 0.08), (x, -0.01, z - reach - 0.22), MAT_SKIN),
+        box((0.095 * k, 0.1 * k, sleeve), (x, 0, z - sleeve / 2), coat, taper=0.92),
+        box((0.082 * k, 0.088 * k, (r - sleeve) + 0.2 * k),
+            (x, 0, z - sleeve - ((r - sleeve) + 0.2 * k) / 2), MAT_SKIN),
+        box((0.09 * k, 0.075 * k, 0.08 * k),
+            (x, -0.01 * k, z - r - 0.22 * k), MAT_SKIN),
     ]
 
 
-def leg_parts(side, z=0.72):
-    """Thigh, calf, boot. Pivot goes at the hip."""
-    x = side * 0.088
+def leg_parts(side, z=0.72, scale=1.0):
+    """Jeans and trainers. Pivot goes at the hip."""
+    k = scale
+    z = z * k
+    x = side * 0.088 * k
     return [
-        box((0.115, 0.13, 0.38), (x, 0, z - 0.19), MAT_COAT_ALT, taper=0.9),
-        box((0.1, 0.11, 0.3), (x, 0, z - 0.53), MAT_COAT_ALT),
-        box((0.115, 0.2, 0.11), (x, -0.03, z - 0.72), MAT_BOOT),
+        box((0.115 * k, 0.13 * k, 0.38 * k), (x, 0, z - 0.19 * k),
+            MAT_COAT_ALT, taper=0.92),
+        box((0.102 * k, 0.112 * k, 0.32 * k), (x, 0, z - 0.54 * k), MAT_COAT_ALT),
+        # Trainer: coloured upper over a pale sole.
+        box((0.115 * k, 0.19 * k, 0.075 * k), (x, -0.028 * k, z - 0.735 * k),
+            MAT_BOOT),
+        box((0.12 * k, 0.2 * k, 0.035 * k), (x, -0.03 * k, z - 0.785 * k),
+            MAT_SOLE),
     ]
 
 
-def satchel_parts():
-    """The courier's bag: strap across the chest, box on the hip."""
+def backpack_parts(scale=1.0):
+    """A backpack and its shoulder straps — the teenager's version of a satchel."""
+    k = scale
+    parts = [
+        box((0.27 * k, 0.15 * k, 0.34 * k), (0, 0.15 * k, 1.06 * k), MAT_BAG),
+        box((0.2 * k, 0.05 * k, 0.12 * k), (0, 0.09 * k, 0.98 * k), MAT_ACCENT),
+    ]
+    for side in (-1, 1):
+        parts.append(box((0.05 * k, 0.05 * k, 0.34 * k),
+                         (side * 0.1 * k, -0.075 * k, 1.12 * k), MAT_BAG))
+    return parts
+
+
+def tote_parts(scale=1.0):
+    """A canvas tote, carried at the hip."""
+    k = scale
     return [
-        box((0.055, 0.03, 0.5), (-0.02, -0.085, 1.08), MAT_BAG),
-        box((0.26, 0.14, 0.22), (0.19, 0.02, 0.83), MAT_BAG),
-        box((0.24, 0.03, 0.09), (0.19, -0.055, 0.92), MAT_BAG),
-        box((0.06, 0.02, 0.04), (0.19, -0.07, 0.86), MAT_ACCENT),
+        box((0.045 * k, 0.03 * k, 0.42 * k), (0.14 * k, -0.05 * k, 1.12 * k), MAT_BAG),
+        box((0.24 * k, 0.1 * k, 0.28 * k), (0.2 * k, -0.02 * k, 0.83 * k), MAT_BAG),
     ]
 
 
 # --------------------------------------------------------------- characters
 
-def build_figure(name, hat=None, coat=MAT_COAT, apron=False, satchel=False,
-                 props=None, location=(0, 0, 0)):
+def build_figure(name, hat=None, coat=MAT_COAT, style="hoodie", apron=False,
+                 carry=None, props=None, scale=1.0, location=(0, 0, 0)):
     """
-    Assemble one villager as a parented rig of named parts.
+    Assemble one person as a parented rig of named parts.
 
     HEAD / ARM_L / ARM_R / LEG_L / LEG_R are separate objects with their pivots
     at neck, shoulders and hips, so the game can drive a walk cycle by rotating
     them. Everything else lives on the root.
+
+    `scale` is how the teenage courier is built from the same parts as the
+    adults: shorter, with slimmer limbs against the same head, which is what
+    reads as young rather than merely small.
     """
-    root_parts = torso_parts(coat, apron)
-    if satchel:
-        root_parts.extend(satchel_parts())
+    root_parts = torso_parts(coat, style=style, apron=apron, scale=scale)
+
+    if carry == "backpack":
+        root_parts.extend(backpack_parts(scale))
+    elif carry == "tote":
+        root_parts.extend(tote_parts(scale))
     if props:
         root_parts.extend(props)
 
     root = make_object(name, root_parts)
     root.location = location
 
-    make_object(f"{name}.HEAD", head_parts(hat=hat), root, origin=(0, 0, 1.3))
+    short_sleeves = style == "tee"
+
+    make_object(f"{name}.HEAD", head_parts(hat=hat, scale=scale), root,
+                origin=(0, 0, 1.3 * scale))
     for side, label in ((-1, "ARM_L"), (1, "ARM_R")):
-        make_object(f"{name}.{label}", arm_parts(side, coat), root,
-                    origin=(side * 0.215, 0, 1.3))
+        make_object(f"{name}.{label}",
+                    arm_parts(side, coat, scale=scale, short=short_sleeves),
+                    root, origin=(side * 0.215 * scale, 0, 1.3 * scale))
     for side, label in ((-1, "LEG_L"), (1, "LEG_R")):
-        make_object(f"{name}.{label}", leg_parts(side), root,
-                    origin=(side * 0.088, 0, 0.74))
+        make_object(f"{name}.{label}", leg_parts(side, scale=scale), root,
+                    origin=(side * 0.088 * scale, 0, 0.74 * scale))
     return root
 
 
-def crook():
-    """The shepherd's crook."""
+def crook(scale=1.0):
+    """The shepherd still carries one; the rest of the outfit is modern."""
+    k = scale
     return [
-        box((0.05, 0.05, 1.55), (0.3, -0.02, 0.78), MAT_BAG),
-        box((0.05, 0.16, 0.05), (0.3, -0.08, 1.53), MAT_BAG),
+        box((0.05 * k, 0.05 * k, 1.55 * k), (0.3 * k, -0.02 * k, 0.78 * k), MAT_BAG),
+        box((0.05 * k, 0.16 * k, 0.05 * k), (0.3 * k, -0.08 * k, 1.53 * k), MAT_BAG),
     ]
 
 
-def baguette():
-    return [box((0.1, 0.44, 0.1), (-0.26, -0.06, 1.0), MAT_HAT, rotation_z=0.5)]
+def baguette(scale=1.0):
+    k = scale
+    return [box((0.1 * k, 0.44 * k, 0.1 * k), (-0.26 * k, -0.06 * k, 1.0 * k),
+                MAT_HAT, rotation_z=0.5)]
 
 
-def rod():
-    return [box((0.04, 0.04, 1.7), (0.32, 0.0, 0.95), MAT_BAG)]
+def rod(scale=1.0):
+    k = scale
+    return [box((0.04 * k, 0.04 * k, 1.7 * k), (0.32 * k, 0.0, 0.95 * k), MAT_BAG)]
 
 
 def reset_scene():
@@ -285,17 +376,22 @@ def reset_scene():
 def build():
     reset_scene()
 
-    # The courier. Flat cap, postal jacket, satchel.
-    build_figure("Courier", hat="cap", satchel=True, location=(0, 0, 0))
+    # The courier: a teenager in a hoodie, backwards cap and a backpack.
+    build_figure("Courier", hat="cap_back", style="hoodie", carry="backpack",
+                 scale=0.87, location=(0, 0, 0))
 
-    # Villagers, each dressed for their trade.
-    build_figure("Villager_Postmaster", hat="cap", location=(2, 0, 0))
-    build_figure("Villager_Baker", hat="chef", apron=True, props=baguette(),
-                 location=(4, 0, 0))
-    build_figure("Villager_Shepherd", hat="brim", props=crook(), location=(6, 0, 0))
-    build_figure("Villager_Fisher", hat="brim", props=rod(), location=(8, 0, 0))
-    build_figure("Villager_Artist", hat="beret", apron=True, location=(10, 0, 0))
-    build_figure("Villager_Keeper", hat="scarf", location=(12, 0, 0))
+    # The villagers, in present-day clothes rather than period costume.
+    build_figure("Villager_Postmaster", hat="cap", style="jacket",
+                 carry="tote", location=(2, 0, 0))
+    build_figure("Villager_Baker", style="tee", apron=True,
+                 props=baguette(), location=(4, 0, 0))
+    build_figure("Villager_Shepherd", hat="beanie", style="jacket",
+                 props=crook(), location=(6, 0, 0))
+    build_figure("Villager_Fisher", hat="bucket", style="jacket",
+                 props=rod(), location=(8, 0, 0))
+    build_figure("Villager_Artist", hat="beanie", style="hoodie",
+                 carry="tote", location=(10, 0, 0))
+    build_figure("Villager_Keeper", style="hoodie", location=(12, 0, 0))
 
     return sorted(o.name for o in bpy.data.objects)
 
