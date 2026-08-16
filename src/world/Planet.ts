@@ -75,6 +75,8 @@ export class Planet {
   /** Region layout, decided before the mesh so their ground can be levelled. */
   private regionLayout: PlacedRegion[] = [];
   private lakeCenter!: THREE.Vector3;
+  /** Paddock site, chosen before the mesh so the ground under it can be level. */
+  private farmCenter!: THREE.Vector3;
 
   constructor(radius: number, kit: Kit | null = null) {
     this.kit = kit;
@@ -177,14 +179,40 @@ export class Planet {
       .normalize();
     this.terrain.addFlatSpot(nearest, 10);
 
-    // Everywhere the lattice put a region. Built-up kinds get level ground;
-    // fields and woods keep their relief, since a vineyard on a slope is what
-    // a vineyard looks like.
-    const needsLevel = new Set(['hamlet', 'graveyard', 'mill', 'chapel', 'ruin']);
+    this.farmCenter = this.pickFarmCenter();
+    this.terrain.addFlatSpot(this.farmCenter.clone().normalize(), 14);
+
+    const hill = this.biomes.find(b => b.type === BiomeType.HILLSIDE)!.center;
+    this.terrain.addFlatSpot(hill, 8);
+    const shrine = this.biomes.find(b => b.type === BiomeType.SHRINE)!.center;
+    this.terrain.addFlatSpot(shrine, 10);
+
+    // Built-up kinds get level ground. Pasture is included so the flock
+    // does not stand in mid-air on a cliff face.
+    const needsLevel = new Set(['hamlet', 'graveyard', 'mill', 'chapel', 'ruin', 'pasture']);
     for (const region of this.regionLayout) {
       if (!needsLevel.has(region.kind)) continue;
-      this.terrain.addFlatSpot(region.center, region.radius * 0.75);
+      const pad = region.kind === 'ruin' ? 0.95 : region.kind === 'pasture' ? 0.7 : 0.75;
+      this.terrain.addFlatSpot(region.center, region.radius * pad);
     }
+  }
+
+  /** Same sweep createFarm uses: furthest from the river on the hillside. */
+  private pickFarmCenter(): THREE.Vector3 {
+    const hillside = this.biomes.find(b => b.type === BiomeType.HILLSIDE)!
+      .center.clone().multiplyScalar(this.radius);
+    let center = hillside;
+    let bestOffset = -1;
+    for (let i = 0; i < 24; i++) {
+      const bearing = (i / 24) * Math.PI * 2;
+      const candidate = this.getOffsetOnSphere(hillside, bearing, 13);
+      const offset = Math.abs(candidate.clone().normalize().dot(this.riverAxis));
+      if (offset > bestOffset) {
+        bestOffset = offset;
+        center = candidate;
+      }
+    }
+    return center;
   }
 
   private createPlanetSphere(): void {
@@ -374,6 +402,7 @@ export class Planet {
       for (let a = -halfChord; a <= halfChord; a += alongGap) {
         const spot = this.getOffsetOnSphere(rowMid, bearing, a);
         if (!this.isFree(spot, 1.1)) continue;
+        if (this.tooSteep(spot, 0.84)) continue;
         // Face along the row so the piece's length runs with it.
         const ahead = this.getOffsetOnSphere(rowMid, bearing, a + 2);
         this.addPiece(piece, spot, ahead);
@@ -769,28 +798,7 @@ export class Planet {
 
   /** A smallholding outside the village: barn, fenced paddock, sheep and goats. */
   private createFarm(): void {
-    const hillside = this.biomes.find(b => b.type === BiomeType.HILLSIDE)!
-      .center.clone().multiplyScalar(this.radius);
-
-    // Put the farm on whichever side of the hillside is furthest from the
-    // water. The river's great circle runs through this biome, and nudging the
-    // site by hand just moved the problem — one attempt parked the paddock
-    // five metres from the bridge, another shunted it next to the village
-    // square. Distance from the river is R * |asin(p . riverAxis)|, so sweep
-    // the bearings and take the best one.
-    let center = hillside;
-    if (this.riverAxis) {
-      let bestOffset = -1;
-      for (let i = 0; i < 24; i++) {
-        const bearing = (i / 24) * Math.PI * 2;
-        const candidate = this.getOffsetOnSphere(hillside, bearing, 13);
-        const offset = Math.abs(candidate.clone().normalize().dot(this.riverAxis));
-        if (offset > bestOffset) {
-          bestOffset = offset;
-          center = candidate;
-        }
-      }
-    }
+    const center = this.farmCenter;
 
     const yard = this.getOffsetOnSphere(center, 1.1, 6);
     this.addPiece('Barn', yard, center);
@@ -857,6 +865,7 @@ export class Planet {
 
     object.position.copy(position);
     object.quaternion.setFromRotationMatrix(matrix);
+    this.settleOnGround(object);
   }
 
   /** Evenly spaced points around a circle of surface-arc `radius` about `center`. */
@@ -989,6 +998,7 @@ export class Planet {
 
         const house = this.createHouse();
         this.placeFacing(house, plot, station.pos);
+        this.settleOnGround(house);
         this.decorations.add(house);
         this.claim(plot, 3.2);
       }
@@ -1021,7 +1031,7 @@ export class Planet {
       ).multiplyScalar(this.radius);
       
       if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.7)) continue;
-      if (this.tooSteep(pos, 0.7)) continue;
+      if (this.tooSteep(pos, 0.88)) continue;
       this.plantTree(pos);
     }
     
@@ -1036,6 +1046,7 @@ export class Planet {
       ).multiplyScalar(this.radius);
       
       if (!this.clearOfSpawn(pos, SPAWN_CLEARANCE * 0.6)) continue;
+      if (this.tooSteep(pos, 0.86)) continue;
 
       // Village furniture only. Traffic cones, traffic mirrors and vending
       // machines belonged to the Japanese-alley direction and read as litter
@@ -1047,6 +1058,7 @@ export class Planet {
 
       const prop = Math.random() < 0.5 ? this.createBench() : this.createMailbox();
       this.placeOnSphere(prop, pos);
+      this.settleOnGround(prop);
       this.decorations.add(prop);
     }
     
@@ -1229,7 +1241,7 @@ export class Planet {
   }
 
   /** True if the slope under `position` is too steep to site a building or tree. */
-  private tooSteep(position: THREE.Vector3, minDot: number = 0.78): boolean {
+  private tooSteep(position: THREE.Vector3, minDot: number = 0.86): boolean {
     const dir = position.clone().normalize();
     return this.terrain.normalAt(dir).dot(dir) < minDot;
   }
@@ -1288,15 +1300,28 @@ export class Planet {
    */
   private plantTree(position: THREE.Vector3, clearance: number = 3.4): boolean {
     if (!this.isFree(position, clearance)) return false;
+    if (this.tooSteep(position, 0.88)) return false;
 
     const tree = this.createTree();
-    this.placeOnSphere(tree, position);
+    this.placeOnSphere(tree, position, undefined, 0);
+    this.settleOnGround(tree);
     this.decorations.add(tree);
     this.claim(position, 1.6);
 
     this.foliage.push(tree);
     this.foliageBaseQuaternions.set(tree, tree.quaternion.clone());
     return true;
+  }
+
+  /** How flat the ground must be for this piece. 0 means always allowed. */
+  private slopeLimit(name: string): number {
+    if (name === 'Waterfall' || name === 'Cliff_Rock' || name === 'Bridge_Stone') return 0;
+    if (name === 'Sheep' || name === 'Goat') return 0.91;
+    if (name.startsWith('Tree') || name === 'Hedge') return 0.88;
+    if (name === 'Fence' || name === 'Wall_Low') return 0.86;
+    if (name === 'Ruin_Arch' || name === 'Chapel' || name === 'Windmill') return 0.85;
+    if (name === 'Barn' || name === 'Church') return 0.84;
+    return 0.86;
   }
 
   /** A kit prop placed flat on the surface, facing a given point. */
@@ -1307,14 +1332,18 @@ export class Planet {
     variant: number = 0
   ): THREE.Object3D | null {
     if (!this.kit || !this.kit.isLoaded || !this.kit.has(name)) return null;
+    const limit = this.slopeLimit(name);
+    if (limit > 0 && this.tooSteep(position, limit)) return null;
     const piece = this.kit.instance(name, variant);
     if (!piece) return null;
 
+    const lean = name.startsWith('Tree') || name === 'Hedge' ? 0 : 0.12;
     if (faceToward) {
       this.placeFacing(piece, position, faceToward);
     } else {
-      this.placeOnSphere(piece, position);
+      this.placeOnSphere(piece, position, undefined, lean);
     }
+    this.settleOnGround(piece);
     this.decorations.add(piece);
 
     const footprint: Record<string, number> = {
@@ -1628,18 +1657,19 @@ export class Planet {
       const angle = (i / 8) * Math.PI * 2;
       const dist = 2 + Math.random() * 5;
       const offset = this.getOffsetOnSphere(center, angle, dist);
-      
       this.plantTree(offset);
     }
     
     const lookout = this.createLookoutPlatform();
-    this.placeOnSphere(lookout, this.getOffsetOnSphere(center, 0, 4));
+    this.placeOnSphere(lookout, this.getOffsetOnSphere(center, 0, 4), undefined, 0);
     this.decorations.add(lookout);
     
     for (let i = 0; i < 3; i++) {
       const bench = this.createBench();
       const angle = i * 2;
-      this.placeOnSphere(bench, this.getOffsetOnSphere(center, angle, 3 + Math.random() * 2));
+      const spot = this.getOffsetOnSphere(center, angle, 3 + Math.random() * 2);
+      if (this.tooSteep(spot, 0.88)) continue;
+      this.placeOnSphere(bench, spot, undefined, 0);
       this.decorations.add(bench);
     }
   }
@@ -1923,18 +1953,55 @@ export class Planet {
     return newPos.normalize().multiplyScalar(this.radius);
   }
 
-  private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3, yawAngle?: number): void {
+  /**
+   * Drop an object along `up` until its lowest corners meet the ground.
+   *
+   * Standing a box upright on a slope puts the downhill feet in the air.
+   * This pulls the whole piece down so those feet touch, and a little
+   * further so the uphill side sits in the dirt rather than hovering.
+   */
+  private settleOnGround(object: THREE.Object3D): void {
+    object.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(object);
+    if (box.isEmpty()) return;
+
+    const up = object.position.clone().normalize();
+    const corners = [
+      new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.max.z)
+    ];
+    corners.sort((a, b) => a.dot(up) - b.dot(up));
+
+    let maxAir = -Infinity;
+    for (const corner of corners.slice(0, 4)) {
+      const radius = corner.length();
+      if (radius < 1e-4) continue;
+      const ground = this.terrain.surfaceRadius(corner.clone().normalize());
+      maxAir = Math.max(maxAir, radius - ground);
+    }
+    if (!isFinite(maxAir) || maxAir < 0.04) return;
+
+    const drop = Math.min(maxAir + 0.1, 2.4);
+    object.position.addScaledVector(up, -drop);
+  }
+
+  private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3, yawAngle?: number, lean = 0.12): void {
     const groundDir = position.clone().normalize();
     position = this.terrain.surfacePoint(groundDir);
     // Use Matrix4.makeBasis for correct orientation
     // This ensures local +Y points outward along the surface normal
     // IMPORTANT: Do NOT use object.rotateY() after this - it rotates around WORLD Y, not local Y!
     //
-    // Props lean with the ground, but only part way: a fence or a tree on a
-    // hillside should tilt, and taking the full terrain normal on a steep
-    // slope lays them over much further than looks right.
+    // A little lean is fine on a gentle slope. 55% of the terrain normal
+    // on the new cliffs planted trees in the sky and sheep on the wall.
     const slope = this.terrain.normalAt(groundDir);
-    const up = groundDir.clone().lerp(slope, 0.55).normalize();
+    const up = groundDir.clone().lerp(slope, lean).normalize();
     
     object.position.copy(position);
     
@@ -1972,6 +2039,7 @@ export class Planet {
     matrix.makeBasis(right, up, forward);
     
     object.quaternion.setFromRotationMatrix(matrix);
+    this.settleOnGround(object);
   }
 
   private computeSpawnPoint(): THREE.Vector3 {

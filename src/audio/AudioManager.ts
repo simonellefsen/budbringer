@@ -1,20 +1,39 @@
 import { Game, GameState } from '../core/Game';
 
 /**
- * Ambient bed and SFX, written to sit like the Messenger reference:
- * almost-whispered, dark, and more weather than song.
+ * Background music and SFX.
  *
- * The old loop marched major-pentatonic sine chords every four seconds and
- * used square-wave beeps for everything else, which read as a toy keyboard
- * sitting on top of the picture. The reference is the opposite: a warm
- * Bb-centred pad under brown wind, almost no air above 2 kHz, and SFX that
- * are short, filtered, and sparse.
+ * The bed is original procedural music in the "deep healing ambient" lane
+ * (warm stacked pads, a low drone, long reverb, sparse piano phrases) —
+ * cozy and a little melancholic, not weather-noise and not a toy organ.
+ * Nature layers sit underneath and still follow the planet.
  *
- * All of it is still generated in the Web Audio graph — no sample bank —
- * so it stays offline and tiny.
+ * All generated in the Web Audio graph so it stays offline and tiny.
  */
 
-const BB_PENTATONIC = [116.54, 130.81, 146.83, 174.61, 196.0, 233.08, 261.63, 293.66, 349.23, 392.0, 466.16];
+/** Slow A-minor progression: Am add9 → Fmaj7 → Cadd9 → Em7. */
+const CHORDS: number[][] = [
+  [110.00, 164.81, 220.00, 493.88],
+  [87.31, 174.61, 220.00, 329.63],
+  [130.81, 196.00, 261.63, 392.00],
+  [82.41, 164.81, 246.94, 329.63]
+];
+
+const PHRASES: number[][] = [
+  [329.63, 392.00, 440.00],
+  [261.63, 329.63, 293.66],
+  [440.00, 392.00, 329.63, 261.63],
+  [523.25, 440.00, 392.00],
+  [220.00, 261.63, 329.63]
+];
+
+const MASTER = 0.88;
+const SFX_BUS = 0.9;
+const PAD = 0.32;
+const PAD_TOWN = 0.36;
+const PAD_TALK = 0.2;
+const WIND = 0.045;
+const WATER = 0.1;
 
 export class AudioManager {
   private game: Game;
@@ -30,13 +49,16 @@ export class AudioManager {
   private waterGain: GainNode | null = null;
   private padFilter: BiquadFilterNode | null = null;
   private padBus: GainNode | null = null;
+  private melodyBus: GainNode | null = null;
   private padVoices: { oscA: OscillatorNode; oscB: OscillatorNode; gain: GainNode }[] = [];
+  private lfo: OscillatorNode | null = null;
   private loops: AudioBufferSourceNode[] = [];
 
   private scheduler: number | null = null;
-  private nextSparkle = 0;
+  private nextPhrase = 0;
   private nextBird = 0;
-  private nextPadShift = 0;
+  private nextChord = 0;
+  private chordIndex = 0;
 
   private footstepTime: number = 0;
   private footstepInterval: number = 0.32;
@@ -68,7 +90,7 @@ export class AudioManager {
 
         this.masterGain = this.audioContext.createGain();
         this.masterGain.connect(this.audioContext.destination);
-        this.masterGain.gain.value = 0.42;
+        this.masterGain.gain.value = MASTER;
 
         this.musicGain = this.audioContext.createGain();
         this.musicGain.connect(this.masterGain);
@@ -76,7 +98,7 @@ export class AudioManager {
 
         this.sfxGain = this.audioContext.createGain();
         this.sfxGain.connect(this.masterGain);
-        this.sfxGain.gain.value = 0.55;
+        this.sfxGain.gain.value = SFX_BUS;
       } catch {
         return false;
       }
@@ -94,9 +116,10 @@ export class AudioManager {
     this.isPlaying = true;
     this.buildBed();
     const now = this.audioContext.currentTime;
-    this.nextSparkle = now + 3 + Math.random() * 4;
-    this.nextBird = now + 6 + Math.random() * 8;
-    this.nextPadShift = now + 11;
+    this.chordIndex = 0;
+    this.nextChord = now + 20;
+    this.nextPhrase = now + 4;
+    this.nextBird = now + 10;
     this.tickScheduler();
   }
 
@@ -129,16 +152,36 @@ export class AudioManager {
     return src;
   }
 
+  private impulse(seconds: number, decay: number): AudioBuffer {
+    const ctx = this.audioContext!;
+    const n = Math.floor(ctx.sampleRate * seconds);
+    const buffer = ctx.createBuffer(2, n, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const data = buffer.getChannelData(c);
+      for (let i = 0; i < n; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay);
+      }
+    }
+    return buffer;
+  }
+
   private buildBed(): void {
     const ctx = this.audioContext!;
     const music = this.musicGain!;
 
+    const reverb = ctx.createConvolver();
+    reverb.buffer = this.impulse(3.4, 2.6);
+    const verbBus = ctx.createGain();
+    verbBus.gain.value = 0.7;
+    reverb.connect(verbBus);
+    verbBus.connect(music);
+
     const windFilter = ctx.createBiquadFilter();
     windFilter.type = 'lowpass';
-    windFilter.frequency.value = 340;
-    windFilter.Q.value = 0.6;
+    windFilter.frequency.value = 420;
+    windFilter.Q.value = 0.5;
     this.windGain = ctx.createGain();
-    this.windGain.gain.value = 0.045;
+    this.windGain.gain.value = WIND;
     windFilter.connect(this.windGain);
     this.windGain.connect(music);
     this.startLoop(this.brownBuffer(3.2), windFilter);
@@ -154,25 +197,36 @@ export class AudioManager {
     this.startLoop(this.brownBuffer(2.4), waterFilter);
 
     this.padBus = ctx.createGain();
-    this.padBus.gain.value = 0.07;
+    this.padBus.gain.value = PAD;
     this.padFilter = ctx.createBiquadFilter();
     this.padFilter.type = 'lowpass';
-    this.padFilter.frequency.value = 920;
-    this.padFilter.Q.value = 0.4;
+    this.padFilter.frequency.value = 2200;
+    this.padFilter.Q.value = 0.35;
     this.padBus.connect(this.padFilter);
     this.padFilter.connect(music);
+    const padWet = ctx.createGain();
+    padWet.gain.value = 0.85;
+    this.padFilter.connect(padWet);
+    padWet.connect(reverb);
 
-    // Three sustained, slightly detuned voices. They retune; they do not restart.
-    const starters = [116.54, 233.08, 392.0];
+    this.lfo = ctx.createOscillator();
+    this.lfo.frequency.value = 0.06;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.045;
+    this.lfo.connect(lfoGain);
+    lfoGain.connect(this.padBus.gain);
+    this.lfo.start();
+
+    const starters = CHORDS[0];
     this.padVoices = starters.map((freq, i) => {
       const oscA = ctx.createOscillator();
       const oscB = ctx.createOscillator();
       const gain = ctx.createGain();
       oscA.type = 'sine';
-      oscB.type = 'triangle';
+      oscB.type = i === 0 ? 'sine' : 'triangle';
       oscA.frequency.value = freq;
-      oscB.frequency.value = freq * 1.004;
-      gain.gain.value = 0.22 + i * 0.04;
+      oscB.frequency.value = freq * 1.0035;
+      gain.gain.value = i === 0 ? 0.55 : 0.28 + i * 0.04;
       oscA.connect(gain);
       oscB.connect(gain);
       gain.connect(this.padBus!);
@@ -180,42 +234,59 @@ export class AudioManager {
       oscB.start();
       return { oscA, oscB, gain };
     });
+
+    this.melodyBus = ctx.createGain();
+    this.melodyBus.gain.value = 0.22;
+    const delay = ctx.createDelay(1.6);
+    delay.delayTime.value = 0.52;
+    const delayFb = ctx.createGain();
+    delayFb.gain.value = 0.42;
+    const delayFilter = ctx.createBiquadFilter();
+    delayFilter.type = 'lowpass';
+    delayFilter.frequency.value = 2400;
+    this.melodyBus.connect(delayFilter);
+    delayFilter.connect(delay);
+    delay.connect(delayFb);
+    delayFb.connect(delay);
+    delay.connect(reverb);
+    this.melodyBus.connect(music);
+    delay.connect(music);
   }
 
   private tickScheduler = (): void => {
     if (!this.isPlaying || !this.audioContext) return;
     const now = this.audioContext.currentTime;
-    this.scheduleSparkles(now);
+    this.shiftChord(now);
+    this.schedulePhrase(now);
     this.scheduleBirds(now);
-    this.shiftPad(now);
     this.scheduler = window.setTimeout(this.tickScheduler, 400);
   };
 
-  private pick(list: number[]): number {
+  private pick<T>(list: readonly T[]): T {
     return list[Math.floor(Math.random() * list.length)];
   }
 
-  private shiftPad(now: number): void {
-    if (now < this.nextPadShift || this.padVoices.length === 0) return;
-    this.nextPadShift = now + 10 + Math.random() * 8;
-    const low = this.pick(BB_PENTATONIC.slice(0, 4));
-    const mid = this.pick(BB_PENTATONIC.slice(3, 8));
-    const high = this.pick(BB_PENTATONIC.slice(6));
-    const freqs = [low, mid, high];
+  private shiftChord(now: number): void {
+    if (now < this.nextChord || this.padVoices.length === 0) return;
+    this.nextChord = now + 18 + Math.random() * 8;
+    this.chordIndex = (this.chordIndex + 1) % CHORDS.length;
+    const chord = CHORDS[this.chordIndex];
+    const t = now + 5.5;
     this.padVoices.forEach((voice, i) => {
-      const f = freqs[i];
-      const t = now + 2.8;
+      const f = chord[i];
       voice.oscA.frequency.linearRampToValueAtTime(f, t);
-      voice.oscB.frequency.linearRampToValueAtTime(f * (1.003 + i * 0.001), t);
+      voice.oscB.frequency.linearRampToValueAtTime(f * (1.003 + i * 0.0008), t);
     });
   }
 
-  /** Occasional high pentatonic tap — a distant kalimba, not a melody. */
-  private scheduleSparkles(now: number): void {
-    if (now < this.nextSparkle || !this.musicGain) return;
-    this.nextSparkle = now + 4.5 + Math.random() * 7;
-    const freq = this.pick(BB_PENTATONIC.slice(6));
-    this.mallet(freq, 0.028, 1.8, this.musicGain, now);
+  /** Slow piano-like phrase through delay, the "melody" layer of the bed. */
+  private schedulePhrase(now: number): void {
+    if (now < this.nextPhrase || !this.melodyBus) return;
+    this.nextPhrase = now + 6 + Math.random() * 6;
+    const phrase = this.pick(PHRASES);
+    phrase.forEach((freq, i) => {
+      this.mallet(freq, 0.11 - i * 0.012, 2.4, this.melodyBus!, now + i * 0.72);
+    });
   }
 
   /** Two-note chirp, only away from town. */
@@ -239,7 +310,7 @@ export class AudioManager {
     filter.frequency.value = start;
     filter.Q.value = 6;
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.018, now + 0.02);
+    gain.gain.linearRampToValueAtTime(0.055, now + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
     osc.connect(filter);
     filter.connect(gain);
@@ -283,16 +354,18 @@ export class AudioManager {
     }
 
     const t = ctx.currentTime + 0.08;
-    this.waterGain.gain.linearRampToValueAtTime(0.055 * water, t);
-    this.windGain.gain.linearRampToValueAtTime(0.032 + 0.028 * (1 - urban * 0.6), t);
-    // Town is a little more pad, countryside a little more air.
-    this.padBus.gain.linearRampToValueAtTime(0.055 + urban * 0.025, t);
+    this.waterGain.gain.linearRampToValueAtTime(WATER * water, t);
+    this.windGain.gain.linearRampToValueAtTime(WIND * (0.75 + 0.45 * (1 - urban * 0.55)), t);
+    const pad = this.game.state === GameState.DIALOGUE
+      ? PAD_TALK
+      : PAD + urban * (PAD_TOWN - PAD);
+    this.padBus.gain.linearRampToValueAtTime(pad, t);
   }
 
   public setDialogue(active: boolean): void {
     if (!this.padBus || !this.audioContext) return;
     const t = this.audioContext.currentTime + 0.12;
-    this.padBus.gain.linearRampToValueAtTime(active ? 0.03 : 0.065, t);
+    this.padBus.gain.linearRampToValueAtTime(active ? PAD_TALK : PAD, t);
   }
 
   public playJump(): void {
@@ -306,7 +379,7 @@ export class AudioManager {
     filter.type = 'highpass';
     filter.frequency.value = 420;
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.setValueAtTime(0.28, now);
     gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
     noise.connect(filter);
     filter.connect(gain);
@@ -314,7 +387,7 @@ export class AudioManager {
     noise.start(now);
     noise.stop(now + 0.2);
 
-    this.mallet(196, 0.05, 0.28, this.sfxGain, now);
+    this.mallet(196, 0.12, 0.28, this.sfxGain, now);
   }
 
   public playLand(): void {
@@ -327,7 +400,7 @@ export class AudioManager {
     filter.type = 'lowpass';
     filter.frequency.value = 180;
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.16, now);
+    gain.gain.setValueAtTime(0.32, now);
     gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
     noise.connect(filter);
     filter.connect(gain);
@@ -350,7 +423,7 @@ export class AudioManager {
     filter.frequency.value = 170 + Math.random() * 80;
     filter.Q.value = 1.1;
     const gain = this.audioContext.createGain();
-    gain.gain.setValueAtTime(0.07 + Math.random() * 0.025, now);
+    gain.gain.setValueAtTime(0.2 + Math.random() * 0.05, now);
     gain.gain.exponentialRampToValueAtTime(0.008, now + 0.07);
     noise.connect(filter);
     filter.connect(gain);
@@ -362,16 +435,16 @@ export class AudioManager {
   public playPickup(): void {
     if (!this.ensureContext() || this.isMuted || !this.sfxGain) return;
     const now = this.audioContext!.currentTime;
-    this.mallet(349.23, 0.09, 0.55, this.sfxGain, now);
-    this.mallet(523.25, 0.07, 0.7, this.sfxGain, now + 0.09);
+    this.mallet(349.23, 0.22, 0.55, this.sfxGain, now);
+    this.mallet(523.25, 0.18, 0.7, this.sfxGain, now + 0.09);
   }
 
   public playDeliver(): void {
     if (!this.ensureContext() || this.isMuted || !this.sfxGain) return;
     const now = this.audioContext!.currentTime;
-    this.mallet(261.63, 0.08, 0.5, this.sfxGain, now);
-    this.mallet(349.23, 0.08, 0.6, this.sfxGain, now + 0.11);
-    this.mallet(466.16, 0.07, 0.85, this.sfxGain, now + 0.22);
+    this.mallet(261.63, 0.2, 0.5, this.sfxGain, now);
+    this.mallet(349.23, 0.2, 0.6, this.sfxGain, now + 0.11);
+    this.mallet(466.16, 0.18, 0.85, this.sfxGain, now + 0.22);
   }
 
   public playDialogue(): void {
@@ -386,7 +459,7 @@ export class AudioManager {
     osc.frequency.value = 104 + Math.random() * 18;
     filter.type = 'lowpass';
     filter.frequency.value = 280;
-    gain.gain.setValueAtTime(0.09, now);
+    gain.gain.setValueAtTime(0.24, now);
     gain.gain.exponentialRampToValueAtTime(0.008, now + 0.07);
     osc.connect(filter);
     filter.connect(gain);
@@ -399,7 +472,7 @@ export class AudioManager {
     this.isMuted = !this.isMuted;
 
     if (this.masterGain) {
-      this.masterGain.gain.value = this.isMuted ? 0 : 0.42;
+      this.masterGain.gain.value = this.isMuted ? 0 : MASTER;
     }
 
     if (this.isMuted) {
@@ -425,10 +498,15 @@ export class AudioManager {
       try { voice.oscA.stop(); voice.oscB.stop(); } catch { /* ignore */ }
     }
     this.padVoices = [];
+    if (this.lfo) {
+      try { this.lfo.stop(); } catch { /* ignore */ }
+      this.lfo = null;
+    }
     this.windGain = null;
     this.waterGain = null;
     this.padBus = null;
     this.padFilter = null;
+    this.melodyBus = null;
   }
 
   public dispose(): void {
