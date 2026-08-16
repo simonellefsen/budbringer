@@ -25,6 +25,7 @@ export class Planet {
   public biomes: BiomeData[] = [];
   private decorations: THREE.Group;
   private foliage: THREE.Object3D[] = [];
+  private foliageBaseQuaternions: Map<THREE.Object3D, THREE.Quaternion> = new Map();
   private windTime: number = 0;
   private clouds: THREE.Group;
 
@@ -382,6 +383,7 @@ export class Planet {
       this.placeOnSphere(tree, pos);
       this.decorations.add(tree);
       this.foliage.push(tree);
+      this.foliageBaseQuaternions.set(tree, tree.quaternion.clone());
     }
     
     // Random props: poles, vending machines, benches, etc.
@@ -942,6 +944,7 @@ export class Planet {
       this.placeOnSphere(tree, offset);
       this.decorations.add(tree);
       this.foliage.push(tree);
+      this.foliageBaseQuaternions.set(tree, tree.quaternion.clone());
     }
     
     const lookout = this.createLookoutPlatform();
@@ -1290,12 +1293,21 @@ export class Planet {
     this.windTime = elapsed;
     
     for (const tree of this.foliage) {
+      const baseQuat = this.foliageBaseQuaternions.get(tree);
+      if (!baseQuat) continue;
+      
       const pos = tree.position;
       const windOffset = Math.sin(this.windTime * 1.5 + pos.x * 0.3) * 0.015;
       const windOffset2 = Math.cos(this.windTime * 1.2 + pos.z * 0.3) * 0.01;
       
-      tree.rotation.x = windOffset;
-      tree.rotation.z = windOffset2;
+      // Apply wind as LOCAL rotation on top of base orientation
+      // Create a small rotation in local space and multiply with base
+      const windQuat = new THREE.Quaternion();
+      const euler = new THREE.Euler(windOffset, 0, windOffset2, 'XYZ');
+      windQuat.setFromEuler(euler);
+      
+      // Result = base * wind (local wind applied to base orientation)
+      tree.quaternion.copy(baseQuat).multiply(windQuat);
     }
     
     this.clouds.children.forEach((cloud, i) => {
