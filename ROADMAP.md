@@ -6,10 +6,12 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- Map place-marks are silent — you cannot tap a name to face that region.
+- There is still no way to drop a pin on a place you have not walked yet.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Map place-marks were silent — a tap on a name, your pin or the
+  delivery pin now eases the orbit to face that region.
 - Trees, sheep and the mill read as giants next to the courier, and the
   camera could barely tilt (14°, inverted, look-at locked on the
   shoulders) so a facade was hard to frame. Kit props are scaled down;
@@ -88,4 +90,5 @@ don't let it go stale.
 
 ## Possible future work
 
-- Let a tap on a map name spin the orbit to face that region.
+- Let the courier set a personal pin on the map for a place they have
+  not visited yet.

@@ -28,7 +28,15 @@ export class MapView {
 
   private active = false;
   private spin = 0;
+  /** When set, the orbit eases here instead of drifting. */
+  private spinTarget: number | null = null;
   private returnState: GameState = GameState.PLAYING;
+  private raycaster = new THREE.Raycaster();
+  private pointer = new THREE.Vector2();
+  private pointerDown: { x: number; y: number } | null = null;
+  private boundPointerDown = (e: PointerEvent) => this.onPointerDown(e);
+  private boundPointerUp = (e: PointerEvent) => this.onPointerUp(e);
+  private boundPointerMove = (e: PointerEvent) => this.onPointerMove(e);
 
   private savedCamPos = new THREE.Vector3();
   private savedCamUp = new THREE.Vector3();
@@ -40,14 +48,15 @@ export class MapView {
     this.markers.visible = false;
     this.game.scene.add(this.markers);
 
-    this.playerPin = this.createPin(ACCENT.ember);
-    this.targetPin = this.createPin(ACCENT.lemon);
+    this.playerPin = this.createPin(ACCENT.ember, 'you');
+    this.targetPin = this.createPin(ACCENT.lemon, 'target');
     this.markers.add(this.playerPin, this.targetPin);
   }
 
   /** A cone on a stalk, standing off the surface so it clears the rooftops. */
-  private createPin(colour: number): THREE.Object3D {
+  private createPin(colour: number, id: string): THREE.Object3D {
     const pin = new THREE.Group();
+    pin.userData.mapId = id;
 
     const head = new THREE.Mesh(
       new THREE.ConeGeometry(1.5, 3.4, 6),
@@ -63,13 +72,25 @@ export class MapView {
     );
     stalk.position.y = 3.4;
     pin.add(stalk);
+    pin.add(this.hitSphere(4.2, 4.6));
 
     return pin;
+  }
+
+  /** Invisible tap target — marks are small on a planet-sized orbit. */
+  private hitSphere(radius: number, y: number): THREE.Mesh {
+    const hit = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 8, 6),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hit.position.y = y;
+    return hit;
   }
 
   /** A small disc plus a name, for a region the courier has already visited. */
   private createPlaceMark(name: string): THREE.Object3D {
     const mark = new THREE.Group();
+    mark.userData.mapId = name;
     const disc = new THREE.Mesh(
       new THREE.SphereGeometry(0.7, 8, 6),
       new THREE.MeshBasicMaterial({ color: ACCENT.teal })
@@ -80,6 +101,7 @@ export class MapView {
     const label = this.nameSprite(name);
     label.position.y = 4.4;
     mark.add(label);
+    mark.add(this.hitSphere(5.4, 3.4));
     return mark;
   }
 
@@ -166,8 +188,11 @@ export class MapView {
 
     this.game.state = GameState.PAUSED;
     this.game.inputManager.disable();
+    if (document.pointerLockElement) document.exitPointerLock();
     this.syncPlaceMarks();
     this.markers.visible = true;
+    this.spinTarget = null;
+    this.bindPointer(true);
   }
 
   public close(): void {
@@ -186,6 +211,84 @@ export class MapView {
     this.game.state = this.returnState;
     this.game.inputManager.enable();
     this.game.cameraController.reset();
+    this.bindPointer(false);
+    this.game.renderer.domElement.style.cursor = '';
+  }
+
+  private bindPointer(on: boolean): void {
+    const canvas = this.game.renderer.domElement;
+    if (on) {
+      canvas.addEventListener('pointerdown', this.boundPointerDown);
+      canvas.addEventListener('pointerup', this.boundPointerUp);
+      canvas.addEventListener('pointermove', this.boundPointerMove);
+    } else {
+      canvas.removeEventListener('pointerdown', this.boundPointerDown);
+      canvas.removeEventListener('pointerup', this.boundPointerUp);
+      canvas.removeEventListener('pointermove', this.boundPointerMove);
+      this.pointerDown = null;
+    }
+  }
+
+  private eventToNdc(e: PointerEvent): THREE.Vector2 {
+    const rect = this.game.renderer.domElement.getBoundingClientRect();
+    this.pointer.set(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    return this.pointer;
+  }
+
+  private pickMark(e: PointerEvent): THREE.Object3D | null {
+    this.eventToNdc(e);
+    this.raycaster.setFromCamera(this.pointer, this.game.camera);
+    const hits = this.raycaster.intersectObjects(this.markers.children, true);
+    for (const hit of hits) {
+      let node: THREE.Object3D | null = hit.object;
+      while (node) {
+        if (typeof node.userData.mapId === 'string') return node;
+        node = node.parent;
+      }
+    }
+    return null;
+  }
+
+  private onPointerDown(e: PointerEvent): void {
+    if (!this.active) return;
+    this.pointerDown = { x: e.clientX, y: e.clientY };
+  }
+
+  private onPointerMove(e: PointerEvent): void {
+    if (!this.active) return;
+    this.game.renderer.domElement.style.cursor = this.pickMark(e) ? 'pointer' : '';
+  }
+
+  private onPointerUp(e: PointerEvent): void {
+    if (!this.active || !this.pointerDown) return;
+    const dx = e.clientX - this.pointerDown.x;
+    const dy = e.clientY - this.pointerDown.y;
+    this.pointerDown = null;
+    if (dx * dx + dy * dy > 64) return;
+
+    const mark = this.pickMark(e);
+    if (!mark) return;
+    const id = mark.userData.mapId as string;
+    const dir = this.directionFor(id);
+    if (!dir) return;
+    this.spinTarget = Math.atan2(dir.z, dir.x);
+  }
+
+  private directionFor(id: string): THREE.Vector3 | null {
+    if (id === 'you') return this.game.character.group.position.clone().normalize();
+    if (id === 'target') {
+      const delivery = this.game.deliverySystem;
+      const targetName = delivery.currentDelivery
+        ? (delivery.hasLetter ? delivery.currentDelivery.to : delivery.currentDelivery.from)
+        : null;
+      const npc = targetName ? this.game.npcManager.getNPCByName(targetName) : null;
+      return npc ? npc.mesh.position.clone().normalize() : null;
+    }
+    const area = this.game.planet.areas.find(a => a.name === id);
+    return area ? area.center.clone().normalize() : null;
   }
 
   /** Stand a pin upright on the surface under `position`. */
@@ -198,8 +301,17 @@ export class MapView {
   public update(delta: number): void {
     if (!this.active) return;
 
-    // Drift round the planet so the far side comes into view on its own.
-    this.spin += delta * 0.16;
+    if (this.spinTarget !== null) {
+      let gap = this.spinTarget - this.spin;
+      while (gap > Math.PI) gap -= Math.PI * 2;
+      while (gap < -Math.PI) gap += Math.PI * 2;
+      const step = 1 - Math.exp(-4.2 * delta);
+      this.spin += gap * step;
+      if (Math.abs(gap) < 0.012) this.spinTarget = null;
+    } else {
+      // Drift round the planet so the far side comes into view on its own.
+      this.spin += delta * 0.16;
+    }
 
     const r = this.game.planetRadius * ORBIT;
     const tilt = 0.38;
