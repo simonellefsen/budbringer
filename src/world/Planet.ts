@@ -2019,6 +2019,29 @@ export class Planet {
     return this.arcFromSpawn(pos) > margin;
   }
 
+  /**
+   * How close a point is to river or lake, 0–1.
+   * Used by the ambient bed so water noise only comes up on the banks.
+   */
+  public waterProximity(position: THREE.Vector3): number {
+    const d = position.clone().normalize();
+    const fromRiver = this.radius * Math.abs(Math.asin(
+      THREE.MathUtils.clamp(d.dot(this.riverAxis), -1, 1)));
+    const river = 1 - THREE.MathUtils.smoothstep(fromRiver, 2.5, 16);
+    const fromLake = this.radius * Math.acos(
+      THREE.MathUtils.clamp(d.dot(this.lakeCenter), -1, 1));
+    const lake = 1 - THREE.MathUtils.smoothstep(fromLake, 10, 24);
+    return Math.max(river, lake);
+  }
+
+  /** 1 in the village, 0 out in the countryside. */
+  public urbanAmount(position: THREE.Vector3): number {
+    const town = this.biomes.find(b => b.type === BiomeType.TOWN)!.center;
+    const d = position.clone().normalize();
+    const arc = this.radius * Math.acos(THREE.MathUtils.clamp(d.dot(town), -1, 1));
+    return 1 - THREE.MathUtils.smoothstep(arc, 8, 28);
+  }
+
   public getBiomePosition(biome: BiomeType): THREE.Vector3 {
     const biomeData = this.biomes.find(b => b.type === biome)!;
     return biomeData.center.clone().multiplyScalar(this.radius);

@@ -281,6 +281,13 @@ export class Game {
 
   private setupAudio(): void {
     this.audioManager = new AudioManager(this);
+    const unlock = () => {
+      this.audioManager.unlock();
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
   }
 
 
@@ -328,12 +335,14 @@ export class Game {
   public enterDialogue(): void {
     this.state = GameState.DIALOGUE;
     this.inputManager.disable();
+    this.audioManager.setDialogue(true);
   }
 
   public exitDialogue(): void {
     this.state = GameState.PLAYING;
     this.inputManager.enable();
     this.cameraController.reset();
+    this.audioManager.setDialogue(false);
   }
 
   private animate = (): void => {
@@ -359,6 +368,7 @@ export class Game {
     this.mapView?.update(delta);
 
     this.planet.update(elapsed);
+    this.audioManager.update();
     this.hud.update();
     
     this.composer.render(delta);

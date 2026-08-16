@@ -27,6 +27,9 @@ don't let it go stale.
 - Flat cardboard look vs the painted reference — mint sky dome, paper grain,
   gouache albedo maps (grass/rock/plaster/water/foliage), illustrated trees,
   and a yellow-tee courier with a bob and sling.
+- Toy-keyboard music vs the Messenger bed — sine-chord loop replaced with a
+  quiet Bb-pentatonic pad, brown wind, water that rises on the banks, and
+  darker SFX (noise footsteps, low dialogue ticks).
 
 - Buildings tipping over on slopes — now stand upright, only small props
   lean (55% of slope).
