@@ -3,37 +3,38 @@ import { Game, GameState } from '../core/Game';
 /**
  * Background music and SFX.
  *
- * The bed is original procedural music in the "deep healing ambient" lane
- * (warm stacked pads, a low drone, long reverb, sparse piano phrases) —
- * cozy and a little melancholic, not weather-noise and not a toy organ.
- * Nature layers sit underneath and still follow the planet.
+ * The iPhone recording of the reference is a mid-range music-box bed in Bb
+ * (G4 as the home note, then Bb, C, D, F) — not a dark healing drone.
+ * Pads stay light; the melody is the thing you hear. Nature sits underneath.
  *
  * All generated in the Web Audio graph so it stays offline and tiny.
  */
 
-/** Slow A-minor progression: Am add9 → Fmaj7 → Cadd9 → Em7. */
+/** Light Bb-family pads. Melody does the talking. */
 const CHORDS: number[][] = [
-  [110.00, 164.81, 220.00, 493.88],
-  [87.31, 174.61, 220.00, 329.63],
-  [130.81, 196.00, 261.63, 392.00],
-  [82.41, 164.81, 246.94, 329.63]
+  [116.54, 174.61, 233.08, 392.00],
+  [155.56, 196.00, 233.08, 311.13],
+  [174.61, 233.08, 261.63, 349.23],
+  [196.00, 233.08, 293.66, 392.00]
 ];
 
 const PHRASES: number[][] = [
-  [329.63, 392.00, 440.00],
-  [261.63, 329.63, 293.66],
-  [440.00, 392.00, 329.63, 261.63],
-  [523.25, 440.00, 392.00],
-  [220.00, 261.63, 329.63]
+  [392.00, 466.16, 523.25],
+  [466.16, 392.00, 349.23],
+  [392.00, 523.25, 466.16, 392.00],
+  [311.13, 349.23, 392.00],
+  [523.25, 466.16, 392.00],
+  [349.23, 392.00, 466.16],
+  [392.00, 349.23, 311.13, 349.23]
 ];
 
-const MASTER = 0.88;
+const MASTER = 0.9;
 const SFX_BUS = 0.9;
-const PAD = 0.32;
-const PAD_TOWN = 0.36;
-const PAD_TALK = 0.2;
-const WIND = 0.045;
-const WATER = 0.1;
+const PAD = 0.16;
+const PAD_TOWN = 0.18;
+const PAD_TALK = 0.1;
+const WIND = 0.035;
+const WATER = 0.08;
 
 export class AudioManager {
   private game: Game;
@@ -118,7 +119,7 @@ export class AudioManager {
     const now = this.audioContext.currentTime;
     this.chordIndex = 0;
     this.nextChord = now + 20;
-    this.nextPhrase = now + 4;
+    this.nextPhrase = now + 1.6;
     this.nextBird = now + 10;
     this.tickScheduler();
   }
@@ -170,7 +171,7 @@ export class AudioManager {
     const music = this.musicGain!;
 
     const reverb = ctx.createConvolver();
-    reverb.buffer = this.impulse(3.4, 2.6);
+    reverb.buffer = this.impulse(2.1, 2.2);
     const verbBus = ctx.createGain();
     verbBus.gain.value = 0.7;
     reverb.connect(verbBus);
@@ -226,7 +227,7 @@ export class AudioManager {
       oscB.type = i === 0 ? 'sine' : 'triangle';
       oscA.frequency.value = freq;
       oscB.frequency.value = freq * 1.0035;
-      gain.gain.value = i === 0 ? 0.55 : 0.28 + i * 0.04;
+      gain.gain.value = i === 0 ? 0.28 : 0.22 + i * 0.03;
       oscA.connect(gain);
       oscB.connect(gain);
       gain.connect(this.padBus!);
@@ -236,7 +237,7 @@ export class AudioManager {
     });
 
     this.melodyBus = ctx.createGain();
-    this.melodyBus.gain.value = 0.22;
+    this.melodyBus.gain.value = 0.42;
     const delay = ctx.createDelay(1.6);
     delay.delayTime.value = 0.52;
     const delayFb = ctx.createGain();
@@ -282,10 +283,10 @@ export class AudioManager {
   /** Slow piano-like phrase through delay, the "melody" layer of the bed. */
   private schedulePhrase(now: number): void {
     if (now < this.nextPhrase || !this.melodyBus) return;
-    this.nextPhrase = now + 6 + Math.random() * 6;
+    this.nextPhrase = now + 2.4 + Math.random() * 2.2;
     const phrase = this.pick(PHRASES);
     phrase.forEach((freq, i) => {
-      this.mallet(freq, 0.11 - i * 0.012, 2.4, this.melodyBus!, now + i * 0.72);
+      this.mallet(freq, 0.16 - i * 0.015, 1.6, this.melodyBus!, now + i * 0.42);
     });
   }
 
@@ -329,7 +330,7 @@ export class AudioManager {
     osc.type = 'sine';
     osc.frequency.value = freq;
     filter.type = 'lowpass';
-    filter.frequency.value = Math.min(1800, freq * 3.2);
+    filter.frequency.value = Math.min(3200, freq * 5.5);
     gain.gain.setValueAtTime(0, t);
     gain.gain.linearRampToValueAtTime(peak, t + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.001, t + life);
