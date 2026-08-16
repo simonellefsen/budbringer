@@ -671,16 +671,25 @@ def fence(length=4.0):
 
 # ----------------------------------------------------------- countryside
 
-def windmill():
-    """A stone tower mill. Tall enough to be a landmark from the next region."""
-    parts = [
+def windmill_tower():
+    """The stone tower. Sails are a separate piece so the game can spin them."""
+    return [
         prism(10, 2.1, 6.5, (0, 0, 0), MAT_STONE, taper=0.72),
         prism(10, 1.6, 0.4, (0, 0, 6.5), MAT_WOOD),
         pyramid(3.0, 3.0, 1.6, (0, 0, 6.9), MAT_ROOF),
         box((0.9, 0.12, 2.0), (0, -1.6, 3.0), MAT_WOOD),   # door
     ]
-    # Four sails on a hub, set in the plane facing -Y.
-    parts.append(box((0.5, 0.5, 0.5), (0, -1.9, 6.4), MAT_WOOD))
+
+
+def windmill_sails():
+    """
+    Hub and four sails, origin on the axle.
+
+    Built in the XZ plane (thin on Y) so after the glTF Y-up conversion the
+    axle is local +Z — the same axis placeFacing uses for the mill's face.
+    The game parents this to the tower at the old hub (0, 6.4, 1.9).
+    """
+    parts = [box((0.5, 0.5, 0.5), (0, 0, 0), MAT_WOOD)]
     for i in range(4):
         a = i * (math.pi / 2) + 0.4
         c, sn = math.cos(a), math.sin(a)
@@ -691,10 +700,9 @@ def windmill():
             (-width/2, -0.12, length/2), (width/2, -0.12, length/2),
             (width/2, 0.12, length/2), (-width/2, 0.12, length/2),
         ]
-        # Rotate in the XZ plane, then push out onto the hub.
-        verts = [(x*c - z*sn, y, x*sn + z*c) for (x, y, z) in verts]
-        verts = [(x, y - 2.1, z + 6.4) for (x, y, z) in verts]
-        faces = [(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
+        verts = [(x * c - z * sn, y, x * sn + z * c) for (x, y, z) in verts]
+        faces = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4),
+                 (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
         parts.append(Part(verts, faces, MAT_WOOD))
     return parts
 
@@ -853,7 +861,8 @@ def build():
     assemble("Sheep", sheep(), (102, 0, 0))
     assemble("Goat", goat(), (105, 0, 0))
     assemble("Fence", fence(), (109, 0, 0))
-    assemble("Windmill", windmill(), (118, 0, 0))
+    assemble("Windmill", windmill_tower(), (118, 0, 0))
+    assemble("Windmill_Sails", windmill_sails(), (124, 0, 0))
     assemble("Chapel", chapel(), (128, 0, 0))
     assemble("Grave_A", gravestone(0), (134, 0, 0))
     assemble("Grave_B", gravestone(1), (137, 0, 0))
@@ -887,3 +896,4 @@ def export(path="/Users/lindau/codex/budbringer/public/models/kit.glb"):
 
 if __name__ == "__main__":
     print(build())
+    print(export())

@@ -26,7 +26,8 @@ export type KitPiece =
   | 'Church' | 'Bridge_Stone' | 'Fountain' | 'Well'
   | 'Tree_Plane' | 'Tree_Forest' | 'Tree_Orchard'
   | 'Wall_Low' | 'Barn' | 'Sheep' | 'Goat' | 'Fence'
-  | 'Waterfall' | 'Cliff_Rock';
+  | 'Waterfall' | 'Cliff_Rock'
+  | 'Windmill' | 'Windmill_Sails';
 
 /** House pieces suitable for ordinary street frontage. */
 export const HOUSE_PIECES: KitPiece[] = [

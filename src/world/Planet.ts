@@ -80,6 +80,8 @@ export class Planet {
   public areas: Area[] = [];
   /** Sheep and goats, so the flock can wander them after the world is built. */
   public animals: GrazingAnimal[] = [];
+  /** Sail hubs, spun in `update`. */
+  private windmills: { sails: THREE.Group; speed: number }[] = [];
   /** The height field. Everything that touches the ground asks this. */
   public terrain!: Terrain;
   /** Region layout, decided before the mesh so their ground can be levelled. */
@@ -500,7 +502,7 @@ export class Planet {
           break;
 
         case 'mill':
-          this.addPiece('Windmill', center, this.getOffsetOnSphere(center, 0, 8));
+          this.addWindmill(center, this.getOffsetOnSphere(center, 0, 8));
           this.scatterInDisc(center, r * 0.8, 5, ['Haystack'], 2.6);
           this.scatterInDisc(center, r, 6, ['Wall_Low', 'Tree_Plane', 'Hedge']);
           break;
@@ -1389,6 +1391,27 @@ export class Planet {
     this.animals.push({ mesh, home: home.clone(), roam, kind });
   }
 
+  /**
+   * A mill with sails that turn.
+   *
+   * The kit splits the tower and the sails so the hub can spin. After the
+   * glTF Y-up conversion the axle is local +Z, sitting at the old hub
+   * (Blender (0, -1.9, 6.4) → (0, 6.4, 1.9)).
+   */
+  private addWindmill(position: THREE.Vector3, faceToward: THREE.Vector3): void {
+    const tower = this.addPiece('Windmill', position, faceToward);
+    if (!tower || !this.kit?.has('Windmill_Sails')) return;
+    const blades = this.kit.instance('Windmill_Sails', this.houseVariant);
+    if (!blades) return;
+
+    const sails = new THREE.Group();
+    sails.name = 'WindmillSails';
+    sails.position.set(0, 6.4, 1.9);
+    sails.add(blades);
+    tower.add(sails);
+    this.windmills.push({ sails, speed: 0.28 + Math.random() * 0.12 });
+  }
+
   private createPrimitiveHouse(): THREE.Group {
     const house = new THREE.Group();
     
@@ -2175,6 +2198,10 @@ export class Planet {
 
   public update(elapsed: number): void {
     this.windTime = elapsed;
+
+    for (const mill of this.windmills) {
+      mill.sails.rotation.z = elapsed * mill.speed;
+    }
     
     for (const tree of this.foliage) {
       const baseQuat = this.foliageBaseQuaternions.get(tree);

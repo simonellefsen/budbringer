@@ -6,10 +6,13 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- Windmill sails are frozen — the mill is a landmark that should turn.
+- The grass tile repeats too clearly at walking speed — a second painted
+  variant would break the 2×2 grid.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Windmill sails were frozen — the kit now exports the tower and sails
+  separately, and the hub turns slowly so the mill reads as a landmark.
 - Sheep and goats were planted props — they now graze inside their paddock
   or pasture disc, with a whole-body waddle (the kit mesh has no leg bones).
 - Villagers only breathed in place — they now stroll between named anchors
@@ -64,11 +67,10 @@ don't let it go stale.
 
 ## Possible future work
 
-- Turn the windmill sails (they are still a static kit mesh).
+- Hand-paint a second grass variant in Krita so the 2×2 tile is less
+  recognisable at walking speed.
 - Expand region variety further (currently 18 named areas from a fixed
   rota of ~12 kinds, plus `Les Chutes`).
 - Investigate whether `postprocessing`'s ink/outline pass could also apply
   to the title-screen orbit view for visual consistency (should already
   work now that title reuses the main scene/composer — verify).
-- Hand-paint a second grass variant in Krita so the 2×2 tile is less
-  recognisable at walking speed.
