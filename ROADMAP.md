@@ -6,11 +6,14 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- The grass tile repeats too clearly at walking speed — a second painted
-  variant would break the 2×2 grid.
+- Region kinds still rotate through a short list — the far side of the
+  globe can feel familiar after one lap.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- The grass tile repeated as a recognisable 2×2 — a second painted fill
+  now blends with the original per world-space patch, so neighbouring
+  ground is not the same tuft.
 - Windmill sails were frozen — the kit now exports the tower and sails
   separately, and the hub turns slowly so the mill reads as a landmark.
 - Sheep and goats were planted props — they now graze inside their paddock
@@ -67,8 +70,6 @@ don't let it go stale.
 
 ## Possible future work
 
-- Hand-paint a second grass variant in Krita so the 2×2 tile is less
-  recognisable at walking speed.
 - Expand region variety further (currently 18 named areas from a fixed
   rota of ~12 kinds, plus `Les Chutes`).
 - Investigate whether `postprocessing`'s ink/outline pass could also apply

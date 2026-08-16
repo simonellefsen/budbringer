@@ -251,12 +251,23 @@ export class Planet {
     geometry.computeVertexNormals();
 
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    
+
+    // XZ world UVs: the village sits near +Y, so this scale is even underfoot
+    // and does not switch projection on a cube face. Two grass paintings then
+    // take turns per patch so the old 2×2 never reads as a grid.
+    const uvs = new Float32Array(posAttr.count * 2);
+    for (let i = 0; i < posAttr.count; i++) {
+      uvs[i * 2] = posAttr.getX(i) * 0.16;
+      uvs[i * 2 + 1] = posAttr.getZ(i) * 0.16;
+    }
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     const material = ToonMaterial.create({
       color: 0xe4ebd4,
       vertexColors: true,
-      map: PaintedTextures.get('grass', 12)
+      map: PaintedTextures.get('grass', 1),
+      unique: true
     });
+    PaintedTextures.varyGround(material);
     
     this.sphere = new THREE.Mesh(geometry, material);
     this.sphere.receiveShadow = true;
