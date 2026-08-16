@@ -1,10 +1,13 @@
 import * as THREE from 'three';
+import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { PaintedTextures } from '../utils/PaintedTextures';
 import { GROUND, BUILDING, ROAD, MATERIAL, ACCENT, SKY, pick } from '../utils/palette';
 import { Kit, SHOP_SIGNS } from './Kit';
 import { distributeRegions, PlacedRegion } from './Regions';
 import { Terrain } from './Terrain';
+
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 export enum BiomeType {
   TOWN,
@@ -82,13 +85,18 @@ export class Planet {
   public animals: GrazingAnimal[] = [];
   /** Sail hubs, spun in `update`. */
   private windmills: { sails: THREE.Group; speed: number }[] = [];
-  /** The height field. Everything that touches the ground asks this. */
+  /** The height field. Placement samples this; walking samples the mesh. */
   public terrain!: Terrain;
   /** Region layout, decided before the mesh so their ground can be levelled. */
   private regionLayout: PlacedRegion[] = [];
   private lakeCenter!: THREE.Vector3;
   /** Paddock site, chosen before the mesh so the ground under it can be level. */
   private farmCenter!: THREE.Vector3;
+  /** Inward ray onto the visible grass, reused every sample. */
+  private readonly groundRay = new THREE.Raycaster();
+  private readonly _groundDir = new THREE.Vector3();
+  private readonly _groundOrigin = new THREE.Vector3();
+  private readonly _groundIn = new THREE.Vector3();
 
   constructor(radius: number, kit: Kit | null = null) {
     this.kit = kit;
@@ -245,7 +253,10 @@ export class Planet {
   }
 
   private createPlanetSphere(): void {
-    const geometry = new THREE.IcosahedronGeometry(this.radius, 6);
+    // Three.js `detail` is edge subdivisions, not recursive splits: 6 gave
+    // 980 triangles ~5 m across, so ridges read as a few giant facets and
+    // the analytic crest sat metres above the grass. 32 is ~1 m on the flats.
+    const geometry = new THREE.IcosahedronGeometry(this.radius, 32);
 
     const posAttr = geometry.getAttribute('position');
     const colors: number[] = [];
@@ -266,6 +277,8 @@ export class Planet {
 
     posAttr.needsUpdate = true;
     geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    geometry.computeBoundingBox();
 
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
@@ -289,6 +302,44 @@ export class Planet {
     this.sphere = new THREE.Mesh(geometry, material);
     this.sphere.receiveShadow = true;
     this.mesh.add(this.sphere);
+    this.bindGroundMesh();
+  }
+
+  /**
+   * BVH on the displaced sphere so walkers can sit on the grass you see.
+   *
+   * Vertices follow `heightAt` exactly; the faces between them do not. On a
+   * ridge the analytic crest is above the triangle, which is why the courier
+   * and villagers used to hover. A ray against this mesh is the visible ground.
+   */
+  private bindGroundMesh(): void {
+    this.sphere.updateMatrixWorld(true);
+    this.sphere.geometry.boundsTree = new MeshBVH(this.sphere.geometry);
+    this.groundRay.firstHitOnly = true;
+    this.groundRay.near = 0;
+  }
+
+  /**
+   * Distance from the planet centre to the rendered grass under `direction`.
+   *
+   * Falls back to the height field if the ray misses, which should not happen
+   * on a closed icosahedron.
+   */
+  public meshRadiusAt(direction: THREE.Vector3): number {
+    const dir = this._groundDir.copy(direction);
+    const len = dir.length();
+    if (len < 1e-8) return this.terrain.surfaceRadius(direction);
+    dir.multiplyScalar(1 / len);
+
+    // Start well above the tallest ridge (~13 m) and fire at the centre.
+    this._groundOrigin.copy(dir).multiplyScalar(this.radius + 28);
+    this._groundIn.copy(dir).negate();
+    this.groundRay.far = 48;
+    this.groundRay.set(this._groundOrigin, this._groundIn);
+
+    const hits = this.groundRay.intersectObject(this.sphere, false);
+    if (hits.length > 0) return hits[0].point.length();
+    return this.terrain.surfaceRadius(direction);
   }
 
   private defineBiomes(): void {
@@ -2113,13 +2164,17 @@ export class Planet {
     for (const corner of corners.slice(0, 4)) {
       const radius = corner.length();
       if (radius < 1e-4) continue;
-      const ground = this.terrain.surfaceRadius(corner.clone().normalize());
+      const ground = this.meshRadiusAt(corner);
       maxAir = Math.max(maxAir, radius - ground);
     }
-    if (!isFinite(maxAir) || maxAir < 0.04) return;
+    if (!isFinite(maxAir)) return;
 
-    const drop = Math.min(maxAir + 0.1, 2.4);
-    object.position.addScaledVector(up, -drop);
+    // Positive: downhill feet in the air. Negative: already in the dirt
+    // (the triangle sits above the analytic floor in a valley). A little
+    // extra drop seats the uphill side in the grass.
+    const shift = THREE.MathUtils.clamp(maxAir + 0.08, -6, 6);
+    if (Math.abs(shift) < 0.03) return;
+    object.position.addScaledVector(up, -shift);
   }
 
   private placeOnSphere(object: THREE.Object3D, position: THREE.Vector3, yawAngle?: number, lean = 0.12): void {
@@ -2189,18 +2244,18 @@ export class Planet {
 
   public getSpawnPosition(): THREE.Vector3 {
     const dir = this.spawnPoint.clone().normalize();
-    return dir.multiplyScalar(this.terrain.surfaceRadius(dir) + 0.5);
+    return dir.multiplyScalar(this.meshRadiusAt(dir) + 0.05);
   }
 
-  /** Distance from the planet centre to the ground below a direction. */
+  /** Distance from the planet centre to the visible ground below a direction. */
   public getGroundRadius(direction: THREE.Vector3): number {
-    return this.terrain.surfaceRadius(direction);
+    return this.meshRadiusAt(direction);
   }
 
-  /** Surface point under `position`, sitting on the height field. */
+  /** Surface point under `position`, sitting on the grass mesh. */
   public groundPoint(position: THREE.Vector3): THREE.Vector3 {
     const dir = position.clone().normalize();
-    return dir.multiplyScalar(this.terrain.surfaceRadius(dir));
+    return dir.multiplyScalar(this.meshRadiusAt(dir));
   }
 
   /** A point `distance` units along the surface from `center` at `angle`. */

@@ -15,6 +15,9 @@ function mix3(
   return idle * idleW + walk * walkW + jump * jumpW;
 }
 
+/** Sole sits a few centimetres above the grass; the rig origin is at the feet. */
+const FOOT_CLEARANCE = 0.05;
+
 export class Character {
   private game: Game;
   public group: THREE.Group;
@@ -55,10 +58,10 @@ export class Character {
     
     this.createCourier();
     
-    // getSpawnPosition already accounts for terrain height; re-deriving it from
-    // planetRadius here put the courier a couple of metres underground.
+    // Sit on the visible grass, not planetRadius — that put the courier
+    // a couple of metres underground on the hills.
     const spawnDir = spawnPosition.clone().normalize();
-    const surfaceHeight = this.game.planet.getGroundRadius(spawnDir) + 0.5;
+    const surfaceHeight = this.game.planet.getGroundRadius(spawnDir) + FOOT_CLEARANCE;
     this.group.position.copy(spawnDir.multiplyScalar(surfaceHeight));
     this.alignToSurface();
     this.isGrounded = true;
@@ -373,12 +376,12 @@ export class Character {
     // Ground height varies with direction now, so it has to be sampled under
     // the courier every frame rather than assumed constant.
     const groundDir = this.group.position.clone().normalize();
-    const surfaceHeight = this.game.planet.getGroundRadius(groundDir) + 0.5;
+    const surfaceHeight = this.game.planet.getGroundRadius(groundDir) + FOOT_CLEARANCE;
     const maxHeight = surfaceHeight + 20;
     const groundTolerance = 0.1;
     
     if (distFromCenter < 1) {
-      this.group.position.set(0, this.game.planetRadius + 0.5, 0);
+      this.group.position.set(0, this.game.planetRadius + FOOT_CLEARANCE, 0);
       this.velocity.set(0, 0, 0);
       this.isGrounded = true;
       return;
@@ -428,7 +431,7 @@ export class Character {
     this.groundShadow.quaternion.copy(shadowQuat);
     
     const heightAboveSurface = this.group.position.length()
-      - this.game.planet.getGroundRadius(this.group.position.clone().normalize()) - 0.5;
+      - this.game.planet.getGroundRadius(this.group.position.clone().normalize()) - FOOT_CLEARANCE;
     const shadowScale = Math.max(0.25, 1 - heightAboveSurface * 0.08);
     const shadowOpacity = Math.max(0.08, 0.2 - heightAboveSurface * 0.02);
     this.groundShadow.scale.setScalar(shadowScale);
