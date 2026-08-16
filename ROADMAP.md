@@ -6,10 +6,13 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- Waterfalls are still a static kit mesh — they do not read as falling.
+- The world map only pins you and the current delivery — named regions
+  you have already walked through have no marks.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Waterfalls were a painted slab — the WATER sheets now scroll down the
+  cliff face, so Les Chutes reads as falling water.
 - The lake and river were a painted sheet — the gouache tile now drifts
   and a soft glint travels along it, so the water reads as water.
 - Title and map orbits sat past the ink fade (~36 units) so the globe
@@ -77,5 +80,5 @@ don't let it go stale.
 
 ## Possible future work
 
-- Animate the waterfall sheets so they read as falling water, not a
-  painted slab.
+- Mark named regions on the world map, not only the courier and the
+  current delivery.
