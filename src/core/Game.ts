@@ -5,6 +5,7 @@ import { CameraController } from './CameraController';
 import { InputManager } from './InputManager';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { NPCManager } from '../world/NPCManager';
+import { Flock } from '../world/Flock';
 import { DialogueSystem } from '../ui/DialogueSystem';
 import { HUD } from '../ui/HUD';
 import { TitleScreen } from '../ui/TitleScreen';
@@ -39,6 +40,7 @@ export class Game {
   public cameraController!: CameraController;
   public inputManager!: InputManager;
   public npcManager!: NPCManager;
+  public flock!: Flock;
   public dialogueSystem!: DialogueSystem;
   public hud!: HUD;
   public titleScreen!: TitleScreen;
@@ -215,6 +217,7 @@ export class Game {
     this.cameraController = new CameraController(this);
     
     this.npcManager = new NPCManager(this);
+    this.flock = new Flock(this);
     
     this.deliverySystem = new DeliverySystem(this);
 
@@ -363,9 +366,10 @@ export class Game {
       this.secrets.update(elapsed);
     }
 
-    // Title orbit shows the real village, so villagers keep strolling there.
+    // Title orbit shows the real village, so villagers and the flock keep moving.
     if (this.state === GameState.PLAYING || this.state === GameState.TITLE) {
       this.npcManager.update(delta, elapsed);
+      this.flock.update(delta);
     }
     
     // The title screen orbits the real planet, so it drives the shared camera.
