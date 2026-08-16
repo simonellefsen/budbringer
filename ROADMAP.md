@@ -10,6 +10,11 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Courier and villagers hovered on ridges: the planet was 980 triangles
+  (~5 m facets) and walkers stood on the analytic crest above those
+  faces, plus a leftover 0.5 m foot pad. The sphere is denser now,
+  walkers / shadows / `settleOnGround` raycast the visible grass, and
+  the sole sits a few centimetres up.
 - A leftover seaside water disc sat at planet radius and painted a blue
   halo through the hills; kit waterfalls on the lake ridge looked like
   a mystery building. That disc is gone, lake water writes depth, and

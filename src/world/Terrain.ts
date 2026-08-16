@@ -8,15 +8,12 @@ import { createNoise3D } from 'simplex-noise';
  * the world read flat from orbit however much you put on it. This gives it
  * hills, ridges and a river valley.
  *
- * One rule governs everything here: elevation is a pure function of direction.
- * The mesh, the placement code, the walking code and the camera all call the
- * same `heightAt`, so a building's floor, the courier's feet and the vertex
- * under both agree exactly. Anything that computes ground height its own way
- * will drift, and the drift shows up as sinking buildings or a player skating
- * above the grass.
- *
- * Because it depends only on direction, the icosahedron's duplicated corner
- * vertices displace identically and the mesh cannot crack along a seam.
+ * Elevation is a pure function of direction, so the icosahedron's duplicated
+ * corner vertices displace identically and the mesh cannot crack along a seam.
+ * Placement (buildings, trees, anchors) still samples `heightAt`. Walking,
+ * shadows and the camera sample the *rendered* mesh instead: the faces are
+ * linear between vertices, so on a ridge the analytic crest sits above the
+ * grass you see. Pinning feet to `heightAt` is what made the courier hover.
  */
 
 export interface FlatSpot {
