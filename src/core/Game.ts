@@ -252,6 +252,7 @@ export class Game {
       if (dir.lengthSq() > 1e-6) this.pinDir = dir.normalize();
     }
     this.deliverySystem.applySave(data.delivery);
+    this.secrets.applySave(data.secrets);
   }
 
   public persistMap(): void {
@@ -260,7 +261,8 @@ export class Game {
       pin: this.pinDir
         ? { x: this.pinDir.x, y: this.pinDir.y, z: this.pinDir.z }
         : null,
-      delivery: this.deliverySystem.captureSave()
+      delivery: this.deliverySystem.captureSave(),
+      secrets: this.secrets.captureSave()
     });
   }
 

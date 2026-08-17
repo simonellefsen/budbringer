@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Finding a secret again after a refresh replayed the speech. The three
+  finds now persist with the mailbag, and the checklist shows how many
+  you have already seen.
 - There was no way to walk the mail again without wiping the browser.
   The title screen and the checklist now offer "start the mail over"
   (twice to confirm); the pin and walked places stay.
@@ -126,4 +129,5 @@ don't let it go stale.
 
 ## Possible future work
 
-- Remember which secrets you have already found.
+- Secrets that sit on the grass (the sea creature) still use planet
+  radius, so they can hover or sink on the new hills.

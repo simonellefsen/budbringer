@@ -1,8 +1,9 @@
 /**
- * Tiny local memory for the map and the mailbag.
+ * Tiny local memory for the map, the mailbag, and the three secrets.
  *
  * The world is rebuilt the same every load, so a refresh only needs the
- * places you have walked, the pin you dropped, and which letter you hold.
+ * places you have walked, the pin you dropped, which letter you hold,
+ * and which hidden things you have already found.
  */
 
 const KEY = 'postilion.v1';
@@ -23,9 +24,10 @@ export interface SaveData {
   visited: string[];
   pin: SavedPin | null;
   delivery: SavedDelivery | null;
+  secrets: string[];
 }
 
-const empty = (): SaveData => ({ visited: [], pin: null, delivery: null });
+const empty = (): SaveData => ({ visited: [], pin: null, delivery: null, secrets: [] });
 
 export function loadSave(): SaveData {
   try {
@@ -51,7 +53,10 @@ export function loadSave(): SaveData {
           hasLetter: !!rawDelivery.hasLetter
         }
       : null;
-    return { visited, pin, delivery };
+    const secrets = Array.isArray(data.secrets)
+      ? data.secrets.filter((n): n is string => typeof n === 'string')
+      : [];
+    return { visited, pin, delivery, secrets };
   } catch {
     return empty();
   }
