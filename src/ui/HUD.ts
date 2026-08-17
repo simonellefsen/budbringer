@@ -545,6 +545,18 @@ export class HUD {
       </div>
     `).join('');
 
+    const found = this.game.secrets.getFoundCount();
+    const total = this.game.secrets.getTotalCount();
+    checklistItems.insertAdjacentHTML(
+      'beforeend',
+      `<div class="story-chain">
+        <div class="story-chain-title ${found === total ? 'completed' : ''}">
+          Secrets
+          <span class="story-chain-progress">(${found}/${total})</span>
+        </div>
+      </div>`
+    );
+
     const mailReset = document.getElementById('mail-reset');
     if (mailReset) {
       mailReset.style.display = this.game.deliverySystem.hasProgress() ? '' : 'none';

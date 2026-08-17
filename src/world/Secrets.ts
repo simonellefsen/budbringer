@@ -197,21 +197,20 @@ export class Secrets {
       const creaturePos = this.beachCreature.position;
       const dist = playerPos.distanceTo(creaturePos);
       
-      if (dist < 15 && !this.foundSecrets.has('creature')) {
+      if (dist < 15) {
         this.beachCreature.visible = true;
-        
-      this.beachCreature.children.forEach((child: THREE.Object3D, i: number) => {
-        if (i > 2) {
-          child.rotation.x = Math.sin(elapsed * 3 + i) * 0.3;
-        }
-      });
+        this.beachCreature.children.forEach((child: THREE.Object3D, i: number) => {
+          if (i > 2) {
+            child.rotation.x = Math.sin(elapsed * 3 + i) * 0.3;
+          }
+        });
       }
-      
-      if (dist < 3 && !this.foundSecrets.has('creature')) {
-        this.foundSecrets.add('creature');
-        this.game.dialogueSystem.showMessage(
-          "A Strange Creature",
-          "A curious sea creature blinks at you from the shallows. It seems friendly... and a little lost."
+
+      if (dist < 3) {
+        this.discover(
+          'creature',
+          'A Strange Creature',
+          'A curious sea creature blinks at you from the shallows. It seems friendly... and a little lost.'
         );
       }
     }
@@ -224,10 +223,10 @@ export class Secrets {
       const orbPos = this.mysteryOrb.position;
       const dist = playerPos.distanceTo(orbPos);
       
-      if (dist < 10 && !this.foundSecrets.has('orb')) {
-        this.foundSecrets.add('orb');
-        this.game.dialogueSystem.showMessage(
-          "The Sky Lantern",
+      if (dist < 10) {
+        this.discover(
+          'orb',
+          'The Sky Lantern',
           "An ancient light floats above the shrine. The elders say it's been here since the planet was young. It feels warm, like summer."
         );
       }
@@ -237,11 +236,11 @@ export class Secrets {
       const islandPos = this.floatingIsland.position;
       const dist = playerPos.distanceTo(islandPos);
       
-      if (dist < 10 && !this.foundSecrets.has('island')) {
-        this.foundSecrets.add('island');
-        this.game.dialogueSystem.showMessage(
-          "The Wandering Isle",
-          "High above the planet, a tiny island drifts in the sky. Purple crystals glimmer in the light. How does it stay up there?"
+      if (dist < 10) {
+        this.discover(
+          'island',
+          'The Wandering Isle',
+          'High above the planet, a tiny island drifts in the sky. Purple crystals glimmer in the light. How does it stay up there?'
         );
       }
     }
@@ -253,5 +252,24 @@ export class Secrets {
 
   public getTotalCount(): number {
     return 3;
+  }
+
+  public captureSave(): string[] {
+    return [...this.foundSecrets];
+  }
+
+  public applySave(ids: string[] | undefined): void {
+    if (!ids) return;
+    const known = new Set(['creature', 'orb', 'island']);
+    for (const id of ids) {
+      if (known.has(id)) this.foundSecrets.add(id);
+    }
+  }
+
+  private discover(id: string, title: string, body: string): void {
+    if (this.foundSecrets.has(id)) return;
+    this.foundSecrets.add(id);
+    this.game.persistMap();
+    this.game.dialogueSystem.showMessage(title, body);
   }
 }
