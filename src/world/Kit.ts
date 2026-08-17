@@ -28,7 +28,8 @@ export type KitPiece =
   | 'Wall_Low' | 'Barn' | 'Sheep' | 'Goat' | 'Dog' | 'Fence'
   | 'Waterfall' | 'Cliff_Rock'
   | 'Windmill' | 'Windmill_Sails'
-  | 'Bench' | 'Calvary';
+  | 'Bench' | 'Calvary'
+  | 'Lake_Creature' | 'Sky_Lantern';
 
 /** House pieces suitable for ordinary street frontage. */
 export const HOUSE_PIECES: KitPiece[] = [
@@ -70,6 +71,8 @@ const SLOT_COLOURS: Record<string, number> = {
   CROP: 0xe8d9a8,
   BLOOM: ACCENT.lavender,
   WATER: 0xd4ecec,
+  LAKE: GROUND.water,
+  LAMP: ACCENT.lamp,
   SIGN: BUILDING.timberDark
 };
 
@@ -85,7 +88,8 @@ const SLOT_MAPS: Partial<Record<string, PaintedSlot>> = {
   WATER: 'water',
   WOOD: 'wood',
   TIMBER: 'wood',
-  ROOF: 'roof'
+  ROOF: 'roof',
+  LAKE: 'plaster'
 };
 
 export class Kit {
@@ -167,6 +171,12 @@ export class Kit {
         const falling = ToonMaterial.create({ color: colour, map: fallMap, unique: true });
         PaintedTextures.fallWater(falling);
         material = falling;
+      } else if (slotName === 'LAMP') {
+        material = ToonMaterial.create({
+          color: colour,
+          emissive: ACCENT.lamp,
+          emissiveIntensity: 0.75
+        });
       } else {
         material = ToonMaterial.create({ color: colour, map });
       }
