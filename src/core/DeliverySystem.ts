@@ -171,6 +171,81 @@ export class DeliverySystem {
     this.setCurrentDelivery(0, 0);
   }
 
+  public captureSave(): { completedIds: number[]; currentId: number | null; hasLetter: boolean } {
+    const completedIds: number[] = [];
+    for (const chain of this.storyChains) {
+      for (const d of chain.deliveries) {
+        if (d.completed) completedIds.push(d.id);
+      }
+    }
+    return {
+      completedIds,
+      currentId: this.currentDelivery?.id ?? null,
+      hasLetter: this.hasLetter && !this.gameComplete
+    };
+  }
+
+  /**
+   * Replay a saved mailbag without firing the "all done" dialogue.
+   *
+   * Delivery ids that no longer exist are ignored, so a rewrite of the
+   * quest list cannot leave the courier holding a ghost letter.
+   */
+  public applySave(saved: {
+    completedIds: number[];
+    currentId: number | null;
+    hasLetter: boolean;
+  } | null | undefined): void {
+    if (!saved) return;
+
+    const known = new Map<number, Delivery>();
+    for (const chain of this.storyChains) {
+      for (const d of chain.deliveries) known.set(d.id, d);
+    }
+
+    let done = 0;
+    for (const id of saved.completedIds) {
+      const d = known.get(id);
+      if (!d || d.completed) continue;
+      d.completed = true;
+      done++;
+    }
+    this.completedCount = done;
+
+    for (const chain of this.storyChains) {
+      chain.completed = chain.deliveries.every(d => d.completed);
+      const next = chain.deliveries.findIndex(d => !d.completed);
+      chain.currentStep = next === -1 ? chain.deliveries.length : next;
+    }
+
+    const allDone = this.storyChains.every(c => c.completed);
+    if (allDone) {
+      this.gameComplete = true;
+      this.currentDelivery = null;
+      this.hasLetter = false;
+      this.currentChainIndex = this.storyChains.length - 1;
+      return;
+    }
+
+    const wanted = saved.currentId !== null ? known.get(saved.currentId) : undefined;
+    const current = wanted && !wanted.completed
+      ? wanted
+      : this.storyChains.flatMap(c => c.deliveries).find(d => !d.completed);
+
+    if (!current) {
+      this.gameComplete = true;
+      this.currentDelivery = null;
+      this.hasLetter = false;
+      return;
+    }
+
+    const idx = this.storyChains.findIndex(c => c.id === current.chainId);
+    this.currentChainIndex = idx < 0 ? 0 : idx;
+    this.currentDelivery = current;
+    this.hasLetter = !!saved.hasLetter && wanted === current;
+    this.gameComplete = false;
+  }
+
   private setCurrentDelivery(chainIndex: number, stepIndex: number): void {
     if (chainIndex >= this.storyChains.length) {
       this.gameComplete = true;
@@ -211,6 +286,7 @@ export class DeliverySystem {
     if (!this.currentDelivery) return '';
     this.hasLetter = true;
     this.game.audioManager.playPickup();
+    this.game.persistMap();
     return `Take this to ${this.currentDelivery.to}. They're waiting!`;
   }
 
@@ -228,6 +304,7 @@ export class DeliverySystem {
     
     setTimeout(() => {
       this.setCurrentDelivery(this.currentChainIndex, nextStep);
+      this.game.persistMap();
     }, 100);
     
     return response;

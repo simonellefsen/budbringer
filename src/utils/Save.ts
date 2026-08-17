@@ -1,7 +1,8 @@
 /**
- * Tiny local memory for the map: where you have walked, and the pin you
- * dropped. The world itself is rebuilt the same every load, so this is
- * the only state that would otherwise vanish on refresh.
+ * Tiny local memory for the map and the mailbag.
+ *
+ * The world is rebuilt the same every load, so a refresh only needs the
+ * places you have walked, the pin you dropped, and which letter you hold.
  */
 
 const KEY = 'postilion.v1';
@@ -12,12 +13,19 @@ export interface SavedPin {
   z: number;
 }
 
+export interface SavedDelivery {
+  completedIds: number[];
+  currentId: number | null;
+  hasLetter: boolean;
+}
+
 export interface SaveData {
   visited: string[];
   pin: SavedPin | null;
+  delivery: SavedDelivery | null;
 }
 
-const empty = (): SaveData => ({ visited: [], pin: null });
+const empty = (): SaveData => ({ visited: [], pin: null, delivery: null });
 
 export function loadSave(): SaveData {
   try {
@@ -31,7 +39,19 @@ export function loadSave(): SaveData {
       && Number.isFinite(data.pin.y) && Number.isFinite(data.pin.z)
       ? { x: data.pin.x, y: data.pin.y, z: data.pin.z }
       : null;
-    return { visited, pin };
+    const rawDelivery = data.delivery;
+    const delivery = rawDelivery && Array.isArray(rawDelivery.completedIds)
+      ? {
+          completedIds: rawDelivery.completedIds.filter(
+            (n): n is number => typeof n === 'number' && Number.isFinite(n)
+          ),
+          currentId: typeof rawDelivery.currentId === 'number'
+            ? rawDelivery.currentId
+            : null,
+          hasLetter: !!rawDelivery.hasLetter
+        }
+      : null;
+    return { visited, pin, delivery };
   } catch {
     return empty();
   }

@@ -251,6 +251,7 @@ export class Game {
       const dir = new THREE.Vector3(data.pin.x, data.pin.y, data.pin.z);
       if (dir.lengthSq() > 1e-6) this.pinDir = dir.normalize();
     }
+    this.deliverySystem.applySave(data.delivery);
   }
 
   public persistMap(): void {
@@ -258,7 +259,8 @@ export class Game {
       visited: [...this.visitedPlaces],
       pin: this.pinDir
         ? { x: this.pinDir.x, y: this.pinDir.y, z: this.pinDir.z }
-        : null
+        : null,
+      delivery: this.deliverySystem.captureSave()
     });
   }
 
@@ -407,7 +409,10 @@ export class Game {
     this.hud.show();
     this.inputManager.enable();
     this.audioManager.startMusic();
-    this.deliverySystem.startFirstDelivery();
+    if (!this.deliverySystem.currentDelivery && !this.deliverySystem.gameComplete) {
+      this.deliverySystem.startFirstDelivery();
+      this.persistMap();
+    }
     this.cameraController.reset();
   }
 
