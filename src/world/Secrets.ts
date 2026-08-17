@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Game } from '../core/Game';
 import { ToonMaterial } from '../utils/ToonMaterial';
+import { BiomeType } from './Planet';
 
 export class Secrets {
   private game: Game;
@@ -105,27 +106,15 @@ export class Secrets {
       creature.add(tentacle);
     }
     
-    const beachBiome = this.game.planet.biomes?.find(b => b.type === 1);
-    if (beachBiome) {
-      const beachCenter = this.game.planet.getBiomePosition(1);
-      const up = beachCenter.clone().normalize();
-      
-      let tangent = new THREE.Vector3(0, 1, 0);
-      if (Math.abs(up.dot(tangent)) > 0.99) {
-        tangent = new THREE.Vector3(1, 0, 0);
-      }
-      const right = new THREE.Vector3().crossVectors(up, tangent).normalize();
-      const forward = new THREE.Vector3().crossVectors(right, up).normalize();
-      
-      const offset = forward.clone().multiplyScalar(8).add(right.clone().multiplyScalar(3));
-      const pos = beachCenter.clone().add(offset).normalize().multiplyScalar(this.game.planetRadius + 0.5);
-      
-      creature.position.copy(pos);
-      
-      const defaultUp = new THREE.Vector3(0, 1, 0);
-      const quaternion = new THREE.Quaternion().setFromUnitVectors(defaultUp, up);
-      creature.quaternion.copy(quaternion);
-    }
+    // The "seaside" biome is grass, not water. Sit in the shallows of Le Lac
+    // on the visible mesh / water plane, not at a flat planetRadius + 0.5.
+    const lake = this.game.planet.areas.find(a => a.name === 'Le Lac');
+    const lakePos = lake
+      ? lake.center.clone().multiplyScalar(this.game.planet.radius)
+      : this.game.planet.getBiomePosition(BiomeType.SEASIDE);
+    const shore = this.game.planet.offsetOnSphere(lakePos, 1.15, 13.4);
+    const up = this.sitSecret(creature, shore, 0.22);
+    creature.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), up);
     
     creature.visible = false;
     this.game.scene.add(creature);
@@ -166,9 +155,12 @@ export class Secrets {
       orb.add(ring);
     }
     
-    const shrineBiome = this.game.planet.getBiomePosition(3);
-    const up = shrineBiome.clone().normalize();
-    orb.position.copy(shrineBiome.clone().add(up.clone().multiplyScalar(8)));
+    const shrine = this.game.planet.areas.find(a => a.name === 'La Chapelle')
+      ?? this.game.planet.areas.find(a => a.name === 'Église Saint-Martin');
+    const shrinePos = shrine
+      ? shrine.center.clone().multiplyScalar(this.game.planet.radius)
+      : this.game.planet.getBiomePosition(BiomeType.SHRINE);
+    this.sitSecret(orb, shrinePos, 6.4);
     
     this.game.scene.add(orb);
     this.mysteryOrb = orb;
@@ -252,6 +244,27 @@ export class Secrets {
 
   public getTotalCount(): number {
     return 3;
+  }
+
+  /**
+   * Sit an object on the grass you see, or on the water if that is higher.
+   *
+   * Secrets used `planetRadius + 0.5`, which hovers on a ridge and sinks
+   * in a valley. The creature belongs in the shallows; the lantern hangs
+   * a few metres above the shrine ground.
+   */
+  private sitSecret(
+    object: THREE.Object3D,
+    near: THREE.Vector3,
+    extra: number
+  ): THREE.Vector3 {
+    const planet = this.game.planet;
+    const dir = near.clone().normalize();
+    const grass = planet.meshRadiusAt(dir);
+    const water = planet.radius + planet.terrain.waterLevel + 0.55;
+    const r = Math.max(grass, water) + extra;
+    object.position.copy(dir.clone().multiplyScalar(r));
+    return dir;
   }
 
   public captureSave(): string[] {

@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- The sea creature sat at planet radius on the grassy "seaside" biome,
+  so it hovered or sank. It now waits in the shallows of Le Lac, and
+  the sky lantern hangs above the real shrine ground.
 - Finding a secret again after a refresh replayed the speech. The three
   finds now persist with the mailbag, and the checklist shows how many
   you have already seen.
@@ -129,5 +132,5 @@ don't let it go stale.
 
 ## Possible future work
 
-- Secrets that sit on the grass (the sea creature) still use planet
-  radius, so they can hover or sink on the new hills.
+- The wandering isle still floats on world +Y rather than a radial
+  orbit, so it hangs over the village pole.
