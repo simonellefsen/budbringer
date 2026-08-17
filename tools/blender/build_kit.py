@@ -114,6 +114,27 @@ def box(size, location, material, rotation_z=0.0, taper=1.0):
     return Part(_place(verts, location, rotation_z), faces, material)
 
 
+def lean_roof(width, depth, drop, location, material, rotation_z=0.0, thick=0.14):
+    """
+    A single-pitch shed roof: high on -Y, low on +Y.
+
+    Lean-tos and side wings need this; a gable on a 1.6 m shed reads as
+    another Minecraft lid.
+    """
+    hw, hd = width / 2.0, depth / 2.0
+    verts = [
+        (-hw, -hd, drop), (+hw, -hd, drop), (+hw, +hd, 0.0), (-hw, +hd, 0.0),
+        (-hw, -hd, drop + thick), (+hw, -hd, drop + thick),
+        (+hw, +hd, thick), (-hw, +hd, thick),
+    ]
+    faces = [
+        (0, 3, 2, 1), (4, 5, 6, 7),
+        (0, 1, 5, 4), (1, 2, 6, 5),
+        (2, 3, 7, 6), (3, 0, 4, 7),
+    ]
+    return Part(_place(verts, location, rotation_z), faces, material)
+
+
 def gable(width, depth, height, location, material, rotation_z=0.0, overhang=0.0):
     """
     A pitched roof: ridge along X, eaves on +/-Y.
@@ -394,41 +415,82 @@ def shop_front(width, front, sign=True):
     return parts
 
 
-def village_house(storeys=2, width=4.0, depth=4.0, wall=MAT_WALL,
-                  timbered=False, dormers=0, shop=False):
-    """
-    The workhorse: a village townhouse with a steep pitched roof.
+def quoins(width, depth, height, base_z=0.45):
+    """Stone corner blocks so a facade is not one flat plaster slab."""
+    parts = []
+    t, h = 0.22, 0.38
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            x = sx * (width / 2.0 - 0.04)
+            y = sy * (depth / 2.0 - 0.04)
+            z = base_z + 0.2
+            while z + h / 2.0 < height - 0.15:
+                parts.append(box((t, t, h), (x, y, z), MAT_STONE))
+                z += h + 0.16
+    return parts
 
-    Steep is the point. Every reference roof is 45 degrees or more with a real
-    overhang, which is what gives the silhouette its character and drops a hard
-    shadow onto the facade below.
+
+def village_house(storeys=2, width=4.0, depth=4.0, wall=MAT_WALL,
+                  timbered=False, dormers=0, shop=False,
+                  jetty=0.0, lean_to=False, wing=False):
+    """
+    A village townhouse whose silhouette is not a cube with a lid.
+
+    `jetty` pushes the upper floors out over the street (Colmar / Gerberoy).
+    `lean_to` adds a side shed. `wing` adds a rear L. Together those break
+    the Minecraft one-box mass the last streets still read as.
     """
     parts = []
     floor_h = 2.6
     total_h = floor_h * storeys
     front = -depth / 2.0
-    roof_h = depth * 0.62          # ~50 degree pitch
+    roof_h = depth * 0.62
+    jetty = max(0.0, jetty)
 
-    # Dressed-stone plinth, then the rendered wall above it.
-    parts.append(box((width + 0.1, depth + 0.1, 0.45), (0, 0, 0.22), MAT_STONE))
-    parts.append(box((width, depth, total_h), (0, 0, total_h / 2.0), wall))
+    # Ground floor is set back when there is a jetty; the upper mass
+    # keeps the full depth and hangs over the pavement.
+    ground_d = depth - jetty
+    ground_y = jetty / 2.0
+    ground_front = front + jetty
+
+    parts.append(box((width + 0.12, ground_d + 0.12, 0.48),
+                     (0, ground_y, 0.24), MAT_STONE))
+    parts.append(box((width, ground_d, floor_h),
+                     (0, ground_y, floor_h / 2.0), wall))
+
+    if storeys > 1:
+        upper_h = floor_h * (storeys - 1)
+        parts.append(box((width, depth, upper_h),
+                         (0, 0, floor_h + upper_h / 2.0), wall))
+        if jetty > 0.04:
+            # Timber soffit under the overhang — the line that sells a jetty.
+            parts.append(box((width + 0.04, jetty + 0.06, 0.14),
+                             (0, front + jetty / 2.0, floor_h + 0.02), MAT_WOOD))
+    else:
+        parts.append(box((width, depth, 0.08), (0, 0, floor_h), wall))
+
+    parts.extend(quoins(width, ground_d if storeys == 1 else depth, total_h))
 
     if timbered:
-        for s in range(storeys):
+        parts.extend(half_timber_frame(width, floor_h, ground_front, 0.0))
+        for s in range(1, storeys):
             parts.extend(half_timber_frame(width, floor_h, front, floor_h * s))
 
-    parts.append(gable(width, depth, roof_h, (0, 0, total_h), MAT_ROOF, overhang=0.34))
+    parts.append(gable(width, depth, roof_h, (0, 0, total_h), MAT_ROOF, overhang=0.38))
+    # Eaves fascia so the roof has thickness, not a paper lid.
+    parts.append(box((width + 0.76, 0.07, 0.16),
+                     (0, front - 0.36, total_h + 0.04), MAT_WOOD))
+    parts.append(box((width + 0.76, 0.07, 0.16),
+                     (0, -front + 0.36, total_h + 0.04), MAT_WOOD))
 
-    # Door, with a stone surround.
-    parts.append(box((1.25, 0.1, 2.3), (-width * 0.2, front + 0.04, 1.15), MAT_STONE))
-    parts.append(box((1.0, 0.1, 2.05), (-width * 0.2, front - 0.03, 1.02), MAT_WOOD))
+    parts.append(box((1.25, 0.1, 2.3), (-width * 0.2, ground_front + 0.04, 1.15), MAT_STONE))
+    parts.append(box((1.0, 0.1, 2.05), (-width * 0.2, ground_front - 0.03, 1.02), MAT_WOOD))
 
     if shop:
-        parts.extend(shop_front(width, front))
+        parts.extend(shop_front(width, ground_front))
     else:
-        parts.extend(shuttered_window(width * 0.24, 1.45, front))
+        parts.extend(shuttered_window(width * 0.24, 1.45, ground_front))
 
-    # Upper floors.
     for s in range(1, storeys):
         for offset in (-0.26, 0.26):
             parts.extend(shuttered_window(width * offset, floor_h * s + 1.35, front))
@@ -439,15 +501,32 @@ def village_house(storeys=2, width=4.0, depth=4.0, wall=MAT_WALL,
 
     parts.extend(chimney(width * 0.32, depth * 0.2, total_h + roof_h * 0.45, 1.4))
 
-    # Downpipe and a window box of geraniums — the reference's signature note.
     parts.append(box((0.11, 0.11, total_h),
-                     (width / 2.0 - 0.16, front + 0.1, total_h / 2.0), MAT_METAL))
+                     (width / 2.0 - 0.16, ground_front + 0.1, total_h / 2.0), MAT_METAL))
     for s in range(1, storeys):
         for offset in (-0.26, 0.26):
             z = floor_h * s + 1.35 - 0.62
             parts.append(box((0.8, 0.22, 0.16), (width * offset, front - 0.12, z), MAT_WOOD))
             parts.append(box((0.74, 0.26, 0.2), (width * offset, front - 0.14, z + 0.14),
                              MAT_ACCENT))
+
+    if lean_to:
+        lw, ld, lh = 1.85, depth * 0.7, floor_h * 0.88
+        lx = width / 2.0 + lw / 2.0 - 0.12
+        parts.append(box((lw + 0.08, ld + 0.08, 0.36), (lx, 0.12, 0.18), MAT_STONE))
+        parts.append(box((lw, ld, lh), (lx, 0.12, lh / 2.0), wall))
+        parts.append(lean_roof(lw + 0.3, ld + 0.28, 0.85, (lx, 0.12, lh), MAT_ROOF))
+        parts.extend(shuttered_window(lx, 1.25, 0.12 - ld / 2.0, w=0.55, h=0.85))
+
+    if wing:
+        ww, wd, wh = width * 0.58, depth * 0.68, floor_h * 1.55
+        wy = depth / 2.0 + wd / 2.0 - 0.18
+        wx = width * 0.12
+        parts.append(box((ww, wd, 0.4), (wx, wy, 0.2), MAT_STONE))
+        parts.append(box((ww, wd, wh), (wx, wy, wh / 2.0), wall))
+        parts.append(gable(ww, wd, wd * 0.52, (wx, wy, wh), MAT_ROOF, overhang=0.22))
+        parts.extend(shuttered_window(wx, 1.4, wy - wd / 2.0, w=0.6, h=0.9))
+
     return parts
 
 
@@ -536,10 +615,10 @@ def fountain():
 
 def plane_tree():
     """
-    An illustrated plane: a leaning trunk and a handful of foliage blobs.
+    An illustrated plane: a leaning trunk and a flattened canopy.
 
-    The reference trees are not lollipops. Overlapping irregular masses with
-    hard edges are what the ink pass turns into a drawn canopy.
+    Height ≈ radius made every cluster a green drum — the Minecraft tree.
+    These are wide, short, overlapping masses, like a painted umbrella.
     """
     parts = [
         prism(6, 0.18, 2.9, (0, 0, 0), MAT_WOOD, taper=0.62),
@@ -548,16 +627,17 @@ def plane_tree():
         box((0.12, 0.55, 0.12), (-0.35, 0.25, 2.15), MAT_WOOD, rotation_z=-0.4),
     ]
     clusters = [
-        (1.35, (0.15, 0.1, 3.15), 0.2),
-        (1.05, (-0.55, 0.35, 3.55), 0.9),
-        (0.95, (0.5, -0.45, 3.7), 1.4),
-        (0.8, (-0.15, -0.55, 2.85), 0.5),
-        (0.72, (0.62, 0.42, 2.7), 1.15),
-        (0.9, (0.05, 0.05, 4.35), 0.15),
-        (0.7, (-0.4, -0.15, 4.05), 0.7),
+        (1.45, 0.62, (0.12, 0.08, 3.05), 0.2),
+        (1.15, 0.5, (-0.62, 0.38, 3.35), 0.9),
+        (1.05, 0.48, (0.58, -0.48, 3.45), 1.4),
+        (0.88, 0.4, (-0.2, -0.62, 2.85), 0.5),
+        (0.8, 0.38, (0.7, 0.4, 2.75), 1.15),
+        (1.0, 0.44, (0.04, 0.06, 3.85), 0.15),
+        (0.78, 0.36, (-0.48, -0.18, 3.7), 0.7),
+        (0.7, 0.32, (0.35, 0.55, 3.55), 1.1),
     ]
-    for r, loc, rot in clusters:
-        parts.append(prism(8, r, r * 1.05, loc, MAT_FOLIAGE, rotation_z=rot, taper=0.62))
+    for r, h, loc, rot in clusters:
+        parts.append(prism(7, r, h, loc, MAT_FOLIAGE, rotation_z=rot, taper=0.52))
     return parts
 
 
@@ -569,17 +649,17 @@ def forest_tree():
         box((0.9, 0.14, 0.14), (-0.3, -0.25, 3.5), MAT_WOOD, rotation_z=0.3),
     ]
     clusters = [
-        (1.7, (0.1, 0.05, 4.4), 0.1),
-        (1.25, (-0.7, 0.4, 5.0), 0.8),
-        (1.15, (0.7, -0.5, 5.15), 1.3),
-        (1.0, (-0.2, -0.7, 4.1), 0.4),
-        (0.95, (0.75, 0.5, 3.9), 1.1),
-        (1.1, (0.0, 0.1, 5.9), 0.2),
-        (0.85, (-0.55, -0.2, 5.55), 0.65),
-        (0.8, (0.4, 0.55, 5.4), 1.5),
+        (1.75, 0.72, (0.08, 0.04, 4.25), 0.1),
+        (1.3, 0.55, (-0.75, 0.42, 4.75), 0.8),
+        (1.2, 0.52, (0.72, -0.52, 4.9), 1.3),
+        (1.05, 0.46, (-0.22, -0.72, 4.05), 0.4),
+        (1.0, 0.44, (0.78, 0.5, 3.85), 1.1),
+        (1.15, 0.5, (0.0, 0.08, 5.45), 0.2),
+        (0.9, 0.4, (-0.58, -0.22, 5.2), 0.65),
+        (0.85, 0.38, (0.42, 0.58, 5.05), 1.5),
     ]
-    for r, loc, rot in clusters:
-        parts.append(prism(8, r, r * 1.0, loc, MAT_FOLIAGE, rotation_z=rot, taper=0.6))
+    for r, h, loc, rot in clusters:
+        parts.append(prism(7, r, h, loc, MAT_FOLIAGE, rotation_z=rot, taper=0.5))
     return parts
 
 
@@ -765,14 +845,43 @@ def lavender_row(length=5.5):
 def orchard_tree():
     """Smaller and rounder than the plane tree, planted in rows."""
     parts = [prism(6, 0.14, 1.45, (0, 0, 0), MAT_WOOD, taper=0.7)]
-    for r, loc, rot in (
-        (0.95, (0.05, 0.0, 1.35), 0.2),
-        (0.72, (-0.35, 0.2, 1.9), 0.9),
-        (0.68, (0.35, -0.25, 2.0), 1.3),
-        (0.55, (0.0, 0.05, 2.45), 0.4),
+    for r, h, loc, rot in (
+        (0.95, 0.42, (0.05, 0.0, 1.45), 0.2),
+        (0.72, 0.34, (-0.35, 0.2, 1.75), 0.9),
+        (0.68, 0.32, (0.35, -0.25, 1.82), 1.3),
+        (0.55, 0.28, (0.0, 0.05, 2.05), 0.4),
     ):
-        parts.append(prism(7, r, r * 0.95, loc, MAT_FOLIAGE, rotation_z=rot, taper=0.65))
+        parts.append(prism(7, r, h, loc, MAT_FOLIAGE, rotation_z=rot, taper=0.55))
     return parts
+
+
+def garden_bench():
+    """A slatted park bench — not two boxes stacked."""
+    parts = []
+    for x in (-0.72, 0.72):
+        parts.append(box((0.1, 0.46, 0.42), (x, 0.02, 0.21), MAT_STONE))
+        parts.append(box((0.08, 0.08, 0.55), (x, -0.16, 0.72), MAT_WOOD))
+    for i, z in enumerate((0.44, 0.52)):
+        parts.append(box((1.55, 0.09, 0.05), (0, 0.06 - i * 0.14, z), MAT_WOOD))
+    for i in range(3):
+        parts.append(box((1.5, 0.06, 0.08),
+                         (0, -0.18, 0.62 + i * 0.14), MAT_WOOD))
+    return parts
+
+
+def calvary():
+    """
+    A hillside calvary: stepped plinth and a stone cross.
+
+    Replaces the leftover torii/box-shrine that sat on the shrine biome.
+    """
+    return [
+        box((2.2, 2.2, 0.35), (0, 0, 0.17), MAT_STONE),
+        box((1.5, 1.5, 0.4), (0, 0, 0.52), MAT_STONE),
+        box((0.85, 0.85, 0.55), (0, 0, 0.95), MAT_STONE),
+        box((0.32, 0.28, 2.4), (0, 0, 2.35), MAT_STONE),
+        box((1.35, 0.24, 0.3), (0, 0, 2.85), MAT_STONE),
+    ]
 
 
 def waterfall():
@@ -839,17 +948,20 @@ def reset_scene():
 def build():
     reset_scene()
 
-    assemble("House_TallA", village_house(3, 4.0, 4.2, MAT_WALL, dormers=2), (0, 0, 0))
-    assemble("House_MidB", village_house(2, 4.4, 4.0, MAT_WALL_ALT, dormers=1), (7, 0, 0))
-    assemble("House_NarrowC", village_house(2, 3.2, 4.2, MAT_WALL), (13, 0, 0))
+    assemble("House_TallA", village_house(3, 4.0, 4.2, MAT_WALL, dormers=2,
+                                          jetty=0.3), (0, 0, 0))
+    assemble("House_MidB", village_house(2, 4.4, 4.0, MAT_WALL_ALT, dormers=1,
+                                         lean_to=True), (7, 0, 0))
+    assemble("House_NarrowC", village_house(2, 3.2, 4.2, MAT_WALL, jetty=0.22),
+             (13, 0, 0))
     assemble("House_TimberD", village_house(2, 4.2, 4.0, MAT_PAINTED, timbered=True,
-                                            dormers=1), (19, 0, 0))
-    assemble("House_TimberE", village_house(3, 3.8, 3.8, MAT_PAINTED, timbered=True),
-             (25, 0, 0))
-    assemble("Shop_A", village_house(2, 4.6, 4.0, MAT_WALL, shop=True, dormers=1),
-             (31, 0, 0))
-    assemble("Shop_B", village_house(2, 4.4, 4.0, MAT_PAINTED, timbered=True, shop=True),
-             (37, 0, 0))
+                                            dormers=1, jetty=0.32), (19, 0, 0))
+    assemble("House_TimberE", village_house(3, 3.8, 3.8, MAT_PAINTED, timbered=True,
+                                            wing=True), (25, 0, 0))
+    assemble("Shop_A", village_house(2, 4.6, 4.0, MAT_WALL, shop=True, dormers=1,
+                                     lean_to=True), (31, 0, 0))
+    assemble("Shop_B", village_house(2, 4.4, 4.0, MAT_PAINTED, timbered=True,
+                                     shop=True, jetty=0.26), (37, 0, 0))
     assemble("Church", church(), (46, 0, 0))
     assemble("Bridge_Stone", stone_bridge(), (60, 0, 0))
     assemble("Fountain", fountain(), (70, 0, 0))
@@ -876,6 +988,8 @@ def build():
     assemble("Boathouse", boathouse(), (194, 0, 0))
     assemble("Waterfall", waterfall(), (204, 0, 0))
     assemble("Cliff_Rock", cliff_rock(), (214, 0, 0))
+    assemble("Bench", garden_bench(), (222, 0, 0))
+    assemble("Calvary", calvary(), (228, 0, 0))
 
     return {o.name: len(o.data.polygons) for o in bpy.data.objects}
 

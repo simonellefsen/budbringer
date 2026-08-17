@@ -1898,7 +1898,14 @@ export class Planet {
     return lookout;
   }
 
-  private createBench(): THREE.Group {
+  private createBench(): THREE.Object3D {
+    if (this.kit?.has('Bench')) {
+      const piece = this.kit.instance('Bench');
+      if (piece) {
+        this.applyKitScale(piece, 'Bench');
+        return piece;
+      }
+    }
     const bench = new THREE.Group();
     
     const seatGeo = new THREE.BoxGeometry(1.5, 0.1, 0.5);
@@ -1925,134 +1932,24 @@ export class Planet {
     return bench;
   }
 
+  /**
+   * A hillside calvary, not the leftover Japanese shrine.
+   *
+   * The torii, box-shrine and stone lanterns were the old alley kit sitting
+   * on a French hill — and they were cubes. A cross on a plinth plus yews
+   * is what belongs here.
+   */
   private createShrineArea(): void {
     const biome = this.biomes.find(b => b.type === BiomeType.SHRINE)!;
     const center = biome.center.clone().multiplyScalar(this.radius);
-    
-    const torii = this.createToriiGate();
-    this.placeOnSphere(torii, this.getOffsetOnSphere(center, 0, 5));
-    this.decorations.add(torii);
-    
-    const shrine = this.createShrine();
-    this.placeOnSphere(shrine, center);
-    this.decorations.add(shrine);
-    
-    for (let i = 0; i < 6; i++) {
-      const lantern = this.createStoneLantern();
-      const angle = (i / 6) * Math.PI * 2;
-      this.placeOnSphere(lantern, this.getOffsetOnSphere(center, angle, 3));
-      this.decorations.add(lantern);
+
+    if (!this.addPiece('Calvary', center, this.getOffsetOnSphere(center, 0, 6))) {
+      this.addPiece('Chapel', center, this.getOffsetOnSphere(center, 0, 8));
     }
-    
-    const steps = this.createStoneSteps();
-    this.placeOnSphere(steps, this.getOffsetOnSphere(center, 0, 3));
-    this.decorations.add(steps);
-  }
-
-  private createToriiGate(): THREE.Group {
-    const gate = new THREE.Group();
-    
-    const postMat = ToonMaterial.create({ color: ACCENT.emberDeep });
-    
-    for (let i = 0; i < 2; i++) {
-      const postGeo = new THREE.CylinderGeometry(0.2, 0.25, 5, 8);
-      const post = new THREE.Mesh(postGeo, postMat);
-      post.position.set(i === 0 ? -2 : 2, 2.5, 0);
-      post.castShadow = true;
-      gate.add(post);
-    }
-    
-    const topGeo = new THREE.BoxGeometry(5.5, 0.4, 0.5);
-    const top = new THREE.Mesh(topGeo, postMat);
-    top.position.y = 4.8;
-    top.castShadow = true;
-    gate.add(top);
-    
-    const beam2Geo = new THREE.BoxGeometry(4.5, 0.3, 0.4);
-    const beam2 = new THREE.Mesh(beam2Geo, postMat);
-    beam2.position.y = 4;
-    gate.add(beam2);
-    
-    return gate;
-  }
-
-  private createShrine(): THREE.Group {
-    const shrine = new THREE.Group();
-    
-    const baseGeo = new THREE.BoxGeometry(5, 0.5, 4);
-    const baseMat = ToonMaterial.create({ color: MATERIAL.stone });
-    const base = new THREE.Mesh(baseGeo, baseMat);
-    base.position.y = 0.25;
-    base.castShadow = true;
-    base.receiveShadow = true;
-    shrine.add(base);
-    
-    const bodyGeo = new THREE.BoxGeometry(4, 3, 3);
-    const bodyMat = ToonMaterial.create({ color: ACCENT.emberDeep });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 2;
-    body.castShadow = true;
-    shrine.add(body);
-    
-    const roofGeo = new THREE.BoxGeometry(5.5, 0.5, 4);
-    const roofMat = ToonMaterial.create({ color: MATERIAL.metalDark });
-    const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.position.y = 3.75;
-    roof.castShadow = true;
-    shrine.add(roof);
-    
-    const roof2Geo = new THREE.BoxGeometry(4.5, 0.4, 3.5);
-    const roof2 = new THREE.Mesh(roof2Geo, roofMat);
-    roof2.position.y = 4.15;
-    shrine.add(roof2);
-    
-    return shrine;
-  }
-
-  private createStoneLantern(): THREE.Group {
-    const lantern = new THREE.Group();
-    
-    const baseGeo = new THREE.CylinderGeometry(0.25, 0.3, 0.3, 6);
-    const stoneMat = ToonMaterial.create({ color: MATERIAL.stoneDark });
-    const base = new THREE.Mesh(baseGeo, stoneMat);
-    base.position.y = 0.15;
-    base.castShadow = true;
-    lantern.add(base);
-    
-    const stemGeo = new THREE.CylinderGeometry(0.1, 0.1, 1, 6);
-    const stem = new THREE.Mesh(stemGeo, stoneMat);
-    stem.position.y = 0.8;
-    lantern.add(stem);
-    
-    const houseGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const houseMat = ToonMaterial.create({ color: ACCENT.lamp, emissive: ACCENT.lemon, emissiveIntensity: 0.3 });
-    const house = new THREE.Mesh(houseGeo, houseMat);
-    house.position.y = 1.55;
-    lantern.add(house);
-    
-    const topGeo = new THREE.ConeGeometry(0.35, 0.3, 4);
-    const top = new THREE.Mesh(topGeo, stoneMat);
-    top.position.y = 1.95;
-    top.rotation.y = Math.PI / 4;
-    lantern.add(top);
-    
-    return lantern;
-  }
-
-  private createStoneSteps(): THREE.Group {
-    const steps = new THREE.Group();
-    
-    for (let i = 0; i < 5; i++) {
-      const stepGeo = new THREE.BoxGeometry(2, 0.2, 0.5);
-      const stepMat = ToonMaterial.create({ color: MATERIAL.stoneDark });
-      const step = new THREE.Mesh(stepGeo, stepMat);
-      step.position.set(0, i * 0.25, -i * 0.5);
-      step.castShadow = true;
-      step.receiveShadow = true;
-      steps.add(step);
-    }
-    
-    return steps;
+    this.scatterInDisc(center, 8, 6, ['Tree_Plane', 'Wall_Low']);
+    const bench = this.createBench();
+    this.placeFacing(bench, this.getOffsetOnSphere(center, 1.2, 4), center);
+    this.decorations.add(bench);
   }
 
   /**

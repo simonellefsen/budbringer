@@ -27,7 +27,8 @@ export type KitPiece =
   | 'Tree_Plane' | 'Tree_Forest' | 'Tree_Orchard'
   | 'Wall_Low' | 'Barn' | 'Sheep' | 'Goat' | 'Fence'
   | 'Waterfall' | 'Cliff_Rock'
-  | 'Windmill' | 'Windmill_Sails';
+  | 'Windmill' | 'Windmill_Sails'
+  | 'Bench' | 'Calvary';
 
 /** House pieces suitable for ordinary street frontage. */
 export const HOUSE_PIECES: KitPiece[] = [
@@ -82,7 +83,9 @@ const SLOT_MAPS: Partial<Record<string, PaintedSlot>> = {
   FOLIAGE: 'foliage',
   CROP: 'grass',
   WATER: 'water',
-  WOOD: 'plaster'
+  WOOD: 'wood',
+  TIMBER: 'wood',
+  ROOF: 'roof'
 };
 
 export class Kit {
