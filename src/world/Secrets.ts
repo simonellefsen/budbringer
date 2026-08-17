@@ -10,6 +10,12 @@ export class Secrets {
   private mysteryOrb: THREE.Group | null = null;
   private foundSecrets: Set<string> = new Set();
   private gameStartTime: number = -1;
+  /** Tilted so the isle tours the globe instead of sitting on +Y (the village). */
+  private readonly islandAxis = new THREE.Vector3(0.38, 0.52, 0.76).normalize();
+  private readonly islandEast = new THREE.Vector3();
+  private readonly islandNorth = new THREE.Vector3();
+  private readonly islandDir = new THREE.Vector3();
+  private readonly islandLocalUp = new THREE.Vector3(0, 1, 0);
 
   constructor(game: Game) {
     this.game = game;
@@ -64,9 +70,34 @@ export class Secrets {
       island.add(crystal);
     }
     
-    island.position.set(0, this.game.planetRadius + 50, 0);
     this.game.scene.add(island);
     this.floatingIsland = island;
+    let tangent = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(this.islandAxis.dot(tangent)) > 0.9) tangent.set(1, 0, 0);
+    this.islandEast.crossVectors(this.islandAxis, tangent).normalize();
+    this.islandNorth.crossVectors(this.islandAxis, this.islandEast).normalize();
+    this.placeIsland(0);
+  }
+
+  /**
+   * Walk the isle around the planet on a tilted great circle.
+   *
+   * World +Y is the village, so parking it at (0, R+50, 0) left a rock
+   * hanging over the square. Local +Y stays radial so the tree stands
+   * "up" from the globe.
+   */
+  private placeIsland(elapsed: number): void {
+    if (!this.floatingIsland) return;
+    const a = elapsed * 0.065;
+    this.islandDir.copy(this.islandEast).multiplyScalar(Math.cos(a))
+      .addScaledVector(this.islandNorth, Math.sin(a));
+    const r = this.game.planetRadius + 15.2 + Math.sin(elapsed * 0.28) * 1.1;
+    this.floatingIsland.position.copy(this.islandDir).multiplyScalar(r);
+    this.floatingIsland.quaternion.setFromUnitVectors(
+      this.islandLocalUp,
+      this.islandDir
+    );
+    this.floatingIsland.rotateOnAxis(this.islandLocalUp, elapsed * 0.12);
   }
 
   private createBeachCreature(): void {
@@ -167,6 +198,8 @@ export class Secrets {
   }
 
   public update(elapsed: number): void {
+    this.placeIsland(elapsed);
+
     if (this.gameStartTime < 0) {
       this.gameStartTime = elapsed;
     }
@@ -177,11 +210,6 @@ export class Secrets {
     const playerDist = playerPos.length();
     if (playerDist < this.game.planetRadius * 0.5 || playerDist > this.game.planetRadius * 2) {
       return;
-    }
-    
-    if (this.floatingIsland) {
-      this.floatingIsland.position.y = this.game.planetRadius + 50 + Math.sin(elapsed * 0.3) * 2;
-      this.floatingIsland.rotation.y = elapsed * 0.1;
     }
     
     if (this.beachCreature) {
@@ -228,7 +256,7 @@ export class Secrets {
       const islandPos = this.floatingIsland.position;
       const dist = playerPos.distanceTo(islandPos);
       
-      if (dist < 10) {
+      if (dist < 14) {
         this.discover(
           'island',
           'The Wandering Isle',

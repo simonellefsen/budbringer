@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- The wandering isle sat on world +Y, so it hung over the village pole
+  and you could never reach it. It now tours a tilted orbit about 15 m
+  up, standing radial, and can be found when it passes overhead.
 - The sea creature sat at planet radius on the grassy "seaside" biome,
   so it hovered or sank. It now waits in the shallows of Le Lac, and
   the sky lantern hangs above the real shrine ground.
@@ -132,5 +135,5 @@ don't let it go stale.
 
 ## Possible future work
 
-- The wandering isle still floats on world +Y rather than a radial
-  orbit, so it hangs over the village pole.
+- The wandering isle is still a cone-tree on a stone disc — it could
+  share the painted kit so it matches the village.
