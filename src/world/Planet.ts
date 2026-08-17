@@ -50,7 +50,7 @@ export interface GrazingAnimal {
   mesh: THREE.Object3D;
   home: THREE.Vector3;
   roam: number;
-  kind: 'Sheep' | 'Goat';
+  kind: 'Sheep' | 'Goat' | 'Dog';
 }
 
 interface BiomeData {
@@ -473,7 +473,7 @@ export class Planet {
       if (this.tooSteep(spot)) continue;
       const name = pieces[Math.floor(Math.random() * pieces.length)];
       const piece = this.addPiece(name, spot);
-      if (piece && (name === 'Sheep' || name === 'Goat')) {
+      if (piece && (name === 'Sheep' || name === 'Goat' || name === 'Dog')) {
         this.registerAnimal(piece, name, center, radius * 0.85);
       }
     }
@@ -641,7 +641,8 @@ export class Planet {
           break;
 
         case 'pasture':
-          this.scatterInDisc(center, r * 0.9, 12, ['Sheep', 'Goat'], 2.0);
+          this.scatterInDisc(center, r * 0.9, 11, ['Sheep', 'Goat'], 2.0);
+          this.scatterInDisc(center, r * 0.5, 1, ['Dog'], 2.4);
           this.scatterInDisc(center, r, 10, ['Fence', 'Wall_Low', 'Hedge'], 2.4);
           this.addPiece('Barn', this.getOffsetOnSphere(center, 2.4, r * 0.55), center);
           break;
@@ -1145,6 +1146,9 @@ export class Planet {
       const piece = this.addPiece(kind, spot, facing, i);
       if (piece) this.registerAnimal(piece, kind, paddock, 6.2);
     }
+    const dogSpot = this.getOffsetOnSphere(paddock, 0.8, 4.2);
+    const dog = this.addPiece('Dog', dogSpot, paddock);
+    if (dog) this.registerAnimal(dog, 'Dog', paddock, 7.4);
   }
 
   // ---------------------------------------------------------------- streets
@@ -1614,7 +1618,7 @@ export class Planet {
   private slopeLimit(name: string): number {
     if (name === 'Waterfall' || name === 'Cliff_Rock' || name === 'Bridge_Stone') return 0;
     if (name === 'Haystack' || name === 'Well') return 0.92;
-    if (name === 'Sheep' || name === 'Goat') return 0.91;
+    if (name === 'Sheep' || name === 'Goat' || name === 'Dog') return 0.91;
     if (name.startsWith('Tree') || name === 'Hedge') return 0.88;
     if (name === 'Fence' || name === 'Wall_Low') return 0.9;
     if (name === 'Ruin_Arch' || name === 'Chapel' || name === 'Windmill') return 0.9;
@@ -1666,6 +1670,7 @@ export class Planet {
       Tree_Orchard: 0.64,
       Sheep: 0.68,
       Goat: 0.66,
+      Dog: 0.72,
       Haystack: 0.7,
       Windmill: 0.68,
       Barn: 0.82,
@@ -1681,7 +1686,7 @@ export class Planet {
 
   private registerAnimal(
     mesh: THREE.Object3D,
-    kind: 'Sheep' | 'Goat',
+    kind: 'Sheep' | 'Goat' | 'Dog',
     home: THREE.Vector3,
     roam: number
   ): void {

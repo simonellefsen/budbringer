@@ -44,15 +44,15 @@ export class Flock {
   }
 
   private adopt(animal: GrazingAnimal, index: number): void {
-    const goat = animal.kind === 'Goat';
+    const kind = animal.kind;
     this.members.push({
       mesh: animal.mesh,
       home: animal.home.clone(),
       roam: animal.roam,
       dest: this.pickDest(animal.home, animal.roam, animal.mesh.position),
       wait: 0.6 + index * 0.28 + Math.random() * 2.4,
-      speed: goat ? 1.15 : 0.72,
-      cadence: goat ? 6.6 : 4.8,
+      speed: kind === 'Dog' ? 2.35 : kind === 'Goat' ? 1.15 : 0.72,
+      cadence: kind === 'Dog' ? 8.4 : kind === 'Goat' ? 6.6 : 4.8,
       moving: false,
       walkBlend: 0,
       walkPhase: index * 0.9,

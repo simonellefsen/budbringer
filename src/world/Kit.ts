@@ -25,7 +25,7 @@ export type KitPiece =
   | 'Shop_A' | 'Shop_B'
   | 'Church' | 'Bridge_Stone' | 'Fountain' | 'Well'
   | 'Tree_Plane' | 'Tree_Forest' | 'Tree_Orchard'
-  | 'Wall_Low' | 'Barn' | 'Sheep' | 'Goat' | 'Fence'
+  | 'Wall_Low' | 'Barn' | 'Sheep' | 'Goat' | 'Dog' | 'Fence'
   | 'Waterfall' | 'Cliff_Rock'
   | 'Windmill' | 'Windmill_Sails'
   | 'Bench' | 'Calvary';
