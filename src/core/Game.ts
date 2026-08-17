@@ -401,6 +401,11 @@ export class Game {
     this.persistMap();
   }
 
+  public resetMail(): void {
+    this.deliverySystem.resetMail();
+    this.persistMap();
+  }
+
   public startGame(): void {
     this.state = GameState.PLAYING;
     this.restoreFog();

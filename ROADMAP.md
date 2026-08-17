@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- There was no way to walk the mail again without wiping the browser.
+  The title screen and the checklist now offer "start the mail over"
+  (twice to confirm); the pin and walked places stay.
 - A refresh sent you back to Maple's first letter. Completed deliveries
   and the letter in your bag now come back with the pin and the places
   you have walked.
@@ -123,4 +126,4 @@ don't let it go stale.
 
 ## Possible future work
 
-- A way to start the mail over without clearing the browser store.
+- Remember which secrets you have already found.
