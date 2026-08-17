@@ -14,7 +14,9 @@ const URLS = {
   rock: 'textures/rock.png',
   water: 'textures/water.png',
   foliage: 'textures/foliage.png',
-  paper: 'textures/paper.png'
+  paper: 'textures/paper.png',
+  roof: 'textures/roof.png',
+  wood: 'textures/wood.png'
 } as const;
 
 export type PaintedSlot = keyof typeof URLS;

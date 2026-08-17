@@ -10,6 +10,10 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Streets still read as Minecraft: one-box houses, green drum trees, a
+  leftover torii, and roofs with no tile. Houses now jetty / lean-to /
+  L-wing, canopies are flattened painted masses, benches and a calvary
+  are kit pieces, and roofs / timber multiply painted gouache tiles.
 - Fisher Finn stood on a village hillside; the stone bridge sat on the
   lawn as a two-arch wall; beach umbrellas, a lighthouse and mailboxes
   were scattered on cliffs. Finn walks the lake shore, the bridge spans
