@@ -75,6 +75,25 @@ export class TitleScreen {
           transform: translate(2px, 2px);
           box-shadow: 2px 2px 0 #1a1a1a;
         }
+
+        #mail-reset-title {
+          margin-top: 14px;
+          background: transparent;
+          color: #fffdf6;
+          border: none;
+          font-family: 'Patrick Hand', cursive;
+          font-size: 1.15rem;
+          letter-spacing: 0.04em;
+          cursor: pointer;
+          pointer-events: auto;
+          text-shadow: 2px 2px 0 #2a2118;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
+        #mail-reset-title.hidden {
+          display: none;
+        }
         
         #title-text {
           font-family: 'Lilita One', 'Patrick Hand', cursive;
@@ -107,6 +126,7 @@ export class TitleScreen {
       <div id="title-ui">
         <div id="title-text">the postilion</div>
         <button id="enter-button">enter</button>
+        <button id="mail-reset-title" type="button">start the mail over</button>
       </div>
       
       <div id="title-controls">wasd walk • space hop • e talk</div>
@@ -122,6 +142,10 @@ export class TitleScreen {
 
     
     const enterButton = document.getElementById('enter-button')!;
+    const resetTitle = document.getElementById('mail-reset-title')!;
+    if (!this.game.deliverySystem.hasProgress()) {
+      resetTitle.classList.add('hidden');
+    }
     let starting = false;
     const go = (e: Event) => {
       e.preventDefault();
@@ -132,6 +156,23 @@ export class TitleScreen {
     };
     enterButton.addEventListener('pointerup', go);
     enterButton.addEventListener('click', go);
+
+    let resetArmed = false;
+    resetTitle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!resetArmed) {
+        resetArmed = true;
+        resetTitle.textContent = 'really start over?';
+        window.setTimeout(() => {
+          resetArmed = false;
+          resetTitle.textContent = 'start the mail over';
+        }, 4000);
+        return;
+      }
+      this.game.resetMail();
+      resetTitle.classList.add('hidden');
+    });
     
     this.boundKeyHandler = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.code === 'Enter') {

@@ -161,6 +161,24 @@ export class HUD {
           font-size: 0.95rem;
           color: #666;
         }
+
+        #mail-reset {
+          margin-top: 14px;
+          width: 100%;
+          background: #fffdf6;
+          color: #2a2118;
+          border: 3px solid #2a2118;
+          border-radius: 8px;
+          padding: 8px 10px;
+          font-family: 'Patrick Hand', cursive;
+          font-size: 1.05rem;
+          cursor: pointer;
+          box-shadow: 3px 3px 0 #2a2118;
+        }
+
+        #mail-reset.armed {
+          background: #f5c842;
+        }
         
         #compass {
           position: absolute;
@@ -347,6 +365,7 @@ export class HUD {
       <div id="checklist-panel">
         <h2>Checklist:</h2>
         <div id="checklist-items"></div>
+        <button id="mail-reset" type="button">Start the mail over</button>
       </div>
       
       <div id="current-task">
@@ -445,6 +464,34 @@ export class HUD {
     });
     
     this.updateChecklist();
+
+    const mailReset = document.getElementById('mail-reset')!;
+    let armed = false;
+    let armTimer: number | null = null;
+    const disarm = () => {
+      armed = false;
+      mailReset.classList.remove('armed');
+      mailReset.textContent = 'Start the mail over';
+      if (armTimer !== null) {
+        window.clearTimeout(armTimer);
+        armTimer = null;
+      }
+    };
+    mailReset.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!armed) {
+        armed = true;
+        mailReset.classList.add('armed');
+        mailReset.textContent = 'Really start over?';
+        armTimer = window.setTimeout(disarm, 4000);
+        return;
+      }
+      disarm();
+      this.game.resetMail();
+      this.update();
+    });
+    mailReset.addEventListener('mousedown', (e) => e.stopPropagation());
   }
 
   private playEmote(emote: string): void {
@@ -497,6 +544,11 @@ export class HUD {
         </div>
       </div>
     `).join('');
+
+    const mailReset = document.getElementById('mail-reset');
+    if (mailReset) {
+      mailReset.style.display = this.game.deliverySystem.hasProgress() ? '' : 'none';
+    }
   }
 
   public show(): void {

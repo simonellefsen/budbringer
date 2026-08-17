@@ -171,6 +171,31 @@ export class DeliverySystem {
     this.setCurrentDelivery(0, 0);
   }
 
+  /** True if the bag is not a fresh first letter. */
+  public hasProgress(): boolean {
+    if (this.gameComplete || this.hasLetter || this.completedCount > 0) return true;
+    if (this.currentChainIndex > 0) return true;
+    return !!(this.currentDelivery && this.currentDelivery.id !== 1);
+  }
+
+  /**
+   * Wipe the mailbag back to Maple's first letter.
+   *
+   * The pin and the places you have walked stay put — this is only the
+   * route, so you can walk it again without clearing the browser.
+   */
+  public resetMail(): void {
+    for (const chain of this.storyChains) {
+      chain.completed = false;
+      chain.currentStep = 0;
+      for (const d of chain.deliveries) d.completed = false;
+    }
+    this.completedCount = 0;
+    this.gameComplete = false;
+    this.hasLetter = false;
+    this.setCurrentDelivery(0, 0);
+  }
+
   public captureSave(): { completedIds: number[]; currentId: number | null; hasLetter: boolean } {
     const completedIds: number[] = [];
     for (const chain of this.storyChains) {
