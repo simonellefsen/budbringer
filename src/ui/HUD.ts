@@ -184,7 +184,11 @@ export class HUD {
           border-right: 6px solid transparent;
           border-bottom: 25px solid #e74c3c;
           transform-origin: center 15px;
-          transition: transform 0.1s ease;
+          transition: transform 0.1s ease, border-bottom-color 0.2s ease;
+        }
+
+        #compass-arrow.pin {
+          border-bottom-color: #d4788a;
         }
         
         #compass-arrow::after {
@@ -579,28 +583,33 @@ export class HUD {
   private updateCompass(): void {
     const delivery = this.game.deliverySystem;
     const recipientPos = delivery.getRecipientPosition();
-    
-    if (!recipientPos || delivery.gameComplete) {
+    const pin = this.game.pinDir;
+    const towardDelivery = !!(recipientPos && !delivery.gameComplete);
+    const target = towardDelivery
+      ? recipientPos
+      : pin
+        ? pin.clone().multiplyScalar(this.game.planetRadius)
+        : null;
+
+    this.compassArrow.classList.toggle('pin', !towardDelivery && !!pin);
+
+    if (!target) {
       this.compassArrow.style.opacity = '0.3';
       return;
     }
-    
+
     this.compassArrow.style.opacity = '1';
-    
+
     const playerPos = this.game.character.getPosition();
     const playerForward = this.game.character.getForward();
     const playerUp = playerPos.clone().normalize();
-    
-    let toTarget = recipientPos.clone().sub(playerPos);
+
+    const toTarget = target.clone().sub(playerPos);
     toTarget.sub(playerUp.clone().multiplyScalar(toTarget.dot(playerUp)));
     toTarget.normalize();
-    
+
     const playerRight = new THREE.Vector3().crossVectors(playerForward, playerUp).normalize();
-    
-    const forward = playerForward.dot(toTarget);
-    const right = playerRight.dot(toTarget);
-    
-    const angle = Math.atan2(right, forward);
+    const angle = Math.atan2(playerRight.dot(toTarget), playerForward.dot(toTarget));
     this.compassArrow.style.transform = `rotate(${angle}rad)`;
   }
 

@@ -60,6 +60,7 @@ export class MapView {
     this.dropPin.add(dropLabel);
     this.dropPin.visible = false;
     this.markers.add(this.playerPin, this.targetPin, this.dropPin);
+    if (this.game.pinDir) this.dropDir = this.game.pinDir.clone();
   }
 
   /** A cone on a stalk, standing off the surface so it clears the rooftops. */
@@ -290,6 +291,7 @@ export class MapView {
     const onGlobe = this.pickGlobe(e);
     if (!onGlobe) return;
     this.dropDir = onGlobe;
+    this.game.setPin(onGlobe);
     this.dropPin.visible = true;
     this.placePin(this.dropPin, onGlobe);
     this.spinTarget = Math.atan2(onGlobe.z, onGlobe.x);
