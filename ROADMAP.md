@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- Courier, villagers and the flock were still crate-people and a vertical
+  wool drum. Figures have a prism skull, neck and tapered limbs; sheep
+  lie along their body; a black-and-white sheepdog herds the paddock.
 - Streets still read as Minecraft: one-box houses, green drum trees, a
   leftover torii, and roofs with no tile. Houses now jetty / lean-to /
   L-wing, canopies are flattened painted masses, benches and a calvary

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { PLAYER, NPC, MATERIAL, ACCENT } from '../utils/palette';
+import { PaintedTextures } from '../utils/PaintedTextures';
 
 /**
  * Loads the courier and the villagers, and hands out animatable instances.
@@ -124,10 +125,13 @@ export class Characters {
       }
     })();
 
-    const key = `${slot}|${colour}`;
+    const mapped = slot === 'COAT' || slot === 'COAT_ALT' || slot === 'APRON'
+      || slot === 'BAG' || slot === 'HAT';
+    const map = mapped ? PaintedTextures.get('plaster') : undefined;
+    const key = `${slot}|${colour}|${map?.uuid ?? '-'}`;
     let material = this.materialCache.get(key);
     if (!material) {
-      material = ToonMaterial.create({ color: colour });
+      material = ToonMaterial.create({ color: colour, map });
       this.materialCache.set(key, material);
     }
     return material;

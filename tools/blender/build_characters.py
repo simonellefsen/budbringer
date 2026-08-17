@@ -106,6 +106,25 @@ def prism(sides, radius, height, location, material, rotation_z=0.0, taper=1.0):
     return Part(_place(verts, location, rotation_z), faces, material)
 
 
+def apply_box_uvs(mesh, scale=1.8):
+    """Triplanar UVs so a painted fabric tile can sit on clothes and skin."""
+    if mesh.uv_layers.active is None:
+        mesh.uv_layers.new(name="UVMap")
+    uv = mesh.uv_layers.active
+    for poly in mesh.polygons:
+        n = poly.normal
+        ax, ay, az = abs(n.x), abs(n.y), abs(n.z)
+        for loop_i in poly.loop_indices:
+            v = mesh.vertices[mesh.loops[loop_i].vertex_index].co
+            if az >= ax and az >= ay:
+                u, vv = v.x, v.y
+            elif ax >= ay:
+                u, vv = v.y, v.z
+            else:
+                u, vv = v.x, v.z
+            uv.data[loop_i].uv = (u * scale, vv * scale)
+
+
 def get_material(name):
     mat = bpy.data.materials.get(name)
     if mat is None:
@@ -151,6 +170,7 @@ def make_object(name, parts, parent=None, origin=(0.0, 0.0, 0.0)):
         poly.material_index = index_of[material]
         poly.use_smooth = False
     mesh.update()
+    apply_box_uvs(mesh)
 
     obj = bpy.data.objects.new(name, mesh)
     obj.location = origin
@@ -162,59 +182,77 @@ def make_object(name, parts, parent=None, origin=(0.0, 0.0, 0.0)):
 
 # ------------------------------------------------------------------ anatomy
 
-def head_parts(hair=MAT_HAIR, hat=None, z=1.42, scale=1.0):
-    """Head, hair, ears, and modern headwear."""
+def head_parts(hair=MAT_HAIR, hat=None, z=1.42, scale=1.0, head_boost=1.0):
+    """
+    Head, hair, ears, and modern headwear.
+
+    A six-sided skull instead of a cube, plus overlapping hair masses — the
+    old head was a Minecraft block with a smaller block on top.
+    """
     k = scale
+    h = k * head_boost
     z = z * k
     parts = [
-        box((0.2 * k, 0.19 * k, 0.24 * k), (0, 0, z), MAT_SKIN, taper=0.94),
-        box((0.21 * k, 0.2 * k, 0.08 * k), (0, 0, z + 0.11 * k), hair, taper=0.96),
-        box((0.2 * k, 0.1 * k, 0.1 * k), (0, -0.055 * k, z + 0.09 * k), hair),
+        # Cranium: a short prism reads as a head, not a crate.
+        prism(6, 0.125 * h, 0.22 * h, (0, 0.01 * k, z - 0.11 * h), MAT_SKIN, taper=0.82),
+        box((0.16 * h, 0.15 * h, 0.14 * h), (0, -0.02 * k, z - 0.02 * h),
+            MAT_SKIN, taper=0.92),
+        # Chin / jaw, slightly narrower.
+        box((0.12 * h, 0.11 * h, 0.08 * h), (0, -0.03 * k, z - 0.12 * h),
+            MAT_SKIN, taper=0.88),
     ]
     for side in (-1, 1):
-        parts.append(box((0.035 * k, 0.06 * k, 0.08 * k),
-                         (side * 0.105 * k, 0.005 * k, z), MAT_SKIN))
-        parts.append(box((0.03 * k, 0.02 * k, 0.035 * k),
-                         (side * 0.05 * k, -0.098 * k, z + 0.012 * k), MAT_HAIR))
+        parts.append(box((0.04 * h, 0.05 * h, 0.07 * h),
+                         (side * 0.12 * h, 0.0, z - 0.01 * h), MAT_SKIN, taper=0.8))
+        # Eyes — two dark dashes, the Messenger note.
+        parts.append(box((0.028 * h, 0.018 * h, 0.018 * h),
+                         (side * 0.045 * h, -0.09 * h, z + 0.01 * h), MAT_HAIR))
 
     if hat == "bob":
         # Messy short bob — the courier's silhouette from behind.
         parts.extend([
-            box((0.23 * k, 0.22 * k, 0.14 * k), (0, 0.02 * k, z + 0.1 * k),
-                MAT_HAIR, taper=0.9),
-            box((0.2 * k, 0.09 * k, 0.1 * k), (0, -0.08 * k, z + 0.07 * k), MAT_HAIR),
-            box((0.075 * k, 0.1 * k, 0.18 * k), (-0.11 * k, 0.0, z), MAT_HAIR),
-            box((0.075 * k, 0.1 * k, 0.18 * k), (0.11 * k, 0.0, z), MAT_HAIR),
-            box((0.18 * k, 0.1 * k, 0.14 * k), (0, 0.09 * k, z - 0.02 * k), MAT_HAIR),
-            box((0.06 * k, 0.07 * k, 0.08 * k), (-0.06 * k, -0.04 * k, z + 0.14 * k),
-                MAT_HAIR),
-            box((0.055 * k, 0.06 * k, 0.07 * k), (0.05 * k, 0.02 * k, z + 0.15 * k),
-                MAT_HAIR),
+            prism(6, 0.14 * h, 0.12 * h, (0, 0.02 * k, z + 0.04 * h),
+                  MAT_HAIR, taper=0.78),
+            box((0.22 * h, 0.12 * h, 0.12 * h), (0, -0.07 * k, z + 0.05 * h),
+                MAT_HAIR, taper=0.88),
+            box((0.09 * h, 0.11 * h, 0.16 * h), (-0.12 * h, 0.02 * k, z - 0.01 * h),
+                MAT_HAIR, taper=0.8),
+            box((0.09 * h, 0.11 * h, 0.16 * h), (0.12 * h, 0.02 * k, z - 0.01 * h),
+                MAT_HAIR, taper=0.8),
+            box((0.18 * h, 0.12 * h, 0.13 * h), (0, 0.1 * k, z - 0.02 * h),
+                MAT_HAIR, taper=0.85),
+            box((0.07 * h, 0.07 * h, 0.08 * h), (-0.06 * h, -0.04 * k, z + 0.13 * h),
+                MAT_HAIR, taper=0.7),
+            box((0.06 * h, 0.06 * h, 0.07 * h), (0.05 * h, 0.02 * k, z + 0.14 * h),
+                MAT_HAIR, taper=0.7),
         ])
         return parts
 
+    # Short hair under hats so a cap does not sit on a bald cube.
+    parts.append(prism(6, 0.13 * h, 0.08 * h, (0, 0.01 * k, z + 0.06 * h),
+                       MAT_HAIR, taper=0.8))
+
     if hat == "cap":
-        parts.append(box((0.225 * k, 0.215 * k, 0.08 * k),
-                         (0, 0.005 * k, z + 0.175 * k), MAT_HAT, taper=0.86))
-        parts.append(box((0.2 * k, 0.12 * k, 0.028 * k),
-                         (0, -0.135 * k, z + 0.15 * k), MAT_HAT))
+        parts.append(box((0.24 * h, 0.23 * h, 0.08 * h),
+                         (0, 0.005 * k, z + 0.16 * h), MAT_HAT, taper=0.82))
+        parts.append(box((0.2 * h, 0.12 * h, 0.028 * h),
+                         (0, -0.14 * h, z + 0.13 * h), MAT_HAT))
     elif hat == "cap_back":
-        # Peak round the back — the whole point of a teenager's cap.
-        parts.append(box((0.225 * k, 0.215 * k, 0.08 * k),
-                         (0, 0.005 * k, z + 0.175 * k), MAT_HAT, taper=0.86))
-        parts.append(box((0.2 * k, 0.12 * k, 0.028 * k),
-                         (0, 0.145 * k, z + 0.15 * k), MAT_HAT))
-        parts.append(box((0.07 * k, 0.02 * k, 0.03 * k),
-                         (0, 0.115 * k, z + 0.175 * k), MAT_ACCENT))
+        parts.append(box((0.24 * h, 0.23 * h, 0.08 * h),
+                         (0, 0.005 * k, z + 0.16 * h), MAT_HAT, taper=0.82))
+        parts.append(box((0.2 * h, 0.12 * h, 0.028 * h),
+                         (0, 0.145 * h, z + 0.13 * h), MAT_HAT))
+        parts.append(box((0.07 * h, 0.02 * h, 0.03 * h),
+                         (0, 0.115 * h, z + 0.16 * h), MAT_ACCENT))
     elif hat == "beanie":
-        parts.append(box((0.225 * k, 0.215 * k, 0.14 * k),
-                         (0, 0, z + 0.16 * k), MAT_HAT, taper=0.9))
-        parts.append(box((0.235 * k, 0.225 * k, 0.045 * k),
-                         (0, 0, z + 0.105 * k), MAT_HAT))
+        parts.append(prism(6, 0.14 * h, 0.12 * h, (0, 0, z + 0.08 * h),
+                           MAT_HAT, taper=0.78))
+        parts.append(box((0.24 * h, 0.23 * h, 0.04 * h),
+                         (0, 0, z + 0.08 * h), MAT_HAT, taper=0.95))
     elif hat == "bucket":
-        parts.append(prism(10, 0.135 * k, 0.13 * k, (0, 0, z + 0.14 * k),
-                           MAT_HAT, taper=0.95))
-        parts.append(prism(10, 0.22 * k, 0.025 * k, (0, 0, z + 0.13 * k), MAT_HAT))
+        parts.append(prism(8, 0.13 * h, 0.12 * h, (0, 0, z + 0.1 * h),
+                           MAT_HAT, taper=0.92))
+        parts.append(prism(8, 0.21 * h, 0.03 * h, (0, 0, z + 0.1 * h), MAT_HAT))
     return parts
 
 
@@ -231,8 +269,12 @@ def torso_parts(coat=MAT_COAT, style="hoodie", apron=False, z=1.05,
     z = z * k
     w = width * k
     parts = [
-        box((w, 0.2 * k, 0.42 * k), (0, 0, z), coat, taper=0.9),
-        box((w * 0.94, 0.19 * k, 0.16 * k), (0, 0, z - 0.28 * k), MAT_COAT_ALT),
+        # Neck, so the head is not a crate glued to a crate.
+        prism(6, 0.055 * k, 0.1 * k, (0, 0.01 * k, z + 0.18 * k), MAT_SKIN, taper=0.9),
+        # Shoulders wider than the waist.
+        box((w * 1.08, 0.22 * k, 0.18 * k), (0, 0, z + 0.14 * k), coat, taper=0.92),
+        box((w, 0.2 * k, 0.32 * k), (0, 0, z - 0.02 * k), coat, taper=0.84),
+        box((w * 0.92, 0.19 * k, 0.18 * k), (0, 0, z - 0.28 * k), MAT_COAT_ALT, taper=0.96),
     ]
 
     if style == "hoodie":
@@ -274,11 +316,11 @@ def arm_parts(side, coat=MAT_COAT, z=1.16, reach=0.28, scale=1.0, short=False):
     sleeve = reach * (0.42 if short else 1.0) * k
     r = reach * k
     return [
-        box((0.095 * k, 0.1 * k, sleeve), (x, 0, z - sleeve / 2), coat, taper=0.92),
-        box((0.082 * k, 0.088 * k, (r - sleeve) + 0.2 * k),
-            (x, 0, z - sleeve - ((r - sleeve) + 0.2 * k) / 2), MAT_SKIN),
-        box((0.09 * k, 0.075 * k, 0.08 * k),
-            (x, -0.01 * k, z - r - 0.22 * k), MAT_SKIN),
+        box((0.1 * k, 0.1 * k, sleeve), (x, 0, z - sleeve / 2), coat, taper=0.78),
+        box((0.078 * k, 0.08 * k, (r - sleeve) + 0.2 * k),
+            (x, 0, z - sleeve - ((r - sleeve) + 0.2 * k) / 2), MAT_SKIN, taper=0.82),
+        box((0.085 * k, 0.07 * k, 0.07 * k),
+            (x, -0.02 * k, z - r - 0.22 * k), MAT_SKIN, taper=0.75),
     ]
 
 
@@ -288,13 +330,13 @@ def leg_parts(side, z=0.72, scale=1.0):
     z = z * k
     x = side * 0.088 * k
     return [
-        box((0.115 * k, 0.13 * k, 0.38 * k), (x, 0, z - 0.19 * k),
-            MAT_COAT_ALT, taper=0.92),
-        box((0.102 * k, 0.112 * k, 0.32 * k), (x, 0, z - 0.54 * k), MAT_COAT_ALT),
-        # Trainer: coloured upper over a pale sole.
-        box((0.115 * k, 0.19 * k, 0.075 * k), (x, -0.028 * k, z - 0.735 * k),
-            MAT_BOOT),
-        box((0.12 * k, 0.2 * k, 0.035 * k), (x, -0.03 * k, z - 0.785 * k),
+        box((0.12 * k, 0.13 * k, 0.38 * k), (x, 0, z - 0.19 * k),
+            MAT_COAT_ALT, taper=0.82),
+        box((0.095 * k, 0.105 * k, 0.32 * k), (x, 0, z - 0.54 * k),
+            MAT_COAT_ALT, taper=0.88),
+        box((0.115 * k, 0.2 * k, 0.075 * k), (x, -0.03 * k, z - 0.735 * k),
+            MAT_BOOT, taper=0.92),
+        box((0.12 * k, 0.21 * k, 0.032 * k), (x, -0.032 * k, z - 0.785 * k),
             MAT_SOLE),
     ]
 
@@ -339,11 +381,11 @@ def short_leg_parts(side, z=0.72, scale=1.0):
     x = side * 0.088 * k
     return [
         box((0.12 * k, 0.13 * k, 0.28 * k), (x, 0, z - 0.14 * k),
-            MAT_COAT_ALT, taper=0.94),
-        box((0.09 * k, 0.1 * k, 0.22 * k), (x, 0, z - 0.42 * k), MAT_SKIN),
-        box((0.085 * k, 0.09 * k, 0.07 * k), (x, 0, z - 0.56 * k), MAT_SOLE),
-        box((0.11 * k, 0.18 * k, 0.07 * k), (x, -0.03 * k, z - 0.64 * k), MAT_BOOT),
-        box((0.115 * k, 0.19 * k, 0.03 * k), (x, -0.03 * k, z - 0.69 * k), MAT_SOLE),
+            MAT_COAT_ALT, taper=0.86),
+        box((0.085 * k, 0.092 * k, 0.22 * k), (x, 0, z - 0.42 * k), MAT_SKIN, taper=0.88),
+        box((0.08 * k, 0.085 * k, 0.06 * k), (x, 0, z - 0.56 * k), MAT_SOLE),
+        box((0.11 * k, 0.19 * k, 0.07 * k), (x, -0.032 * k, z - 0.64 * k), MAT_BOOT, taper=0.9),
+        box((0.115 * k, 0.2 * k, 0.03 * k), (x, -0.034 * k, z - 0.69 * k), MAT_SOLE),
     ]
 
 
@@ -351,7 +393,7 @@ def short_leg_parts(side, z=0.72, scale=1.0):
 
 def build_figure(name, hat=None, coat=MAT_COAT, style="hoodie", apron=False,
                  carry=None, props=None, scale=1.0, location=(0, 0, 0),
-                 shorts=False):
+                 shorts=False, head_boost=1.0):
     """
     Assemble one person as a parented rig of named parts.
 
@@ -379,8 +421,8 @@ def build_figure(name, hat=None, coat=MAT_COAT, style="hoodie", apron=False,
 
     short_sleeves = style == "tee"
 
-    make_object(f"{name}.HEAD", head_parts(hat=hat, scale=scale), root,
-                origin=(0, 0, 1.3 * scale))
+    make_object(f"{name}.HEAD", head_parts(hat=hat, scale=scale, head_boost=head_boost),
+                root, origin=(0, 0, 1.3 * scale))
     for side, label in ((-1, "ARM_L"), (1, "ARM_R")):
         make_object(f"{name}.{label}",
                     arm_parts(side, coat, scale=scale, short=short_sleeves),
@@ -425,7 +467,7 @@ def build():
 
     # The courier: yellow tee, cropped trousers, sling bag, messy bob.
     build_figure("Courier", hat="bob", style="tee", carry="sling", shorts=True,
-                 scale=0.9, location=(0, 0, 0))
+                 scale=0.9, head_boost=1.14, location=(0, 0, 0))
 
     # The villagers, in present-day clothes rather than period costume.
     build_figure("Villager_Postmaster", hat="cap", style="jacket",
@@ -459,3 +501,4 @@ def export(path="/Users/lindau/codex/budbringer/public/models/characters.glb"):
 
 if __name__ == "__main__":
     print(build())
+    print(export())
