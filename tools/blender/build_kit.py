@@ -53,10 +53,13 @@ MAT_CROP = "CROP"        # straw, wheat, thatch
 MAT_BLOOM = "BLOOM"      # lavender, blossom
 MAT_SIGN = "SIGN"        # blank board; the game letters it with troika text
 MAT_WATER = "WATER"      # waterfall sheets and foam-adjacent water
+MAT_LAKE = "LAKE"        # lake creature hide — teal, not the falling-sheet shader
+MAT_LAMP = "LAMP"        # shrine lantern flame
 
 SLOTS = [MAT_WALL, MAT_WALL_ALT, MAT_PAINTED, MAT_ROOF, MAT_TIMBER, MAT_TRIM,
          MAT_WOOD, MAT_STONE, MAT_METAL, MAT_GLASS, MAT_SHUTTER, MAT_ACCENT,
-         MAT_FOLIAGE, MAT_CROP, MAT_BLOOM, MAT_SIGN, MAT_WATER]
+         MAT_FOLIAGE, MAT_CROP, MAT_BLOOM, MAT_SIGN, MAT_WATER, MAT_LAKE,
+         MAT_LAMP]
 
 # Viewport-only colours so the Blender viewport is legible while working.
 # The game ignores these entirely.
@@ -78,6 +81,8 @@ PREVIEW = {
     MAT_BLOOM:    (0.55, 0.47, 0.71, 1.0),
     MAT_SIGN:     (0.16, 0.13, 0.10, 1.0),
     MAT_WATER:    (0.45, 0.68, 0.72, 1.0),
+    MAT_LAKE:     (0.37, 0.60, 0.64, 1.0),
+    MAT_LAMP:     (1.0, 0.89, 0.68, 1.0),
 }
 
 
@@ -947,6 +952,54 @@ def waterfall():
     ]
 
 
+def lake_creature():
+    """
+    A shy lake otter, not a sphere with tentacles.
+
+    Long on Y like the sheep, prism head, dash eyes, paddle tail. WATER
+    would pick up the falling-sheet shader, so the hide uses LAKE — the
+    same teal family, painted, without the scroll.
+    """
+    parts = [
+        box((0.38, 0.74, 0.3), (0, 0.04, 0.28), MAT_LAKE, taper=0.9),
+        box((0.32, 0.28, 0.22), (0, 0.44, 0.24), MAT_LAKE, taper=0.84),
+        box((0.28, 0.24, 0.18), (0, -0.4, 0.3), MAT_LAKE, taper=0.88),
+        box((0.26, 0.5, 0.12), (0, 0.02, 0.16), MAT_TRIM, taper=0.92),
+        prism(6, 0.13, 0.18, (0, -0.56, 0.22), MAT_LAKE, taper=0.78),
+        box((0.16, 0.16, 0.11), (0, -0.7, 0.27), MAT_LAKE, taper=0.84),
+        box((0.07, 0.08, 0.05), (0, -0.8, 0.25), MAT_TRIM, taper=0.8),
+    ]
+    for side in (-1, 1):
+        parts.append(box((0.034, 0.018, 0.018),
+                         (side * 0.055, -0.74, 0.34), MAT_TIMBER))
+        parts.append(box((0.05, 0.04, 0.06),
+                         (side * 0.09, -0.52, 0.4), MAT_LAKE, taper=0.6))
+        parts.append(box((0.22, 0.1, 0.045),
+                         (side * 0.22, -0.06, 0.13), MAT_LAKE, taper=0.7))
+        parts.append(box((0.16, 0.08, 0.04),
+                         (side * 0.16, 0.3, 0.12), MAT_LAKE, taper=0.7))
+    parts.append(box((0.14, 0.36, 0.08), (0, 0.7, 0.2), MAT_LAKE, taper=0.55))
+    return parts
+
+
+def sky_lantern():
+    """
+    A paper shrine lantern, not a glowing sphere with torus rings.
+
+    Hexagonal shade, timber hoops, a warm lamp inside. Origin sits at the
+    hanging ring so it can float above the chapel and sway from that point.
+    """
+    return [
+        prism(6, 0.28, 0.55, (0, 0, -0.56), MAT_TRIM, taper=0.86),
+        prism(6, 0.15, 0.26, (0, 0, -0.42), MAT_LAMP, taper=0.9),
+        prism(8, 0.3, 0.05, (0, 0, -0.05), MAT_WOOD),
+        prism(8, 0.25, 0.045, (0, 0, -0.56), MAT_WOOD, taper=0.95),
+        prism(6, 0.16, 0.08, (0, 0, -0.02), MAT_WOOD, taper=0.35),
+        prism(8, 0.055, 0.04, (0, 0, 0.08), MAT_METAL),
+        box((0.03, 0.03, 0.16), (0, 0, -0.7), MAT_ACCENT),
+    ]
+
+
 def cliff_rock():
     """A chunk of cliff face for the lip above a fall."""
     return [
@@ -1034,6 +1087,8 @@ def build():
     assemble("Cliff_Rock", cliff_rock(), (214, 0, 0))
     assemble("Bench", garden_bench(), (222, 0, 0))
     assemble("Calvary", calvary(), (228, 0, 0))
+    assemble("Lake_Creature", lake_creature(), (236, 0, 0))
+    assemble("Sky_Lantern", sky_lantern(), (242, 0, 0))
 
     return {o.name: len(o.data.polygons) for o in bpy.data.objects}
 

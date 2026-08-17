@@ -3,7 +3,7 @@ import { Game } from '../core/Game';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { BiomeType } from './Planet';
 import { PaintedTextures } from '../utils/PaintedTextures';
-import { GROUND, MATERIAL, ACCENT } from '../utils/palette';
+import { GROUND, MATERIAL, ACCENT, BUILDING } from '../utils/palette';
 
 export class Secrets {
   private game: Game;
@@ -18,6 +18,11 @@ export class Secrets {
   private readonly islandNorth = new THREE.Vector3();
   private readonly islandDir = new THREE.Vector3();
   private readonly islandLocalUp = new THREE.Vector3(0, 1, 0);
+  private readonly creatureHome = new THREE.Vector3();
+  private readonly creatureUp = new THREE.Vector3();
+  private readonly lanternHome = new THREE.Vector3();
+  private readonly lanternUp = new THREE.Vector3();
+  private readonly lanternSway = new THREE.Vector3(1, 0, 0);
 
   constructor(game: Game) {
     this.game = game;
@@ -174,43 +179,21 @@ export class Secrets {
     this.floatingIsland.rotateOnAxis(this.islandLocalUp, elapsed * 0.12);
   }
 
+  /**
+   * A painted lake otter, not a blue sphere with tentacles.
+   *
+   * The village animals are kit boxes; this one uses the same language
+   * (long body, prism head, dash eyes) so the secret belongs in the pond
+   * rather than a different game.
+   */
   private createBeachCreature(): void {
     const creature = new THREE.Group();
-    
-    const bodyGeo = new THREE.SphereGeometry(0.6, 16, 16);
-    const bodyMat = ToonMaterial.create({ color: 0x3498db });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.scale.set(1, 0.8, 1.2);
-    body.castShadow = true;
-    creature.add(body);
-    
-    for (let i = 0; i < 2; i++) {
-      const eyeGeo = new THREE.SphereGeometry(0.2, 12, 12);
-      const eyeWhite = new THREE.Mesh(eyeGeo, ToonMaterial.create({ color: 0xffffff }));
-      eyeWhite.position.set(i === 0 ? -0.25 : 0.25, 0.3, 0.4);
-      creature.add(eyeWhite);
-      
-      const pupilGeo = new THREE.SphereGeometry(0.1, 8, 8);
-      const pupil = new THREE.Mesh(pupilGeo, ToonMaterial.create({ color: 0x2c3e50 }));
-      pupil.position.set(i === 0 ? -0.25 : 0.25, 0.3, 0.55);
-      creature.add(pupil);
-    }
-    
-    for (let i = 0; i < 4; i++) {
-      const tentacleGeo = new THREE.CylinderGeometry(0.08, 0.05, 0.5, 6);
-      const tentacleMat = ToonMaterial.create({ color: 0x2980b9 });
-      const tentacle = new THREE.Mesh(tentacleGeo, tentacleMat);
-      const angle = (i / 4) * Math.PI * 2;
-      tentacle.position.set(
-        Math.cos(angle) * 0.4,
-        -0.5,
-        Math.sin(angle) * 0.4
-      );
-      tentacle.rotation.x = 0.3;
-      tentacle.rotation.z = Math.cos(angle) * 0.3;
-      creature.add(tentacle);
-    }
-    
+    const piece = this.game.kit?.isLoaded
+      ? this.game.kit.instance('Lake_Creature')
+      : null;
+    if (piece) creature.add(piece);
+    else this.fallbackCreature(creature);
+
     // The "seaside" biome is grass, not water. Sit in the shallows of Le Lac
     // on the visible mesh / water plane, not at a flat planetRadius + 0.5.
     const lake = this.game.planet.areas.find(a => a.name === 'Le Lac');
@@ -218,57 +201,85 @@ export class Secrets {
       ? lake.center.clone().multiplyScalar(this.game.planet.radius)
       : this.game.planet.getBiomePosition(BiomeType.SEASIDE);
     const shore = this.game.planet.offsetOnSphere(lakePos, 1.15, 13.4);
-    const up = this.sitSecret(creature, shore, 0.22);
-    creature.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), up);
-    
+    const up = this.sitSecret(creature, shore, 0.08);
+    creature.quaternion.setFromUnitVectors(this.islandLocalUp, up);
+
+    this.creatureHome.copy(creature.position);
+    this.creatureUp.copy(up);
     creature.visible = false;
     this.game.scene.add(creature);
     this.beachCreature = creature;
   }
 
+  private fallbackCreature(creature: THREE.Group): void {
+    const hide = ToonMaterial.create({
+      color: GROUND.water,
+      map: PaintedTextures.get('plaster')
+    });
+    const belly = ToonMaterial.create({
+      color: MATERIAL.stone,
+      map: PaintedTextures.get('plaster')
+    });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.3, 0.74), hide);
+    body.position.y = 0.28;
+    body.castShadow = true;
+    creature.add(body);
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.5), belly);
+    chest.position.y = 0.16;
+    creature.add(chest);
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.18, 6), hide);
+    head.position.set(0, 0.3, -0.56);
+    creature.add(head);
+  }
+
+  /**
+   * A paper shrine lantern, not a glowing sphere with torus rings.
+   *
+   * Same timber hoops and lime-render paper as the village joinery, with
+   * a warm lamp inside. Local +Y stays radial so it hangs above the chapel
+   * instead of tilting to world-Y.
+   */
   private createMysteryOrb(): void {
     const orb = new THREE.Group();
-    
-    const coreGeo = new THREE.SphereGeometry(0.5, 32, 32);
-    const coreMat = ToonMaterial.create({
-      color: 0xffeaa7,
-      emissive: 0xf39c12,
-      emissiveIntensity: 0.8
-    });
-    const core = new THREE.Mesh(coreGeo, coreMat);
-    orb.add(core);
-    
-    const glowGeo = new THREE.SphereGeometry(0.7, 16, 16);
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: 0xffeaa7,
-      transparent: true,
-      opacity: 0.3
-    });
-    const glow = new THREE.Mesh(glowGeo, glowMat);
-    orb.add(glow);
-    
-    for (let i = 0; i < 3; i++) {
-      const ringGeo = new THREE.TorusGeometry(0.8 + i * 0.15, 0.02, 8, 32);
-      const ringMat = ToonMaterial.create({
-        color: 0xf39c12,
-        emissive: 0xf39c12,
-        emissiveIntensity: 0.5
-      });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = Math.PI / 2 + i * 0.3;
-      ring.rotation.y = i * 0.5;
-      orb.add(ring);
-    }
-    
+    const piece = this.game.kit?.isLoaded
+      ? this.game.kit.instance('Sky_Lantern')
+      : null;
+    if (piece) orb.add(piece);
+    else this.fallbackLantern(orb);
+
     const shrine = this.game.planet.areas.find(a => a.name === 'La Chapelle')
       ?? this.game.planet.areas.find(a => a.name === 'Église Saint-Martin');
     const shrinePos = shrine
       ? shrine.center.clone().multiplyScalar(this.game.planet.radius)
       : this.game.planet.getBiomePosition(BiomeType.SHRINE);
-    this.sitSecret(orb, shrinePos, 6.4);
-    
+    const up = this.sitSecret(orb, shrinePos, 6.4);
+    orb.quaternion.setFromUnitVectors(this.islandLocalUp, up);
+
+    this.lanternHome.copy(orb.position);
+    this.lanternUp.copy(up);
     this.game.scene.add(orb);
     this.mysteryOrb = orb;
+  }
+
+  private fallbackLantern(orb: THREE.Group): void {
+    const paper = ToonMaterial.create({
+      color: BUILDING.trim,
+      map: PaintedTextures.get('plaster')
+    });
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.55, 6), paper);
+    shade.position.y = -0.3;
+    shade.castShadow = true;
+    orb.add(shade);
+    const flame = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.1, 0.14, 0.22, 6),
+      ToonMaterial.create({
+        color: ACCENT.lamp,
+        emissive: ACCENT.lamp,
+        emissiveIntensity: 0.75
+      })
+    );
+    flame.position.y = -0.28;
+    orb.add(flame);
   }
 
   public update(elapsed: number): void {
@@ -287,41 +298,44 @@ export class Secrets {
     }
     
     if (this.beachCreature) {
-      const playerPos = this.game.character.group.position;
-      const creaturePos = this.beachCreature.position;
-      const dist = playerPos.distanceTo(creaturePos);
-      
+      const dist = playerPos.distanceTo(this.creatureHome);
+      this.beachCreature.position.copy(this.creatureHome)
+        .addScaledVector(this.creatureUp, Math.sin(elapsed * 1.6) * 0.07);
+      this.beachCreature.quaternion.setFromUnitVectors(
+        this.islandLocalUp,
+        this.creatureUp
+      );
+      this.beachCreature.rotateOnAxis(this.islandLocalUp, Math.sin(elapsed * 0.9) * 0.16);
+
       if (dist < 15) {
         this.beachCreature.visible = true;
-        this.beachCreature.children.forEach((child: THREE.Object3D, i: number) => {
-          if (i > 2) {
-            child.rotation.x = Math.sin(elapsed * 3 + i) * 0.3;
-          }
-        });
       }
 
-      if (dist < 3) {
+      if (dist < 3.2) {
         this.discover(
           'creature',
           'A Strange Creature',
-          'A curious sea creature blinks at you from the shallows. It seems friendly... and a little lost.'
+          'A curious lake otter blinks at you from the shallows. It seems friendly... and a little lost.'
         );
       }
     }
-    
+
     if (this.mysteryOrb) {
-      this.mysteryOrb.rotation.y = elapsed * 0.5;
-      this.mysteryOrb.rotation.z = Math.sin(elapsed * 0.7) * 0.2;
-      
-      const playerPos = this.game.character.group.position;
-      const orbPos = this.mysteryOrb.position;
-      const dist = playerPos.distanceTo(orbPos);
-      
+      this.mysteryOrb.position.copy(this.lanternHome)
+        .addScaledVector(this.lanternUp, Math.sin(elapsed * 0.8) * 0.12);
+      this.mysteryOrb.quaternion.setFromUnitVectors(
+        this.islandLocalUp,
+        this.lanternUp
+      );
+      this.mysteryOrb.rotateOnAxis(this.islandLocalUp, elapsed * 0.28);
+      this.mysteryOrb.rotateOnAxis(this.lanternSway, Math.sin(elapsed * 0.7) * 0.08);
+
+      const dist = playerPos.distanceTo(this.lanternHome);
       if (dist < 10) {
         this.discover(
           'orb',
           'The Sky Lantern',
-          "An ancient light floats above the shrine. The elders say it's been here since the planet was young. It feels warm, like summer."
+          "A paper lantern hangs above the shrine. The elders say it's been here since the planet was young. It feels warm, like summer."
         );
       }
     }

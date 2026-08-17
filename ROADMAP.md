@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- The sea creature and the sky lantern were a blue sphere with tentacles
+  and a glowing orb with torus rings. They are now a painted lake otter
+  and a paper shrine lantern from the same kit as the village.
 - The wandering isle was a cone-tree on a grey disc, so it read as a
   leftover from another game. It now shares the village's painted
   cliff, orchard tree and bench.
@@ -138,5 +141,5 @@ don't let it go stale.
 
 ## Possible future work
 
-- The sea creature and the sky lantern are still primitive spheres —
-  they could be built in the same painted-kit language as the village.
+- The isle crystals are still raw octahedrons — they could be painted
+  quartz so they match the limestone and timber.
