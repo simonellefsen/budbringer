@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- A refresh sent you back to Maple's first letter. Completed deliveries
+  and the letter in your bag now come back with the pin and the places
+  you have walked.
 - A refresh forgot the rose pin and every walked region. Both now live
   in local storage, and the compass points at the pin when you have no
   letter in hand.
@@ -120,4 +123,4 @@ don't let it go stale.
 
 ## Possible future work
 
-- Remember delivery progress across sessions.
+- A way to start the mail over without clearing the browser store.
