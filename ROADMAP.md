@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- A refresh forgot the rose pin and every walked region. Both now live
+  in local storage, and the compass points at the pin when you have no
+  letter in hand.
 - The map only marked places you had already walked — a tap on empty
   grass now drops a rose pin you can face again, even on the far side.
 - Courier, villagers and the flock were still crate-people and a vertical
@@ -117,4 +120,4 @@ don't let it go stale.
 
 ## Possible future work
 
-- Remember the personal map pin across sessions.
+- Remember delivery progress across sessions.

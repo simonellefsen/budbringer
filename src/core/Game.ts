@@ -21,6 +21,7 @@ import { PaintedTextures } from '../utils/PaintedTextures';
 import { Kit } from '../world/Kit';
 import { Characters } from '../world/Characters';
 import { MapView } from '../ui/MapView';
+import { loadSave, writeSave } from '../utils/Save';
 
 export enum GameState {
   TITLE,
@@ -61,6 +62,8 @@ export class Game {
   public planetRadius: number = 30;
   /** Named regions the courier has stood in, for the world map. */
   public visitedPlaces: Set<string> = new Set();
+  /** Personal map pin, as a unit direction. Survives a refresh. */
+  public pinDir: THREE.Vector3 | null = null;
   
   private animationId: number = 0;
   private container!: HTMLElement;
@@ -229,6 +232,39 @@ export class Game {
 
     this.enableShadowsEverywhere();
     this.cameraController.rebuildColliders();
+    this.restoreMapMemory();
+  }
+
+  /**
+   * Walked regions and the personal pin come back after a refresh.
+   *
+   * The globe is rebuilt identically every load, so this is the only memory
+   * the map needs. Names that no longer exist on the planet are dropped.
+   */
+  private restoreMapMemory(): void {
+    const data = loadSave();
+    const known = new Set(this.planet.areas.map(a => a.name));
+    for (const name of data.visited) {
+      if (known.has(name)) this.visitedPlaces.add(name);
+    }
+    if (data.pin) {
+      const dir = new THREE.Vector3(data.pin.x, data.pin.y, data.pin.z);
+      if (dir.lengthSq() > 1e-6) this.pinDir = dir.normalize();
+    }
+  }
+
+  public persistMap(): void {
+    writeSave({
+      visited: [...this.visitedPlaces],
+      pin: this.pinDir
+        ? { x: this.pinDir.x, y: this.pinDir.y, z: this.pinDir.z }
+        : null
+    });
+  }
+
+  public setPin(dir: THREE.Vector3 | null): void {
+    this.pinDir = dir ? dir.clone().normalize() : null;
+    this.persistMap();
   }
 
   /**
@@ -358,7 +394,9 @@ export class Game {
   }
 
   public rememberPlace(name: string): void {
+    if (this.visitedPlaces.has(name)) return;
     this.visitedPlaces.add(name);
+    this.persistMap();
   }
 
   public startGame(): void {
