@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { Game } from '../core/Game';
 import { ToonMaterial } from '../utils/ToonMaterial';
 import { BiomeType } from './Planet';
+import { PaintedTextures } from '../utils/PaintedTextures';
+import { GROUND, MATERIAL, ACCENT } from '../utils/palette';
 
 export class Secrets {
   private game: Game;
@@ -28,55 +30,127 @@ export class Secrets {
     this.createMysteryOrb();
   }
 
+  /**
+   * A scrap of hillside, not a cone on a grey disc.
+   *
+   * The village is painted kit. The old isle was a dodecahedron, a
+   * cylinder and a pine cone, so it read as a different game. Same
+   * cliff, orchard tree and bench as the ground, plus the crystals
+   * that mark it as a secret.
+   */
   private createFloatingIsland(): void {
     const island = new THREE.Group();
-    
-    const baseGeo = new THREE.DodecahedronGeometry(2, 1);
-    const baseMat = ToonMaterial.create({ color: 0x7f8c8d });
-    const base = new THREE.Mesh(baseGeo, baseMat);
-    base.scale.y = 0.5;
-    base.castShadow = true;
-    island.add(base);
-    
-    const grassGeo = new THREE.CylinderGeometry(1.8, 2, 0.3, 12);
-    const grassMat = ToonMaterial.create({ color: 0x27ae60 });
-    const grass = new THREE.Mesh(grassGeo, grassMat);
-    grass.position.y = 0.6;
-    grass.castShadow = true;
-    island.add(grass);
-    
-    const treeGeo = new THREE.ConeGeometry(0.5, 1.5, 6);
-    const treeMat = ToonMaterial.create({ color: 0x16a085 });
-    const tree = new THREE.Mesh(treeGeo, treeMat);
-    tree.position.y = 1.5;
-    tree.castShadow = true;
-    island.add(tree);
-    
-    for (let i = 0; i < 5; i++) {
-      const crystalGeo = new THREE.OctahedronGeometry(0.15, 0);
-      const crystalMat = ToonMaterial.create({ 
-        color: 0x9b59b6, 
-        emissive: 0x9b59b6, 
-        emissiveIntensity: 0.5 
-      });
-      const crystal = new THREE.Mesh(crystalGeo, crystalMat);
-      const angle = (i / 5) * Math.PI * 2;
-      crystal.position.set(
-        Math.cos(angle) * 1.2,
-        0.8,
-        Math.sin(angle) * 1.2
-      );
-      crystal.scale.y = 1.5;
+
+    const sod = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.68, 1.86, 0.26, 10),
+      ToonMaterial.create({
+        color: GROUND.hillside,
+        map: PaintedTextures.get('grass', 2)
+      })
+    );
+    sod.position.y = 0.1;
+    sod.castShadow = true;
+    sod.receiveShadow = true;
+    island.add(sod);
+
+    const soil = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.74, 1.48, 0.36, 10),
+      ToonMaterial.create({
+        color: MATERIAL.stone,
+        map: PaintedTextures.get('rock', 2)
+      })
+    );
+    soil.position.y = -0.16;
+    soil.castShadow = true;
+    island.add(soil);
+
+    // Cliff_Rock is 5 × 4.15 × 2.5 m at the origin. Hang it under the sod
+    // so the limestone reads as a torn-off chunk, not a grey flying saucer.
+    const hungRock = this.plantOnIsle(island, 'Cliff_Rock', 0.34, 0.12, -1.22, 0.04, 0.4);
+    this.plantOnIsle(island, 'Cliff_Rock', 0.22, -0.78, -0.78, 0.52, 2.05);
+    const plantedTree = this.plantOnIsle(island, 'Tree_Orchard', 0.6, 0.22, 0.2, -0.14, -0.35);
+    this.plantOnIsle(island, 'Bench', 0.7, -0.62, 0.2, 0.58, 2.35);
+
+    if (!hungRock) this.fallbackIsleRock(island);
+    if (!plantedTree) this.fallbackIsleTree(island);
+
+    const crystalMat = ToonMaterial.create({
+      color: ACCENT.lavender,
+      emissive: ACCENT.lavender,
+      emissiveIntensity: 0.45
+    });
+    for (let i = 0; i < 4; i++) {
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.12, 0), crystalMat);
+      const angle = (i / 4) * Math.PI * 2 + 0.4;
+      crystal.position.set(Math.cos(angle) * 1.18, 0.38, Math.sin(angle) * 1.18);
+      crystal.scale.y = 1.45;
+      crystal.castShadow = true;
       island.add(crystal);
     }
-    
+
     this.game.scene.add(island);
     this.floatingIsland = island;
-    let tangent = new THREE.Vector3(0, 1, 0);
+    const tangent = new THREE.Vector3(0, 1, 0);
     if (Math.abs(this.islandAxis.dot(tangent)) > 0.9) tangent.set(1, 0, 0);
     this.islandEast.crossVectors(this.islandAxis, tangent).normalize();
     this.islandNorth.crossVectors(this.islandAxis, this.islandEast).normalize();
     this.placeIsland(0);
+  }
+
+  /** Sit a kit piece on the isle in local space. */
+  private plantOnIsle(
+    island: THREE.Group,
+    name: string,
+    scale: number,
+    x: number,
+    y: number,
+    z: number,
+    yaw = 0
+  ): boolean {
+    if (!this.game.kit?.isLoaded || !this.game.kit.has(name)) return false;
+    const piece = this.game.kit.instance(name);
+    if (!piece) return false;
+    piece.scale.multiplyScalar(scale);
+    piece.position.set(x, y, z);
+    piece.rotation.y = yaw;
+    island.add(piece);
+    return true;
+  }
+
+  private fallbackIsleRock(island: THREE.Group): void {
+    const lump = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(1.3, 0),
+      ToonMaterial.create({
+        color: MATERIAL.stone,
+        map: PaintedTextures.get('rock', 2)
+      })
+    );
+    lump.scale.set(1.12, 0.68, 1);
+    lump.position.y = -0.52;
+    lump.castShadow = true;
+    island.add(lump);
+  }
+
+  private fallbackIsleTree(island: THREE.Group): void {
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.1, 0.85, 6),
+      ToonMaterial.create({ color: MATERIAL.trunk })
+    );
+    trunk.position.set(0.18, 0.64, -0.12);
+    trunk.castShadow = true;
+    island.add(trunk);
+
+    const canopy = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.72, 1),
+      ToonMaterial.create({
+        color: MATERIAL.foliage,
+        map: PaintedTextures.get('foliage')
+      })
+    );
+    canopy.scale.y = 0.48;
+    canopy.position.set(0.18, 1.2, -0.12);
+    canopy.castShadow = true;
+    island.add(canopy);
   }
 
   /**
@@ -260,7 +334,7 @@ export class Secrets {
         this.discover(
           'island',
           'The Wandering Isle',
-          'High above the planet, a tiny island drifts in the sky. Purple crystals glimmer in the light. How does it stay up there?'
+          'A scrap of hillside drifts overhead — orchard tree, a bench, and purple crystals. How does it stay up there?'
         );
       }
     }

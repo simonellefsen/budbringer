@@ -10,6 +10,9 @@ don't let it go stale.
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- The wandering isle was a cone-tree on a grey disc, so it read as a
+  leftover from another game. It now shares the village's painted
+  cliff, orchard tree and bench.
 - The wandering isle sat on world +Y, so it hung over the village pole
   and you could never reach it. It now tours a tilted orbit about 15 m
   up, standing radial, and can be found when it passes overhead.
@@ -135,5 +138,5 @@ don't let it go stale.
 
 ## Possible future work
 
-- The wandering isle is still a cone-tree on a stone disc — it could
-  share the painted kit so it matches the village.
+- The sea creature and the sky lantern are still primitive spheres —
+  they could be built in the same painted-kit language as the village.
