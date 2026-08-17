@@ -305,6 +305,11 @@ export class Planet {
     this.bindGroundMesh();
   }
 
+  /** The displaced grass mesh, for map picking and ground rays. */
+  public get groundMesh(): THREE.Mesh {
+    return this.sphere;
+  }
+
   /**
    * BVH on the displaced sphere so walkers can sit on the grass you see.
    *

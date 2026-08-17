@@ -6,10 +6,12 @@ don't let it go stale.
 
 ## Known issues (open)
 
-- There is still no way to drop a pin on a place you have not walked yet.
+- (none right now)
 
 ## Recently fixed (for context — remove once confident these don't regress)
 
+- The map only marked places you had already walked — a tap on empty
+  grass now drops a rose pin you can face again, even on the far side.
 - Courier, villagers and the flock were still crate-people and a vertical
   wool drum. Figures have a prism skull, neck and tapered limbs; sheep
   lie along their body; a black-and-white sheepdog herds the paddock.
@@ -115,5 +117,4 @@ don't let it go stale.
 
 ## Possible future work
 
-- Let the courier set a personal pin on the map for a place they have
-  not visited yet.
+- Remember the personal map pin across sessions.

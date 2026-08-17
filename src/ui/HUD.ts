@@ -51,6 +51,28 @@ export class HUD {
           opacity: 0;
           transition: opacity 0.25s ease;
         }
+
+        #map-hint {
+          position: absolute;
+          left: 50%;
+          bottom: max(22px, calc(env(safe-area-inset-bottom, 0px) + 14px));
+          transform: translateX(-50%);
+          background: #fffdf6;
+          border: 3px solid #2a2118;
+          border-radius: 8px;
+          padding: 8px 14px;
+          font-size: 0.95rem;
+          color: #2a2118;
+          box-shadow: 3px 3px 0 #2a2118;
+          opacity: 0;
+          pointer-events: none;
+          white-space: nowrap;
+          transition: opacity 0.25s ease;
+        }
+
+        #hud-container.map-open #map-hint {
+          opacity: 1;
+        }
         
         #hud-stack {
           position: absolute;
@@ -330,6 +352,7 @@ export class HUD {
       <div id="area-name"></div>
 
       <div id="interaction-hint">Press E to talk</div>
+      <div id="map-hint">Tap the globe to drop a pin</div>
 
       <div id="hud-stack">
         <button id="map-toggle" class="hud-card" title="World map (M)" aria-label="World map"
