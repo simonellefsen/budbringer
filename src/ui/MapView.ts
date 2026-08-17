@@ -12,7 +12,8 @@ import { ACCENT, INK, SKY } from '../utils/palette';
  *
  * Toggling holds the courier still, lifts the camera off the surface and out
  * to an orbit, and marks the places that matter: where you are, who you are
- * looking for, and every named region you have already walked through.
+ * looking for, every named region you have already walked through, and a
+ * personal pin you can drop on a place you have not.
  */
 
 /** How far out the camera sits, as a multiple of the planet radius. */
@@ -23,6 +24,9 @@ export class MapView {
   private markers: THREE.Group;
   private playerPin!: THREE.Object3D;
   private targetPin!: THREE.Object3D;
+  private dropPin!: THREE.Object3D;
+  /** Unit direction of the courier's own pin, if they have set one. */
+  private dropDir: THREE.Vector3 | null = null;
   private placeMarks: Map<string, THREE.Object3D> = new Map();
   private labelCache: Map<string, THREE.Sprite> = new Map();
 
@@ -50,7 +54,12 @@ export class MapView {
 
     this.playerPin = this.createPin(ACCENT.ember, 'you');
     this.targetPin = this.createPin(ACCENT.lemon, 'target');
-    this.markers.add(this.playerPin, this.targetPin);
+    this.dropPin = this.createPin(ACCENT.rose, 'pin');
+    const dropLabel = this.nameSprite('Pin');
+    dropLabel.position.y = 10.2;
+    this.dropPin.add(dropLabel);
+    this.dropPin.visible = false;
+    this.markers.add(this.playerPin, this.targetPin, this.dropPin);
   }
 
   /** A cone on a stalk, standing off the surface so it clears the rooftops. */
@@ -270,15 +279,35 @@ export class MapView {
     if (dx * dx + dy * dy > 64) return;
 
     const mark = this.pickMark(e);
-    if (!mark) return;
-    const id = mark.userData.mapId as string;
-    const dir = this.directionFor(id);
-    if (!dir) return;
-    this.spinTarget = Math.atan2(dir.z, dir.x);
+    if (mark) {
+      const id = mark.userData.mapId as string;
+      const dir = this.directionFor(id);
+      if (!dir) return;
+      this.spinTarget = Math.atan2(dir.z, dir.x);
+      return;
+    }
+
+    const onGlobe = this.pickGlobe(e);
+    if (!onGlobe) return;
+    this.dropDir = onGlobe;
+    this.dropPin.visible = true;
+    this.placePin(this.dropPin, onGlobe);
+    this.spinTarget = Math.atan2(onGlobe.z, onGlobe.x);
+  }
+
+  /** First grass-mesh hit under the pointer, as a unit direction. */
+  private pickGlobe(e: PointerEvent): THREE.Vector3 | null {
+    this.eventToNdc(e);
+    this.raycaster.setFromCamera(this.pointer, this.game.camera);
+    this.raycaster.firstHitOnly = true;
+    const hits = this.raycaster.intersectObject(this.game.planet.groundMesh, false);
+    if (hits.length === 0) return null;
+    return hits[0].point.clone().normalize();
   }
 
   private directionFor(id: string): THREE.Vector3 | null {
     if (id === 'you') return this.game.character.group.position.clone().normalize();
+    if (id === 'pin') return this.dropDir ? this.dropDir.clone() : null;
     if (id === 'target') {
       const delivery = this.game.deliverySystem;
       const targetName = delivery.currentDelivery
@@ -326,6 +355,13 @@ export class MapView {
     camera.lookAt(0, 0, 0);
 
     this.placePin(this.playerPin, this.game.character.group.position);
+
+    if (this.dropDir) {
+      this.dropPin.visible = true;
+      this.placePin(this.dropPin, this.dropDir);
+    } else {
+      this.dropPin.visible = false;
+    }
 
     // Mark whoever the current task points at, if anyone.
     const delivery = this.game.deliverySystem;
